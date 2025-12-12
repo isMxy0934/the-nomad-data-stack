@@ -61,7 +61,7 @@ def extract_stock_data_from_akshare(**kwargs):
 dag = DAG(
     DAG_ID,
     default_args=default_args,
-    schedule_interval='0 18 * * *', # every day at 18:00
+    schedule='0 18 * * *', # every day at 18:00
     catchup=False,
     tags=['extractor'],
 )
