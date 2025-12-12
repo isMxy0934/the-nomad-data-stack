@@ -1,0 +1,7 @@
+FROM quay.io/jupyter/scipy-notebook:latest
+
+COPY ./infra_build/requirements.txt /tmp/requirements.txt
+
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+WORKDIR /home/jovyan
