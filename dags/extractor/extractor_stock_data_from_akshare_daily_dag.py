@@ -46,7 +46,7 @@ dag = DAG(
     schedule="30 18 * * *",
     start_date=datetime(2025, 12, 13),
     catchup=False,
-    tags=['extractor', 'tushare'],
+    tags=['extractor', 'tushare','stock'],
 )
 
 fetch_market_snapshot = PythonOperator(
