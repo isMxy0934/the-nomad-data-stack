@@ -6,7 +6,7 @@ import pandas as pd
 import tushare as ts
 from datetime import timedelta, datetime
 from airflow.models.dag import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from utils.s3_utils import S3Uploader
 from utils.time_utils import get_previous_date_str, get_previous_partition_date_str
 
@@ -34,7 +34,7 @@ def fetch_stock_data_from_akshare():
         logging.warning(f"{target_date_str} has no data (maybe it's a holiday)")
         return None
     
-    s3_uploader = S3Uploader(S3_BUCKET_NAME)
+    s3_uploader = S3Uploader(aws_conn_id="MINIO_S3", bucket_name=S3_BUCKET_NAME)
     file_key = f"akshare/stock_daily/{target_partition_date_str}.csv"
     
     s3_uploader.upload_bytes(df.to_csv(index=False).encode('utf-8'), file_key, replace=True)

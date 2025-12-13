@@ -38,11 +38,11 @@ def get_previous_date_str(tz='Asia/Shanghai') -> str:
         tz: timezone, default to Beijing timezone
     
     Returns:
-        str: formatted date string (yyyy-MM-dd)
+        str: formatted date string (yyyy%m%d)
     """
     timezone = pytz.timezone(tz)
     previous_day = datetime.now(timezone) - timedelta(days=1)
-    return previous_day.strftime('%Y-%m-%d')
+    return previous_day.strftime('%Y%m%d')
 
 def get_previous_partition_date_str(tz='Asia/Shanghai') -> str:
     """
