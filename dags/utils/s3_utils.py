@@ -7,7 +7,7 @@ class S3Uploader:
     
     def __init__(self, aws_conn_id="MINIO_S3", bucket_name=None):
         self.aws_conn_id = aws_conn_id
-        self.bucket_name = bucket_name or os.getenv("S3_BUCKET_NAME", "test-bucket")
+        self.bucket_name = bucket_name or os.getenv("S3_BUCKET_NAME", "stock-data")
         self.s3_hook = S3Hook(aws_conn_id=self.aws_conn_id)
     
     def upload_file(self, local_file_path, key=None, replace=True) -> str:

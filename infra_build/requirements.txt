@@ -1,5 +1,7 @@
-apache-airflow-providers-amazon[s3fs]
-akshare
-pytz
-tushare
+# --- Airflow Providers ---
+apache-airflow-providers-amazon
+
+# --- Financial Data ---
 yfinance
+tushare
+akshare
