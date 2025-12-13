@@ -1,5 +1,7 @@
 import os
+import time
 import logging
+import pandas as pd
 import akshare as ak
 from datetime import datetime, timedelta
 from airflow.models.dag import DAG
@@ -11,22 +13,23 @@ DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
 def fetch_fund_data_from_akshare():
     """
-    Fetch A-Share fund daily market snapshot from Akshare.
+    Fetch A-Share Fund daily market snapshot from Akshare.
     API: fund_etf_spot_em
     """
+    
     target_date_str = get_previous_date_str()
     target_partition_date_str = get_previous_partition_date_str()
     
-    logging.info(f"Start fetching A-Share fund snapshot for date: {target_date_str}")
+    logging.info(f"Start fetching ETF snapshot from [Sina Finance] for date: {target_date_str}")
     
     try:
-        df = ak.fund_etf_spot_em()
+        df = ak.fund_etf_category_sina(symbol="ETF基金")
     except Exception as e:
-        logging.error(f"Akshare API (fund) failed: {e}")
+        logging.error(f"Sina API failed: {e}")
         raise e
     
-    if df.empty:
-        logging.warning(f"No fund data found for {target_date_str}")
+    if df is None or df.empty:
+        logging.warning(f"No fund data found from Sina for {target_date_str}")
         return None
 
     rename_map = {
@@ -34,17 +37,24 @@ def fetch_fund_data_from_akshare():
         '名称': 'name',
         '最新价': 'close',
         '开盘价': 'open',
+        '开盘': 'open',
         '最高价': 'high',
+        '最高': 'high',
         '最低价': 'low',
+        '最低': 'low',
         '成交量': 'vol',
         '成交额': 'amount',
         '昨收': 'pre_close',
         '换手率': 'turnover_rate',
         '涨跌幅': 'pct_chg'
     }
-    
+
     available_cols = [c for c in rename_map.keys() if c in df.columns]
-    df = df[available_cols].rename(columns=rename_map)
+    df = df.rename(columns=rename_map)
+    
+    target_columns = ['symbol', 'name', 'close', 'open', 'high', 'low', 'vol', 'amount', 'pre_close', 'pct_chg']
+    final_cols = [c for c in target_columns if c in df.columns]
+    df = df[final_cols]
     
     df['trade_date'] = target_date_str
     
@@ -53,9 +63,9 @@ def fetch_fund_data_from_akshare():
     
     try:
         s3_uploader.upload_bytes(df.to_csv(index=False).encode('utf-8'), file_key, replace=True)
-        logging.info(f"uploaded fund data to S3: {file_key}, total {len(df)} records")
+        logging.info(f"Uploaded Sina ETF data to S3: {file_key}, total {len(df)} records")
     except Exception as e:
-        logging.error(f"failed to upload to S3: {e}")
+        logging.error(f"Failed to upload to S3: {e}")
         raise e
         
     return file_key
