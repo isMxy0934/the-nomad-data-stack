@@ -34,3 +34,28 @@ class S3Uploader:
         s3_path = f"s3://{self.bucket_name}/{key}"
         print(f"Uploaded {local_file_path} to {s3_path}")
         return s3_path
+    
+    def upload_bytes(self, data: bytes, key: str, replace: bool = True) -> str:
+        """
+        Upload bytes data to S3
+        
+        Args:
+            data: bytes data to upload (like csv_buffer.getvalue().encode('utf-8'))
+            key: S3 key
+            replace: whether to replace existing file
+        
+        Returns:
+            str: S3 file full path
+        """
+        if not key:
+            raise ValueError("s3 key is required")
+        
+        self.s3_hook.load_bytes(
+            bytes_data=data,
+            bucket_name=self.bucket_name,
+            key=key,
+            replace=replace,
+        )
+        s3_path = f"s3://{self.bucket_name}/{key}"
+        print(f"Uploaded bytes data to {s3_path}")
+        return s3_path

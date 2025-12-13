@@ -2,9 +2,9 @@ from datetime import datetime
 import pytz
 
 
-def get_current_date_str(tz='Asia/Shanghai') -> str:
+def get_current_partition_date_str(tz='Asia/Shanghai') -> str:
     """
-    Get current date string
+    Get current partition date string
     
     Args:
         tz: timezone, default to Beijing timezone
@@ -15,3 +15,17 @@ def get_current_date_str(tz='Asia/Shanghai') -> str:
     timezone = pytz.timezone(tz)
     now = datetime.now(timezone)
     return now.strftime('%Y-%m-%d')
+
+def get_current_date_str(tz='Asia/Shanghai') -> str:
+    """
+    Get current date string
+    
+    Args:
+        tz: timezone, default to Beijing timezone
+    
+    Returns:
+        str: formatted date string (yyyy%m%d)
+    """
+    timezone = pytz.timezone(tz)
+    now = datetime.now(timezone)
+    return now.strftime('%Y%m%d')

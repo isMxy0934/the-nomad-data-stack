@@ -1,3 +1,7 @@
 apache-airflow-providers-amazon[s3fs]
 akshare
 pytz
+tushare
+pandas
+yfinance
+pyyaml
