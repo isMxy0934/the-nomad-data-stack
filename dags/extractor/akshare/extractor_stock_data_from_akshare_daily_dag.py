@@ -69,12 +69,7 @@ dag = DAG(
     schedule="30 18 * * *",
     start_date=datetime(2025, 12, 13),
     catchup=False,
-    tags=['extractor', 'akshare', 'stock'],
-    default_args={
-        'owner': 'airflow',
-        'retries': 2,
-        'retry_delay': timedelta(minutes=5),
-    }
+    tags=['extractor', 'akshare', 'stock']
 )
 
 fetch_stock_task = PythonOperator(
