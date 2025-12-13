@@ -20,7 +20,7 @@ def fetch_fund_data_from_akshare():
     logging.info(f"Start fetching A-Share fund snapshot for date: {target_date_str}")
     
     try:
-        df = ak.fund_etf_spot_em(trade_date=target_date_str)
+        df = ak.fund_etf_spot_em()
     except Exception as e:
         logging.error(f"Akshare API (fund) failed: {e}")
         raise e
