@@ -1,20 +1,20 @@
 - src:
     type: "s3"
     properties:
-      path: "dw_ods/daily/stock_price/akshare"
+      path: "raw/daily/stock_price/akshare"
   dest: "ods_daily_stock_price_akshare"
 - src:
     type: "s3"
     properties:
-      path: "dw_ods/daily/fund_price/akshare"
+      path: "raw/daily/fund_price/akshare"
   dest: "ods_daily_fund_price_akshare"
 - src:
     type: "s3"
     properties:
-      path: "dw_ods/daily/stock_price/tushare"
+      path: "raw/daily/stock_price/tushare"
   dest: "ods_daily_stock_price_tushare"
 - src:
     type: "s3"
     properties:
-      path: "dw_ods/daily/fund_price/tushare"
+      path: "raw/daily/fund_price/tushare"
   dest: "ods_daily_fund_price_tushare"
