@@ -9,6 +9,7 @@ from dags.utils.sql_utils import load_and_render_sql
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
+
 def test_single_table_etl_pipeline(
     minio_client,
     test_bucket_name,
@@ -42,8 +43,7 @@ def test_single_table_etl_pipeline(
     csv_path = f"s3://{test_bucket_name}/{raw_key}"
     execute_sql(
         conn,
-        f"CREATE OR REPLACE VIEW tmp_{table_name} AS "
-        f"SELECT * FROM read_csv_auto('{csv_path}');",
+        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}');",
     )
 
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"
@@ -73,6 +73,7 @@ def test_single_table_etl_pipeline(
 
     # 3. 验证处理结果
     verify_table_processed(minio_client, test_bucket_name, table_name, test_date)
+
 
 def verify_table_processed(minio_client, bucket, table, test_date):
     """Helper to verify table processing"""

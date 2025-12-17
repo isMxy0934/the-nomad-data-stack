@@ -13,6 +13,7 @@ from dags.utils.sql_utils import load_and_render_sql
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
+
 def _run_single_partition(
     *,
     minio_client,

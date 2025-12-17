@@ -1,12 +1,11 @@
 """Integration test configuration and shared fixtures."""
 
-import os
-import sys
-import json
 import csv
 import io
-from collections.abc import Generator
-from collections.abc import Callable
+import json
+import os
+import sys
+from collections.abc import Callable, Generator
 from pathlib import Path
 
 import boto3
