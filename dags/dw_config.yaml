@@ -1,0 +1,19 @@
+layer_dependencies:
+  dwd:
+    depends_on: ["ods"]
+  dim:
+    depends_on: ["dwd"]
+  dwm:
+    depends_on: ["dwd", "dim"]
+  dws:
+    depends_on: ["dwm"]
+  ads:
+    depends_on: ["dws"]
+
+# 同层内表依赖（可选，只有当同层表有依赖关系时才需要）
+table_dependencies:
+  dim:  # dim 层内的表依赖
+    dim_customer_account_merge_mapping_full:
+      - dim_customer_customer_info_zip  # 这个表依赖另一个 dim 表
+  dwd:  # dwd 层内的表依赖
+    # 如果 dwd 层内有表依赖关系，在此定义
