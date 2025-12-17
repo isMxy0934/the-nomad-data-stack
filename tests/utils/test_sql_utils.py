@@ -1,6 +1,10 @@
 import sys
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
 import pytest
 
 from dags.utils.sql_utils import (  # pylint: disable=wrong-import-position
@@ -9,10 +13,6 @@ from dags.utils.sql_utils import (  # pylint: disable=wrong-import-position
     load_sql,
     render_sql,
 )
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
 
 
 def test_load_sql_raises_for_missing_file(tmp_path):

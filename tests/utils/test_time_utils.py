@@ -1,6 +1,10 @@
 import sys
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
 from freezegun import freeze_time
 
 from dags.utils.time_utils import (
@@ -9,10 +13,6 @@ from dags.utils.time_utils import (
     get_previous_date_str,
     get_previous_partition_date_str,
 )
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
 
 
 class TestGetCurrentPartitionDateStr:

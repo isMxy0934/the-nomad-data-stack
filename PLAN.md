@@ -81,12 +81,12 @@
 
 #### P3：`duckdb_utils`（DuckDB 临时计算 + S3/MinIO 读写能力）
 
-- [ ] `dags/utils/duckdb_utils.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
-- [ ] `dags/utils/duckdb_utils.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
-- [ ] `dags/utils/duckdb_utils.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
+- [x] `dags/utils/duckdb_utils.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
+- [x] `dags/utils/duckdb_utils.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
+- [x] `dags/utils/duckdb_utils.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
 
 验收：
-- [ ] 至少有一个最小验证（单测或脚本）：能执行 `SELECT 1`，且 COPY 写入路径参数校验通过
+- [x] 至少有一个最小验证（单测或脚本）：能执行 `SELECT 1`，且 COPY 写入路径参数校验通过
 
 #### P4：ODS Loader DAG（拼装层）
 
