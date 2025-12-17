@@ -122,8 +122,10 @@ def prepare_partition(
         bucket_name=bucket_name,
     )
     return {
+        "partition_date": partition_date,
         "canonical_prefix": paths.canonical_prefix,
         "tmp_prefix": paths.tmp_prefix,
+        "tmp_partition_prefix": paths.tmp_partition_prefix,
         "manifest_path": paths.manifest_path,
         "success_flag_path": paths.success_flag_path,
     }
@@ -154,7 +156,7 @@ def load_partition(
     connection.execute(
         f"""
         CREATE OR REPLACE VIEW {staging_view} AS
-        SELECT * FROM read_csv_auto('{source_uri}', hive_partitioning=true);
+        SELECT * FROM read_csv_auto('{source_uri}', hive_partitioning=false);
         """
     )
 
@@ -226,7 +228,7 @@ def commit_partition(
         run_id=run_id,
         file_count=int(metrics["file_count"]),
         row_count=int(metrics["row_count"]),
-        source_prefix=paths.tmp_prefix,
+        source_prefix=paths.tmp_partition_prefix,
         target_prefix=paths.canonical_prefix,
     )
 

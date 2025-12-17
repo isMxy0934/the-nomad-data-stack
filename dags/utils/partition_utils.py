@@ -14,8 +14,10 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 class PartitionPaths:
     """Resolved locations for a single partition commit."""
 
+    partition_date: str
     canonical_prefix: str
     tmp_prefix: str
+    tmp_partition_prefix: str
     manifest_path: str
     success_flag_path: str
 
@@ -65,13 +67,16 @@ def build_partition_paths(
 
     normalized_base = _strip_slashes(base_prefix)
     canonical_prefix = f"s3://{bucket_name}/{normalized_base}/dt={partition_date}"
-    tmp_prefix = f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}/dt={partition_date}"
+    tmp_prefix = f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}"
+    tmp_partition_prefix = f"{tmp_prefix}/dt={partition_date}"
     manifest_path = f"{canonical_prefix}/manifest.json"
     success_flag_path = f"{canonical_prefix}/_SUCCESS"
 
     return PartitionPaths(
+        partition_date=partition_date,
         canonical_prefix=canonical_prefix,
         tmp_prefix=tmp_prefix,
+        tmp_partition_prefix=tmp_partition_prefix,
         manifest_path=manifest_path,
         success_flag_path=success_flag_path,
     )
@@ -163,7 +168,7 @@ def publish_partition(
     """Publish a partition by promoting tmp outputs and writing markers."""
 
     _delete_prefix(s3_hook, paths.canonical_prefix)
-    _copy_prefix(s3_hook, paths.tmp_prefix, paths.canonical_prefix)
+    _copy_prefix(s3_hook, paths.tmp_partition_prefix, paths.canonical_prefix)
 
     manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
     success_path = None

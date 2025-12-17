@@ -210,7 +210,7 @@ def s3_publish_partition(minio_client, s3_delete_prefix):
 
     def publish_partition(paths, manifest: dict) -> None:
         canonical_bucket, canonical_prefix_key = parse_s3_uri(paths.canonical_prefix)
-        tmp_bucket, tmp_prefix_key = parse_s3_uri(paths.tmp_prefix)
+        tmp_bucket, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
         if canonical_bucket != tmp_bucket:
             raise AssertionError("tmp/canonical buckets must match in integration tests")
 

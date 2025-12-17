@@ -51,7 +51,7 @@ def _run_single_partition(
 
     execute_sql(
         conn,
-        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}');",
+        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
     )
 
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"
@@ -80,7 +80,7 @@ def _run_single_partition(
         run_id=run_id,
         file_count=len(parquet_files),
         row_count=row_count,
-        source_prefix=paths.tmp_prefix,
+        source_prefix=paths.tmp_partition_prefix,
         target_prefix=paths.canonical_prefix,
     )
     s3_publish_partition(paths, dict(manifest))
