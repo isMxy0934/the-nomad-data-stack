@@ -90,11 +90,11 @@
 
 #### P4：ODS Loader DAG（拼装层）
 
-- [ ] `dags/ods_loader_dag.py`：从 `dags/ods/config.yaml` 读取表清单并动态生成任务
-- [ ] `dags/ods_loader_dag.py`：每表 TaskGroup：prepare → load → validate → commit → cleanup
-- [ ] `dags/ods_loader_dag.py`：load 使用 DuckDB 写 tmp 前缀（`COPY ... PARTITION_BY (dt)`）
-- [ ] `dags/ods_loader_dag.py`：commit 调用 `partition_utils` publish + 写完成标记
-- [ ] 单写者：为每张表创建 Airflow pool（slots=1），写分区任务必须指定该 pool
+- [x] `dags/ods_loader_dag.py`：从 `dags/ods/config.yaml` 读取表清单并动态生成任务
+- [x] `dags/ods_loader_dag.py`：每表 TaskGroup：prepare → load → validate → commit → cleanup
+- [x] `dags/ods_loader_dag.py`：load 使用 DuckDB 写 tmp 前缀（`COPY ... PARTITION_BY (dt)`）
+- [x] `dags/ods_loader_dag.py`：commit 调用 `partition_utils` publish + 写完成标记
+- [x] 单写者：为每张表创建 Airflow pool（slots=1），写分区任务必须指定该 pool
 
 验收：
 - [ ] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
