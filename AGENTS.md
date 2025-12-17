@@ -6,7 +6,9 @@
 
 - **存储与计算分离**：数据事实只在 MinIO（`lake/...`）；ETL/验证阶段的 DuckDB 连接应使用内存库或临时文件，不作为共享数据库。
 - **分析 Catalog（metadata-only）**：允许维护一个持久化 DuckDB 文件 `./.duckdb/catalog.duckdb`，仅保存 `SCHEMA + VIEW + MACRO`，不存数据；用于交互分析 `SELECT * FROM ods.xxx`。
-- **约定优于配置**：目录结构即配置；ODS 表清单见 `dags/ods/config.yaml`，SQL 文件按 `dags/ods/{dest}.sql` 约定命名。
+- **约定优于配置**：目录结构即配置；
+  - ODS：表清单见 `dags/ods/config.yaml`，SQL 文件按 `dags/ods/{dest}.sql` 命名。
+  - DW：层依赖见 `dags/dw_config.yaml`，表通过扫描 `dags/{layer}/*.sql` 发现（空层/缺目录跳过，不生成占位）。
 - **单写者原则**：同一 `(table, dt)` 同时只能一个任务写入；通过 Airflow `pool`/并发限制保证。
 
 ## 数据与分区约定
@@ -14,14 +16,21 @@
 - 分区列：`dt=YYYY-MM-DD`（Hive 风格），不要修改分区命名约定。
 - 建议路径：
   - ODS：`lake/ods/{table}/dt=YYYY-MM-DD/*.parquet`
+  - DW（DWD/DIM/ADS 等）：`lake/{layer}/{table}/dt=YYYY-MM-DD/*.parquet`
   - 临时写入：`lake/ods/{table}/_tmp/run_{run_id}/dt=YYYY-MM-DD/*.parquet`
-- 下游依赖：以 `_SUCCESS` / `manifest.json` 为完成标记，避免读到写入中间态。
+- 下游依赖：以 `_SUCCESS` / `manifest.json` 为完成标记，避免读到写入中间态；M2 约定“无 `_SUCCESS` 视为无数据”，由编排保证上游失败不触发下游。
 
 ## 写入与提交协议（Commit Protocol）
 
 - 禁止 in-place overwrite 远端分区。
 - 标准流程：写入临时前缀 → 校验（行数/文件数等）→ promote 到 canonical 分区 → 写入 `manifest.json` + `_SUCCESS` → 清理临时前缀。
 - 相关实现：`dags/utils/partition_utils.py`、`dags/ods_loader_dag.py`。
+
+## M2：DW（DWD/DIM/ADS）约定摘要
+
+- 每层生成独立 DAG：`dw_{layer}`（例如 `dw_dwd`），由 `dags/dw_dags.py` 统一生成。
+- 表命名必须带 layer 前缀：例如 `dags/dwd/dwd_daily_stock_price.sql` → `dwd.dwd_daily_stock_price`。
+- 任务运行时只读 attach `./.duckdb/catalog.duckdb`（metadata-only），SQL 只引用逻辑表（如 `ods.xxx`），不硬编码 S3 路径。
 
 ## DuckDB 扩展与 S3 访问
 
