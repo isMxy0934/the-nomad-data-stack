@@ -14,7 +14,6 @@
 - **Airflow（编排与调度）**：负责任务依赖、调度、参数化（分区日期）、重跑与回放。
 - **Postgres（元数据与审计）**：
   - 必选：Airflow 自身的 metadata DB（`docker-compose.yml` 已包含）。
-  - 可选但推荐：旁挂一个 **catalog schema**（复用同一个 Postgres 实例，但用独立 schema/表隔离），存放“表/分区/产出状态/Schema 版本”等元数据，作为下游依赖与审计依据。
 
 ### 数据流与分层
 
@@ -74,6 +73,7 @@ INSTALL httpfs;
 LOAD httpfs;
 
 -- 凭证与 endpoint 推荐用 DuckDB Secrets（或用环境变量/参数注入，按部署方式选择）
+-- 建议：生产镜像构建阶段预装扩展（httpfs/aws），任务运行时只执行 LOAD（必要时 INSTALL 作为 fallback）
 
 CREATE SCHEMA IF NOT EXISTS ods;
 CREATE OR REPLACE VIEW ods.ods_daily_stock_price_akshare AS
@@ -83,6 +83,10 @@ FROM read_parquet(
   hive_partitioning=true
 );
 ```
+
+> **读取模式建议**：
+> - **生产任务读**：优先读精确分区路径（如 `.../dt=${PARTITION_DATE}/...`），减少 S3 ListObjectsV2 列举成本
+> - **交互分析读**：可以用 `dt=*` 方便探索数据
 
 #### 4) 分区写入（DuckDB 原生 partitioned writes + 幂等）
 
@@ -95,36 +99,23 @@ COPY (
     CAST('${PARTITION_DATE}' AS DATE) AS dt
   FROM ...
 ) TO 's3://<bucket>/dw/ods/ods_daily_stock_price_akshare'
-(FORMAT parquet, PARTITION_BY (dt), OVERWRITE_OR_IGNORE, FILENAME_PATTERN 'file_{uuid}');
+(FORMAT parquet, PARTITION_BY (dt), OVERWRITE_OR_IGNORE, FILENAME_PATTERN 'file_{uuid}', WRITE_PARTITION_COLUMNS false);
 ```
+
+> 建议：显式加上 `WRITE_PARTITION_COLUMNS false`（默认就是 false，但显式写更少踩坑）。
 
 运行约束（强约束）：
 
-- **单写者**：同一 `(table, dt)` 在任一时刻只允许一个任务写入（Airflow 侧保证）。
-- **幂等重跑**：重跑同一 `dt` 的产出必须覆盖旧分区或确保不会混入旧文件（`OVERWRITE_OR_IGNORE` + 单写者，或“临时前缀→校验→切换/清理”）。
+- **单写者**：同一 `(table, dt)` 在任一时刻只允许一个任务写入（通过 Airflow pool 或 concurrency 限制保证）。
+  - 用 **pool**（按表或按分区写入资源建 pool），把写分区任务放进同一个 pool
+  - 或用 DAG 的 `max_active_runs` / `concurrency` / task 的并发限制
+- **幂等重跑**：
+  - ✅ **主方案（强推荐）**：写临时前缀 → 校验（row_count/file_count/schema_hash）→ 写 `_SUCCESS`/manifest → 切换/清理旧分区前缀
+  - ⚠️ `OVERWRITE_OR_IGNORE` 仅作为"某些环境可用的优化"，不能作为可靠语义（尤其在 S3/MinIO 上不支持 overwriting）
 - **完成标记**：分区写完后写入 `_SUCCESS` 或 `manifest.json`；下游只依赖“标记存在”，避免读到写入一半的数据。
 - **小文件治理**：长期运行会产生大量小 Parquet；增加周期性 compaction（按表/按月合并）提升读取性能与成本。
 - **Schema 管理**：至少为每张表声明 schema（YAML/DDL），写入前校验（缺列/类型变化报警），避免无意 schema 演进让下游查询变脆。
 
-### Catalog（Postgres，轻量元数据）
-
-引入轻量 catalog 后，下游依赖变成“查 catalog 找到成功分区 location，再用 DuckDB 读取”，而不是依赖 glob 扫描。
-
-最小表结构（字段可按需增删）：
-
-- `catalog.tables`：`table_name, layer, partition_col, schema_hash, owner, created_at`
-- `catalog.partitions`：`table_name, dt, location, file_count, row_count, status, run_id, produced_at`
-- `catalog.runs`：`run_id, dag_id, task_id, partition_date, started_at, ended_at, status, error`
-
-约束：
-
-- `(table_name, dt)` 唯一键（分区幂等与回放的核心）。
-- 下游依赖：`status='success'` 且分区 `_SUCCESS` 存在（双保险）。
-
-### 可选演进方向
-
-- 需要 ACID/快照/更强的 Schema 演进治理：Iceberg / Delta / Hudi（引入成本↑，治理能力↑）。
-- 保持轻量：持续增强 catalog（统计信息、血缘、权限、schema 演进规则），而不是引入全套湖表生态。
 
 ### Airflow DAG 组织
 
@@ -133,7 +124,7 @@ COPY (
 - `dags/extractor/*`：采集 DAG（写入 MinIO，通常为 CSV）
 - `dags/ods/*`：ODS 配置与 SQL
 - `dags/utils/*`：通用工具（如 S3 上传、日期分区）
-- `dags/ods_loader_dag.py`：ODS 加载 DAG（读取 `config.yaml`，按 SQL 落 Parquet，并写入 `_SUCCESS`/catalog）
+- `dags/ods_loader_dag.py`：ODS 加载 DAG（读取 `config.yaml`，按 SQL 落 Parquet，并写入 `_SUCCESS` 完成标记）
 
 依赖关系：
 
