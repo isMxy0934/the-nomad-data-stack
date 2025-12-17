@@ -76,6 +76,20 @@ LOAD httpfs;
 -- 建议：生产镜像构建阶段预装扩展（httpfs/aws），任务运行时只执行 LOAD（必要时 INSTALL 作为 fallback）
 
 CREATE SCHEMA IF NOT EXISTS ods;
+```
+
+**生产任务读（推荐）**：
+```sql
+CREATE OR REPLACE VIEW ods.ods_daily_stock_price_akshare__dt AS
+SELECT *
+FROM read_parquet(
+  's3://<bucket>/dw/ods/ods_daily_stock_price_akshare/dt=${PARTITION_DATE}/*.parquet',
+  hive_partitioning=true
+);
+```
+
+**交互分析读**：
+```sql
 CREATE OR REPLACE VIEW ods.ods_daily_stock_price_akshare AS
 SELECT *
 FROM read_parquet(
@@ -84,25 +98,37 @@ FROM read_parquet(
 );
 ```
 
-> **读取模式建议**：
-> - **生产任务读**：优先读精确分区路径（如 `.../dt=${PARTITION_DATE}/...`），减少 S3 ListObjectsV2 列举成本
-> - **交互分析读**：可以用 `dt=*` 方便探索数据
+> **读取模式说明**：
+> - **生产任务读**：使用精确分区路径，避免触发 S3 ListObjectsV2 列举，减少成本和延迟
+> - **交互分析读**：使用 `dt=*` 通配符方便探索数据（会触发列举，适合 ad-hoc 查询）
 
 #### 4) 分区写入（DuckDB 原生 partitioned writes + 幂等）
 
-用 DuckDB 的 `COPY ... PARTITION_BY` 直接写 Hive 风格分区目录，避免手工拼目录并保证一致性：
+用 DuckDB 的 `COPY ... PARTITION_BY` 直接写 Hive 风格分区目录，避免手工拼目录并保证一致性。
 
+**临时前缀提交协议（生产推荐）**：
 ```sql
+-- 1. 写到临时前缀（只新增，不覆盖）
 COPY (
   SELECT
     ...,
     CAST('${PARTITION_DATE}' AS DATE) AS dt
   FROM ...
-) TO 's3://<bucket>/dw/ods/ods_daily_stock_price_akshare'
-(FORMAT parquet, PARTITION_BY (dt), OVERWRITE_OR_IGNORE, FILENAME_PATTERN 'file_{uuid}', WRITE_PARTITION_COLUMNS false);
+) TO 's3://<bucket>/dw/ods/ods_daily_stock_price_akshare/_tmp/run_${RUN_ID}'
+(FORMAT parquet, PARTITION_BY (dt), FILENAME_PATTERN 'file_{uuid}', WRITE_PARTITION_COLUMNS false, USE_TMP_FILE true);
+
+-- 2. 校验产出质量（row_count/file_count/schema_hash）
+-- 3. 写完成标记
+-- 4. 切换/清理旧分区（S3 rename = copy+delete，评估成本）
 ```
 
-> 建议：显式加上 `WRITE_PARTITION_COLUMNS false`（默认就是 false，但显式写更少踩坑）。
+> **USE_TMP_FILE true**：先写临时文件再替换，降低写入中断导致"坏文件覆盖"的风险
+
+> **重要约束**：远端分区更新 = commit protocol，不允许 in-place overwrite。OVERWRITE_OR_IGNORE 在 S3/MinIO 上不可靠，可能导致部分文件覆盖失败。
+>
+> **兼容性注意**：
+> - 如果只用 DuckDB 读写：`WRITE_PARTITION_COLUMNS false` 通常不影响
+> - 如果未来要被 Spark/Polars/PyArrow/Trino 读：上线前用一个小分区做验收（检查 schema/列冲突/类型），必要时采用"落盘后 drop 分区列"的策略
 
 运行约束（强约束）：
 
