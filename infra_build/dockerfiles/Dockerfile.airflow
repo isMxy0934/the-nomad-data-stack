@@ -8,3 +8,5 @@ RUN pip install --no-cache-dir \
       apache-airflow==2.11.0 \
       -r requirements.txt \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.11.0/constraints-3.9.txt"
+
+RUN python -c "import duckdb; con=duckdb.connect(); con.execute('INSTALL httpfs'); con.close()"
