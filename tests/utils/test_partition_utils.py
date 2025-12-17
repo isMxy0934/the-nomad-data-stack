@@ -5,10 +5,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
-
 from dags.utils.partition_utils import (  # pylint: disable=wrong-import-position
     PartitionPaths,
     build_manifest,
@@ -16,6 +12,10 @@ from dags.utils.partition_utils import (  # pylint: disable=wrong-import-positio
     parse_s3_uri,
     publish_partition,
 )
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
 
 def test_build_partition_paths_generates_expected_prefixes():
@@ -113,12 +113,12 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
 
     copy_calls = s3_hook.copy_object.call_args_list
     assert len(copy_calls) == 2
-    assert copy_calls[0].kwargs["source_bucket_key"].startswith(
-        "dw/ods/table/_tmp/run_abc123/dt=2024-03-01/"
+    assert (
+        copy_calls[0]
+        .kwargs["source_bucket_key"]
+        .startswith("dw/ods/table/_tmp/run_abc123/dt=2024-03-01/")
     )
-    assert copy_calls[0].kwargs["dest_bucket_key"].startswith(
-        "dw/ods/table/dt=2024-03-01/"
-    )
+    assert copy_calls[0].kwargs["dest_bucket_key"].startswith("dw/ods/table/dt=2024-03-01/")
 
     manifest_args = s3_hook.load_string.call_args_list[0].kwargs
     assert manifest_args["bucket_name"] == "bucket"

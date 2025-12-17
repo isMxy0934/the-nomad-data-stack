@@ -1,15 +1,15 @@
 """SQL template utilities for ODS and downstream tasks."""
 
+from collections.abc import Mapping
 from pathlib import Path
 from string import Template
-from typing import Mapping, Union
 
 
 class MissingTemplateVariableError(ValueError):
     """Error raised when a required template variable is not provided."""
 
 
-def load_sql(path: Union[str, Path]) -> str:
+def load_sql(path: str | Path) -> str:
     """Load SQL text from a file and validate that it is not empty.
 
     Args:
@@ -56,9 +56,7 @@ def render_sql(sql: str, variables: Mapping[str, str]) -> str:
         rendered = Template(sql).substitute(**variables)
     except KeyError as exc:
         missing = exc.args[0]
-        raise MissingTemplateVariableError(
-            f"Missing template variable: {missing}"
-        ) from exc
+        raise MissingTemplateVariableError(f"Missing template variable: {missing}") from exc
 
     if not rendered.strip():
         raise ValueError("Rendered SQL is empty")
@@ -66,7 +64,7 @@ def render_sql(sql: str, variables: Mapping[str, str]) -> str:
     return rendered
 
 
-def load_and_render_sql(path: Union[str, Path], variables: Mapping[str, str]) -> str:
+def load_and_render_sql(path: str | Path, variables: Mapping[str, str]) -> str:
     """Convenience helper to load a SQL file and apply template rendering."""
 
     raw_sql = load_sql(path)

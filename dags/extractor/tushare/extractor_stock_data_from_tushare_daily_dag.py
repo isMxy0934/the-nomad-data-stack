@@ -1,10 +1,8 @@
-import io
-import os
-import time
 import logging
-import pandas as pd
+import os
+from datetime import datetime
+
 import tushare as ts
-from datetime import timedelta, datetime
 from airflow.models.dag import DAG
 from airflow.operators.python_operator import PythonOperator
 from utils.s3_utils import S3Uploader
@@ -18,39 +16,40 @@ def fetch_stock_data_from_tushare():
     """
     fetch market snapshot data from Tushare
     """
-    
+
     target_date_str = get_previous_date_str()
     target_partition_date_str = get_previous_partition_date_str()
-    
+
     logging.info(f"start fetching market snapshot data from Akshare: {target_date_str}")
-    
+
     ts.set_token(TUSHARE_TOKEN)
     pro = ts.pro_api()
-    
+
     df = pro.daily(trade_date=target_date_str)
-    
+
     if df.empty:
         logging.warning(f"{target_date_str} has no data (maybe it's a holiday)")
         return None
-    
+
     s3_uploader = S3Uploader()
     file_key = f"raw/daily/stock_price/tushare/{target_partition_date_str}.csv"
-    
-    s3_uploader.upload_bytes(df.to_csv(index=False).encode('utf-8'), file_key, replace=True)
-    
+
+    s3_uploader.upload_bytes(df.to_csv(index=False).encode("utf-8"), file_key, replace=True)
+
     logging.info(f"uploaded market snapshot data to S3: {file_key}, total {len(df)} records")
     return file_key
+
 
 dag = DAG(
     dag_id=DAG_ID,
     schedule="30 18 * * *",
     start_date=datetime(2025, 12, 13),
     catchup=False,
-    tags=['extractor', 'tushare','stock'],
+    tags=["extractor", "tushare", "stock"],
 )
 
 fetch_market_snapshot = PythonOperator(
-    task_id='fetch_stock_data_from_akshare',
+    task_id="fetch_stock_data_from_akshare",
     python_callable=fetch_stock_data_from_tushare,
     dag=dag,
 )
