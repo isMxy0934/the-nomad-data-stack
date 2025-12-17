@@ -26,6 +26,7 @@ def test_build_layer_view_sql_parquet_partitioned():
     assert "CREATE OR REPLACE VIEW" in sql
     assert "read_parquet" in sql
     assert "dt=*/*.parquet" in sql
+    assert "dt=*/*/*.parquet" in sql
     assert "hive_partitioning=true" in sql
 
 

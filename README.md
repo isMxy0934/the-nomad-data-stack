@@ -181,7 +181,7 @@ uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/_integration/
 之后在 DuckDB UI（或 CLI）里打开 `./.duckdb/catalog.duckdb`，即可：
 
 - `SELECT * FROM ods.ods_daily_stock_price_akshare;`（探索：会列举分区）
-- `SELECT * FROM ods.ods_daily_stock_price_akshare_dt('2024-01-15');`（精确分区：不需要列举）
+- `SELECT * FROM ods.ods_daily_stock_price_akshare_dt('2024-01-15');`（精确分区：仅在该 dt 前缀下匹配文件）
 
 #### 迁移机制（折中方案）
 

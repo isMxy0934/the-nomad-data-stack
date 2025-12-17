@@ -48,7 +48,6 @@ def build_layer_view_sql(*, bucket: str, layer: LayerSpec, table: str) -> str:
 
     base_prefix = normalize_prefix(layer.base_prefix)
     if layer.partitioned_by_dt:
-        path = f"s3://{bucket}/{base_prefix}/{table}/dt=*/*.{layer.file_extension}"
         hive_partitioning = "true"
     else:
         path = f"s3://{bucket}/{base_prefix}/{table}/*.{layer.file_extension}"
@@ -64,9 +63,23 @@ def build_layer_view_sql(*, bucket: str, layer: LayerSpec, table: str) -> str:
     else:
         raise ValueError(f"Unsupported file_extension: {layer.file_extension}")
 
+    if layer.partitioned_by_dt:
+        # Be tolerant to both:
+        # - dt=YYYY-MM-DD/*.parquet (target convention)
+        # - dt=YYYY-MM-DD/dt=YYYY-MM-DD/*.parquet (legacy nested partitions)
+        path_flat = f"s3://{bucket}/{base_prefix}/{table}/dt=*/*.{layer.file_extension}"
+        path_nested = f"s3://{bucket}/{base_prefix}/{table}/dt=*/*/*.{layer.file_extension}"
+        select_sql = (
+            f"SELECT * FROM {reader}('{path_flat}', hive_partitioning={hive_partitioning})\n"
+            f"UNION ALL\n"
+            f"SELECT * FROM {reader}('{path_nested}', hive_partitioning={hive_partitioning})"
+        )
+    else:
+        select_sql = f"SELECT * FROM {reader}('{path}', hive_partitioning={hive_partitioning})"
+
     return (
         f"CREATE OR REPLACE VIEW {schema_sql}.{table_sql} AS\n"
-        f"SELECT * FROM {reader}('{path}', hive_partitioning={hive_partitioning});"
+        f"{select_sql};"
     )
 
 
@@ -92,6 +105,11 @@ def build_layer_dt_macro_sql(*, bucket: str, layer: LayerSpec, table: str) -> st
         f"SELECT * FROM read_parquet(\n"
         f"  's3://{bucket}/{base_prefix}/{table}/dt=' || partition_date || '/*.parquet',\n"
         f"  hive_partitioning=true\n"
+        f")\n"
+        f"UNION ALL\n"
+        f"SELECT * FROM read_parquet(\n"
+        f"  's3://{bucket}/{base_prefix}/{table}/dt=' || partition_date || '/*/*.parquet',\n"
+        f"  hive_partitioning=true\n"
         f");"
     )
 
@@ -100,4 +118,3 @@ def build_schema_sql(schema: str) -> str:
     """Create schema statement."""
 
     return f"CREATE SCHEMA IF NOT EXISTS {quote_ident(schema)};"
-
