@@ -7,7 +7,7 @@ from airflow.models.dag import DAG
 from airflow.operators.python_operator import PythonOperator
 
 from dags.utils.s3_utils import S3Uploader
-from dags.utils.time_utils import get_previous_date_str, get_previous_partition_date_str
+from dags.utils.time_utils import get_date_str, get_partition_date_str
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
@@ -18,8 +18,8 @@ def fetch_stock_data_from_akshare():
     API: stock_zh_a_spot_em (Eastern Money Source)
     """
 
-    target_date_str = get_previous_date_str()
-    target_partition_date_str = get_previous_partition_date_str()
+    target_date_str = get_date_str()
+    target_partition_date_str = get_partition_date_str()
 
     logging.info(f"Start fetching A-Share Stock snapshot for date: {target_date_str}")
 
