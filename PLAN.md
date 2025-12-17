@@ -41,44 +41,72 @@
 ## M1：ODS Loader（优先级最高）
 
 ### 验收口径（Definition of Done）
-- [ ] 指定 `dest + dt` 跑一次，产出 Parquet + `_SUCCESS`
+- [ ] 指定 `dest + dt` 跑一次，产出 Parquet + `manifest.json`（可选 `_SUCCESS`）
 - [ ] 下游能按精确分区路径读取，不触发全量列举（避免 S3 ListObjectsV2 成本）
 - [ ] 重跑同一 `dt` 不会混入旧文件（commit protocol 通过）
 - [ ] 结构化日志输出：`table/dt/run_id/location/file_count/row_count/status`
 - [ ] `make smoke`：集成验收脚本验证完整链路
 
-### 1.1 约定（保持简单、强约束）
+### 执行顺序（按优先级，按步骤验收）
+
+> 原则：一次只做一小步、可验收、可回滚；每一步都要有最小验证（单测或脚本）。
+
+#### P0：锁定约定（先写清楚，再写代码）
 
 - [x] 配置文件：`dags/ods/config.yaml`
 - [x] SQL 约定：`dags/ods/{dest}.sql`
 - [x] 分区参数：`PARTITION_DATE`（`YYYY-MM-DD`）
-- [ ] ODS 产物路径：`dw/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（实现落盘）
-- [ ] 完成标记：`dw/ods/{dest}/dt=YYYY-MM-DD/_SUCCESS` 或 `manifest.json`（实现写入）
-- [ ] 幂等策略：同一 `(dest, dt)` 单写者 + 重跑覆盖/切换（实现并验证）
+- [ ] ODS 产物路径：`dw/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
+- [ ] 完成标记：`dw/ods/{dest}/dt=YYYY-MM-DD/manifest.json`（可选 `_SUCCESS`）
+- [ ] 幂等策略：同一 `(dest, dt)` 单写者 + 重跑覆盖（publish 前清空 canonical 分区）
 
-### 1.2 Commit Protocol 实现（核心任务）
+#### P1：`sql_utils`（最小工具 + 单元测试）
 
-- [ ] 写入 `_tmp/run_${RUN_ID}/dt=.../` 临时前缀（只新增，不覆盖）
-- [ ] 校验产出质量：row_count/file_count/schema_hash
-- [ ] 发布到 canonical `dw/ods/{dest}/dt=.../`（copy + 写 `_SUCCESS/manifest`）
-- [ ] 清理旧 run（可选、可配置）
-- [ ] 单写者保证：为每张表创建 Airflow pool（slots=1），写分区任务必须指定该 pool
+- [ ] `dags/utils/sql_utils.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
+- [ ] `tests/utils/test_sql_utils.py`：覆盖变量渲染与错误分支（缺参/空 SQL）
 
-### 1.3 通用工具（ODS Loader 会依赖）
+验收：
+- [ ] 本地运行单测通过（不依赖 Airflow/MinIO）
 
-- [ ] `dags/utils/duckdb_utils.py`：DuckDB 连接、`httpfs`、MinIO/S3 配置、执行 SQL、`COPY` 写 Parquet
-- [ ] `dags/utils/sql_utils.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如要求产出 `dt`）
-- [ ] `dags/utils/partition_utils.py`：生成分区路径、写 `_SUCCESS/manifest`、统计文件/行数、commit protocol 实现
-- [ ] `dags/utils/schema_utils.py`：表 schema 定义、动态 SQL 生成、类型校验
+#### P2：`partition_utils`（commit protocol 的语义落地 + 单元测试）
 
-### 1.4 ODS Loader DAG：`dags/ods_loader_dag.py`
+> commit protocol 是 M1 的核心：禁止直接写 canonical；必须 tmp → validate → publish → 标记完成。
 
-- [ ] 从 `dags/ods/config.yaml` 读取表清单并动态生成任务
-- [ ] 每表 TaskGroup：prepare → load → validate → commit → cleanup
-- [ ] load：DuckDB 执行（注册源 → 跑 SQL → `COPY ... PARTITION_BY (dt)` 写临时前缀）
-- [ ] validate：质量校验（行数/文件数/schema一致性）
-- [ ] commit：发布到正式分区路径 + 写完成标记
-- [ ] 端到端验证：跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
+- [ ] `dags/utils/partition_utils.py`：生成 tmp/canonical 前缀、生成 manifest、写入完成标记
+- [ ] `dags/utils/partition_utils.py`：publish 实现（清空 canonical dt 前缀 → copy tmp dt 前缀 → 写 manifest.json → 可选写 `_SUCCESS`）
+- [ ] `tests/utils/test_partition_utils.py`：覆盖路径生成与 manifest 字段（不依赖真实 S3）
+
+验收：
+- [ ] 单测通过，且路径严格符合 `dt=YYYY-MM-DD`
+
+#### P3：`duckdb_utils`（DuckDB 临时计算 + S3/MinIO 读写能力）
+
+- [ ] `dags/utils/duckdb_utils.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
+- [ ] `dags/utils/duckdb_utils.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
+- [ ] `dags/utils/duckdb_utils.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
+
+验收：
+- [ ] 至少有一个最小验证（单测或脚本）：能执行 `SELECT 1`，且 COPY 写入路径参数校验通过
+
+#### P4：ODS Loader DAG（拼装层）
+
+- [ ] `dags/ods_loader_dag.py`：从 `dags/ods/config.yaml` 读取表清单并动态生成任务
+- [ ] `dags/ods_loader_dag.py`：每表 TaskGroup：prepare → load → validate → commit → cleanup
+- [ ] `dags/ods_loader_dag.py`：load 使用 DuckDB 写 tmp 前缀（`COPY ... PARTITION_BY (dt)`）
+- [ ] `dags/ods_loader_dag.py`：commit 调用 `partition_utils` publish + 写完成标记
+- [ ] 单写者：为每张表创建 Airflow pool（slots=1），写分区任务必须指定该 pool
+
+验收：
+- [ ] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
+
+#### P5：端到端 smoke（脚本化验收）
+
+- [ ] `make smoke`（或 `scripts/smoke_m1.sh`）：extractor → ods_loader → 校验 ODS 分区产物与完成标记
+- [ ] 校验项：parquet 存在 + 完成标记存在 + 支持精确分区路径读取
+
+#### P6：schema（可延后，非阻塞 M1 最小闭环）
+
+- [ ] `dags/utils/schema_utils.py`：表 schema 定义、类型校验（先从 1 张表开始）
 
 ---
 
