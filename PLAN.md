@@ -21,7 +21,7 @@
 
 - **M0 基础可运行**：本地 `docker compose up` 后 Airflow/MinIO/Postgres 可用，Extractor DAG 可写入 MinIO。
 - **M1 ODS 打通**：ODS Loader 能从 MinIO 读原始数据（CSV）→ DuckDB 执行 SQL → 写 ODS 分区 Parquet → 写 `_SUCCESS` 完成标记。
-- **M2 DW 打通（配置驱动）**：基于 `dags/dw_config.yaml` + `dags/**`（目录即配置）生成 DAG；按配置顺序解析层与表并创建 TaskGroup；像 ODS 一样执行（依赖判定 → DuckDB 计算 → tmp 写入 → validate → promote → manifest/_SUCCESS）。
+- **M2 DW 打通（配置驱动）**：基于 `dags/dw_config.yaml` + `dags/{layer}/*.sql`（目录即配置）生成每层独立 DAG（`dw_{layer}`）；空层（无 SQL/目录不存在）跳过；任务运行时只读 attach DuckDB catalog 以支持 `SELECT * FROM ods.xxx`；像 ODS 一样执行（DuckDB 计算 → tmp 写入 → validate → publish → `_SUCCESS` → cleanup）。
 - **M3 治理与运维**：小文件 compaction、schema 校验与演进、失败重试与回放、可观测与审计完善。
 
 ---
@@ -124,21 +124,23 @@
 
 ### 2.0 约定（先写清楚，再写代码）
 
-- [ ] 配置文件：`dags/dw_config.yaml`（按定义顺序解析层；显式声明层依赖；可选同层表依赖）
-- [ ] 目录即配置：`dags/{layer}/...`（按 layer 目录扫描表定义；无需再引入第二份表清单）
-- [ ] SQL 约定：`dags/{layer}/{table}.sql`（必要时允许同名 `dags/{layer}/{table}.yaml` 承载分区/输出等元信息）
+- [ ] 配置文件：`dags/dw_config.yaml`（层依赖 + 可选同层表依赖）
+- [ ] 目录即配置：按 layer 扫描 `dags/{layer}/*.sql`；目录不存在或无 SQL 文件则跳过该层（不生成空层占位）
+- [ ] SQL 约定：`dags/{layer}/{table}.sql`（表名强约束带 layer 前缀，例如 `dwd_daily_stock_price`）
 - [ ] 分区参数：`${PARTITION_DATE}`（`YYYY-MM-DD`，与 ODS 一致）
 - [ ] 产物路径：
   - 分区表：`lake/{layer}/{table}/dt=YYYY-MM-DD/*.parquet`（遵循 commit protocol）
   - 非分区表（DIM full / 快照类）：`lake/{layer}/{table}/*.parquet`（同样走 tmp → promote，禁止原地覆盖）
-- [ ] 完成标记：与 ODS 一致，写 `manifest.json` + 可选 `_SUCCESS`，并作为下游依赖判定依据
+- [ ] DAG 生成：每层生成一个独立 DAG：`dw_{layer}`（例如 `dw_dwd`、`dw_ads`）
+- [ ] 完成标记：写入 `_SUCCESS`（核心约定）；无数据视为成功但不写 `_SUCCESS`，只记录日志
 - [ ] 单写者：同一 `(layer, table, dt)` 只能一个任务写入（Airflow pool/并发限制）
 
 ### 2.1 解析与依赖建模（核心：可测试）
 
-- [ ] `dw_config.yaml` 解析：读取层顺序/层依赖/同层表依赖，并做严格校验（未知 layer、循环依赖等）
-- [ ] 目录扫描：按约定扫描 `dags/**`，产出“待执行表清单”（layer/table/sql_path/meta_path）
-- [ ] 依赖判定：跨层依赖通过 `_SUCCESS`；同层依赖通过“上游 task 完成 +（可选）上游 `_SUCCESS`”
+- [ ] `dw_config.yaml` 解析：读取层依赖/同层表依赖，并做严格校验（未知 layer、循环依赖等）
+- [ ] 目录扫描：按约定扫描 `dags/{layer}/*.sql`，产出“待执行表清单”（layer/table/sql_path）
+- [ ] 命名校验：`{table}` 必须以 `{layer}_` 开头；否则报错（避免 catalog/落盘命名漂移）
+- [ ] 依赖建模：同层表依赖按 `table_dependencies` 做拓扑排序；跨层顺序由编排（按 `layer_dependencies`）保证
 - [ ] 单元测试：覆盖解析、扫描、拓扑排序与错误分支
 
 ### 2.2 DW 执行与提交（复用 M1 组件）
@@ -147,17 +149,19 @@
 - [ ] 分区表写入：DuckDB `COPY ... PARTITION_BY (dt)`，dt 由 `${PARTITION_DATE}` 注入
 - [ ] 非分区表写入：仍按“临时前缀 → promote 到 canonical”落地（避免读到中间态）
 - [ ] 校验口径：至少文件数/行数与路径一致性校验（对齐 ODS）
+- [ ] Catalog 接入：任务运行时只读 attach `./.duckdb/catalog.duckdb`，SQL 只引用 `ods.*`/上游层逻辑表（不硬编码 S3 路径）
 
 ### 2.3 Airflow DAG 生成：`dags/dw_dags.py`
 
-- [ ] 按 `dw_config.yaml` 顺序：逐层创建 TaskGroup；层内按目录扫描结果创建子 TaskGroup/Tasks
+- [ ] 逐层生成 DAG：仅当该层发现 `*.sql` 才生成 `dw_{layer}` DAG（空层跳过）
+- [ ] 层内按目录扫描结果创建 tasks（可选用 TaskGroup 按表分组）
 - [ ] 与 ODS 对齐的流程：prepare → load → validate → commit → cleanup
-- [ ] pool 策略：为每张表（或每层）提供默认 pool（slots=1），确保单写者
+- [ ] pool 策略：为每张表提供默认 pool（slots=1），确保单写者
 
 ### 2.4 端到端验证（最小闭环）
 
 - [ ] 增加至少 1 个 DWD 表（SQL + 目录约定）并从 ODS 跑通一个 `dt`
-- [ ] 增加至少 1 个 ADS 指标/宽表（SQL + 目录约定）并跑通一个 `dt`（物化落盘，可回放审计）
+- [ ] Demo 表：`dwd.dwd_daily_stock_price`（AkShare/TuShare 合并；按 `symbol, trade_date` 粒度，产出 `open_avg/close_avg`）
 
 ---
 

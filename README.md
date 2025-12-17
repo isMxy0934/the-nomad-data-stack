@@ -150,8 +150,23 @@ COPY (
 
 - `dags/extractor/*`：采集 DAG（写入 MinIO，通常为 CSV）
 - `dags/ods/*`：ODS 配置与 SQL
+- `dags/dw_config.yaml`：DW 分层依赖配置（层依赖 + 可选同层表依赖）
+- `dags/dw_dags.py`：DW DAG 生成入口（按 `dw_config.yaml` + 目录扫描生成 `dw_{layer}` DAG）
 - `dags/utils/*`：通用工具（如 S3 上传、日期分区）
 - `dags/ods_loader_dag.py`：ODS 加载 DAG（读取 `config.yaml`，按 SQL 落 Parquet，并写入 `_SUCCESS` 完成标记）
+
+#### M2：DW（配置驱动，目录即配置）
+
+DW 层（DWD/DIM/DWM/DWS/ADS）由 `dags/dw_dags.py` 根据 `dags/dw_config.yaml` 动态生成，每一层生成一个独立 DAG：
+
+- DAG ID：`dw_{layer}`（例如 `dw_dwd`、`dw_ads`）
+- 表发现：扫描 `dags/{layer}/*.sql`；目录不存在或无 SQL 文件则跳过该层（不生成占位 DAG）
+- 命名约定：文件名必须带 layer 前缀，例如 `dags/dwd/dwd_daily_stock_price.sql` 对应逻辑表 `dwd.dwd_daily_stock_price`
+- 分区与落盘：默认按 `dt=YYYY-MM-DD` 分区写入 `lake/{layer}/{table}/dt=.../*.parquet`，遵循 tmp → validate → publish → `_SUCCESS` → cleanup 的提交协议
+- Catalog 接入：任务运行时只读 attach `./.duckdb/catalog.duckdb`（metadata-only），SQL 里可以直接写 `FROM ods.xxx ...`（不硬编码 S3 路径）
+- `_SUCCESS` 语义：
+  - 由“写该分区的任务”决定是否产出；无数据视为成功但不写 `_SUCCESS`，仅记录日志
+  - 下游不额外检查 `_SUCCESS`；读不到当日分区即空输入处理并成功退出（上游失败由 Airflow 依赖自然阻塞）
 
 ### DuckDB 分析 Catalog（推荐）
 
@@ -204,8 +219,9 @@ uv run python -m scripts.validate_duckdb_catalog_migrations
 
 依赖关系：
 
-- ODS：`extractor_*` → `ods_loader_*`
-- DWD：等待对应 ODS 分区完成 → 执行 `dwd/{table}.sql` → 写入 `lake/dwd/...`
+- 推荐编排：`duckdb_catalog_dag` → `ods_loader` → `dw_{layer}`（按 `dw_config.yaml` 顺序）
+- ODS：`extractor_*` → `ods_loader`
+- DW：`dw_{layer}` 读取逻辑表（`ods.*`/上游层）→ 写入 `lake/{layer}/...`
 
 ### 本地启动（Docker Compose）
 
