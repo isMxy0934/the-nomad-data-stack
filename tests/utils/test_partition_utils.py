@@ -113,12 +113,12 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
 
     copy_calls = s3_hook.copy_object.call_args_list
     assert len(copy_calls) == 2
-    assert copy_calls[0].kwargs["source_bucket_key"].startswith(
-        "dw/ods/table/_tmp/run_abc123/dt=2024-03-01/"
+    assert (
+        copy_calls[0]
+        .kwargs["source_bucket_key"]
+        .startswith("dw/ods/table/_tmp/run_abc123/dt=2024-03-01/")
     )
-    assert copy_calls[0].kwargs["dest_bucket_key"].startswith(
-        "dw/ods/table/dt=2024-03-01/"
-    )
+    assert copy_calls[0].kwargs["dest_bucket_key"].startswith("dw/ods/table/dt=2024-03-01/")
 
     manifest_args = s3_hook.load_string.call_args_list[0].kwargs
     assert manifest_args["bucket_name"] == "bucket"

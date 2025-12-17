@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Mapping, MutableMapping, Tuple
+from datetime import UTC, datetime
 
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
@@ -24,7 +24,7 @@ def _strip_slashes(path: str) -> str:
     return path.strip("/")
 
 
-def parse_s3_uri(uri: str) -> Tuple[str, str]:
+def parse_s3_uri(uri: str) -> tuple[str, str]:
     """Split an ``s3://`` URI into bucket and key components."""
 
     if not uri.startswith("s3://"):
@@ -65,9 +65,7 @@ def build_partition_paths(
 
     normalized_base = _strip_slashes(base_prefix)
     canonical_prefix = f"s3://{bucket_name}/{normalized_base}/dt={partition_date}"
-    tmp_prefix = (
-        f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}/dt={partition_date}"
-    )
+    tmp_prefix = f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}/dt={partition_date}"
     manifest_path = f"{canonical_prefix}/manifest.json"
     success_flag_path = f"{canonical_prefix}/_SUCCESS"
 
@@ -98,7 +96,7 @@ def build_manifest(
     if row_count < 0:
         raise ValueError("row_count cannot be negative")
 
-    timestamp = generated_at or datetime.now(timezone.utc).isoformat()
+    timestamp = generated_at or datetime.now(UTC).isoformat()
 
     return {
         "dest": dest,
