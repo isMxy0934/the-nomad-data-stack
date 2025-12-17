@@ -62,11 +62,11 @@
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
 
-- [ ] `dags/utils/sql_utils.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
-- [ ] `tests/utils/test_sql_utils.py`：覆盖变量渲染与错误分支（缺参/空 SQL）
+- [x] `dags/utils/sql_utils.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
+- [x] `tests/utils/test_sql_utils.py`：覆盖变量渲染与错误分支（缺参/空 SQL）
 
 验收：
-- [ ] 本地运行单测通过（不依赖 Airflow/MinIO）
+- [x] 本地运行单测通过（不依赖 Airflow/MinIO）
 
 #### P2：`partition_utils`（commit protocol 的语义落地 + 单元测试）
 
