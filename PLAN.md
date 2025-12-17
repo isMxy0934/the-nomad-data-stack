@@ -29,11 +29,11 @@
 
 ## M0：基础可运行
 
-- [ ] 本地启动：`docker compose up -d` 可启动 Airflow/MinIO/Postgres（完成健康检查）
-- [ ] Airflow 连接：Web UI 可访问（`localhost:8080`），scheduler 正常心跳
-- [ ] MinIO 可用：控制台可访问（`localhost:9001`），bucket/凭证可用
-- [ ] Airflow 连接串：`AIRFLOW_CONN_MINIO_S3` 可用（能 list/read/write）
-- [ ] Extractor 验证：手动触发任一 extractor DAG，确认 CSV 成功写入 MinIO
+- [x] 本地启动：`docker compose up -d` 可启动 Airflow/MinIO/Postgres（完成健康检查）
+- [x] Airflow 连接：Web UI 可访问（`localhost:8080`），scheduler 正常心跳
+- [x] MinIO 可用：控制台可访问（`localhost:9001`），bucket/凭证可用
+- [x] Airflow 连接串：`AIRFLOW_CONN_MINIO_S3` 可用（能 list/read/write）
+- [x] Extractor 验证：手动触发任一 extractor DAG，确认 CSV 成功写入 MinIO
 
 ---
 
