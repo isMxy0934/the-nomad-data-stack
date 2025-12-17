@@ -34,7 +34,7 @@
 - [x] MinIO 可用：控制台可访问（`localhost:9001`），bucket/凭证可用
 - [x] Airflow 连接串：`AIRFLOW_CONN_MINIO_S3` 可用（能 list/read/write）
 - [x] Extractor 验证：手动触发任一 extractor DAG，确认 CSV 成功写入 MinIO
-- [ ] `make smoke`：集成验收脚本（docker compose up → 触发 extractor → 校验 CSV 成功写入 MinIO）
+- [x] `make smoke`：集成验收脚本（docker compose up → 触发 extractor → 校验 CSV 成功写入 MinIO）
 
 ---
 
