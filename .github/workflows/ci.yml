@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     
     steps:
     - uses: actions/checkout@v4
@@ -26,7 +31,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        uv sync --group dev
+        uv sync --group dev --frozen
     
     - name: Run tests with coverage
       run: |
@@ -40,12 +45,16 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     
     steps:
     - uses: actions/checkout@v4
     
     - name: Install uv
       uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -54,7 +63,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        uv sync --group dev
+        uv sync --group dev --frozen
     
     - name: Run ruff linter
       run: |

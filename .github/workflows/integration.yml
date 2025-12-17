@@ -1,8 +1,8 @@
 name: Integration Tests
 
 on:
-  # push:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       target_table:
@@ -13,12 +13,22 @@ on:
         options:
         - 'ods_daily_stock_price_akshare'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   integration_test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     
     steps:
     - uses: actions/checkout@v4
+
+    - name: Add local bin to PATH
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Start MinIO
       run: |
@@ -55,12 +65,20 @@ jobs:
     
     - name: Install dependencies
       run: |
-        uv sync --group dev
+        uv sync --group dev --frozen
     
+    - name: Cache MinIO client (mc)
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/bin/mc
+        key: mc-${{ runner.os }}-linux-amd64-v1
+
     - name: Set up MinIO client
       run: |
-        curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
-        chmod +x /usr/local/bin/mc
+        if ! command -v mc >/dev/null 2>&1; then
+          curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o "$HOME/.local/bin/mc"
+          chmod +x "$HOME/.local/bin/mc"
+        fi
         mc alias set local http://localhost:9000 minioadmin minioadmin
     
     - name: Run integration tests
