@@ -1,15 +1,14 @@
 import sys
 from pathlib import Path
 
-import pytest
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from airflow.models import Connection
 from airflow.utils.task_group import TaskGroup
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
-
-from dags.ods_loader_dag import (  # pylint: disable=wrong-import-position
+from dags.ods_loader_dag import (
     build_s3_connection_config,
     create_ods_loader_dag,
     get_table_pool_name,
