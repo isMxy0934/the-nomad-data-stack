@@ -64,16 +64,12 @@ def build_layer_view_sql(*, bucket: str, layer: LayerSpec, table: str) -> str:
         raise ValueError(f"Unsupported file_extension: {layer.file_extension}")
 
     if layer.partitioned_by_dt:
-        # Be tolerant to both:
-        # - dt=YYYY-MM-DD/*.parquet (target convention)
-        # - dt=YYYY-MM-DD/dt=YYYY-MM-DD/*.parquet (legacy nested partitions)
-        path_flat = f"s3://{bucket}/{base_prefix}/{table}/dt=*/*.{layer.file_extension}"
-        path_nested = f"s3://{bucket}/{base_prefix}/{table}/dt=*/*/*.{layer.file_extension}"
-        select_sql = (
-            f"SELECT * FROM {reader}('{path_flat}', hive_partitioning={hive_partitioning})\n"
-            f"UNION ALL\n"
-            f"SELECT * FROM {reader}('{path_nested}', hive_partitioning={hive_partitioning})"
-        )
+        # Support both layouts via recursive glob:
+        # - dt=YYYY-MM-DD/*.parquet (flat)
+        # - dt=YYYY-MM-DD/dt=YYYY-MM-DD/*.parquet (nested, can happen if you
+        #   partition-by dt under a dt-prefixed destination)
+        path = f"s3://{bucket}/{base_prefix}/{table}/dt=*/**/*.{layer.file_extension}"
+        select_sql = f"SELECT * FROM {reader}('{path}', hive_partitioning={hive_partitioning})"
     else:
         select_sql = f"SELECT * FROM {reader}('{path}', hive_partitioning={hive_partitioning})"
 
@@ -103,12 +99,7 @@ def build_layer_dt_macro_sql(*, bucket: str, layer: LayerSpec, table: str) -> st
     return (
         f"CREATE OR REPLACE MACRO {schema_sql}.{macro_sql}(partition_date) AS TABLE\n"
         f"SELECT * FROM read_parquet(\n"
-        f"  's3://{bucket}/{base_prefix}/{table}/dt=' || partition_date || '/*.parquet',\n"
-        f"  hive_partitioning=true\n"
-        f")\n"
-        f"UNION ALL\n"
-        f"SELECT * FROM read_parquet(\n"
-        f"  's3://{bucket}/{base_prefix}/{table}/dt=' || partition_date || '/*/*.parquet',\n"
+        f"  's3://{bucket}/{base_prefix}/{table}/dt=' || partition_date || '/**/*.parquet',\n"
         f"  hive_partitioning=true\n"
         f");"
     )

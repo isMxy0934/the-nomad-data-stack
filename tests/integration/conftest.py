@@ -12,6 +12,7 @@ from pathlib import Path
 import boto3
 import pytest
 import yaml
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 # 设置测试环境路径
@@ -89,12 +90,21 @@ def minio_client(test_bucket_name: str) -> Generator[boto3.client, None, None]:
     secret_key = os.getenv("S3_SECRET_KEY", "minioadmin")
     region = os.getenv("S3_REGION", "us-east-1")
 
+    # Fail fast when MinIO is not running/reachable; otherwise boto3 can appear to "hang"
+    # due to retries and long default timeouts.
+    client_config = Config(
+        connect_timeout=float(os.getenv("S3_CONNECT_TIMEOUT", "2")),
+        read_timeout=float(os.getenv("S3_READ_TIMEOUT", "5")),
+        retries={"max_attempts": int(os.getenv("S3_MAX_ATTEMPTS", "2"))},
+    )
+
     client = boto3.client(
         "s3",
         endpoint_url=endpoint_url,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
         region_name=region,
+        config=client_config,
     )
 
     # 确保 bucket 存在

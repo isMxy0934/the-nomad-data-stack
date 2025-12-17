@@ -16,21 +16,21 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from utils.duckdb_utils import (
+from dags.utils.duckdb_utils import (
     S3ConnectionConfig,
     configure_s3_access,
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
 )
-from utils.partition_utils import (
+from dags.utils.partition_utils import (
     PartitionPaths,
     build_manifest,
     build_partition_paths,
     parse_s3_uri,
     publish_partition,
 )
-from utils.sql_utils import load_and_render_sql
+from dags.utils.sql_utils import load_and_render_sql
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")

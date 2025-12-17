@@ -25,8 +25,7 @@ def test_build_layer_view_sql_parquet_partitioned():
     sql = build_layer_view_sql(bucket="stock-data", layer=layer, table="ods_daily")
     assert "CREATE OR REPLACE VIEW" in sql
     assert "read_parquet" in sql
-    assert "dt=*/*.parquet" in sql
-    assert "dt=*/*/*.parquet" in sql
+    assert "dt=*/**/*.parquet" in sql
     assert "hive_partitioning=true" in sql
 
 
