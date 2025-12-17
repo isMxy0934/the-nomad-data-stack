@@ -36,11 +36,14 @@
 - ✅ **覆盖率监控**：Codecov 跟踪测试覆盖率
 
 ### 本地开发检查
-# 运行测试
+# 1.安装依赖
+uv sync --group dev
+
+# 2.运行测试
 uv run python -m pytest tests/ -v
 
-# 代码质量检查
+# 3.代码质量检查
 uv run ruff check .
 
-# 代码格式化
+# 4.代码格式化
 uv run ruff format .
