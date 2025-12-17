@@ -56,8 +56,8 @@
 - [x] 配置文件：`dags/ods/config.yaml`
 - [x] SQL 约定：`dags/ods/{dest}.sql`
 - [x] 分区参数：`PARTITION_DATE`（`YYYY-MM-DD`）
-- [x] ODS 产物路径：`dw/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
-- [x] 完成标记：`dw/ods/{dest}/dt=YYYY-MM-DD/manifest.json`（可选 `_SUCCESS`）
+- [x] ODS 产物路径：`lake/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
+- [x] 完成标记：`lake/ods/{dest}/dt=YYYY-MM-DD/manifest.json`（可选 `_SUCCESS`）
 - [x] 幂等策略：同一 `(dest, dt)` 单写者 + 重跑覆盖（publish 前清空 canonical 分区）
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
@@ -123,7 +123,7 @@
 
 ### 2.2 DIM 分区策略落地
 
-- [ ] DIM 默认不分区：`dw/dim/{table}/*.parquet`
+- [ ] DIM 默认不分区：`lake/dim/{table}/*.parquet`
 - [ ] DIM 版本化（可选）：`as_of=YYYY-MM-DD` 或 `version=...`
 
 ### 2.3 端到端验证
@@ -136,7 +136,7 @@
 ## M3：ADS / Metrics 打通
 
 - [ ] 指标层配置与 SQL 约定（例如 `dags/ads/config.yaml` + `dags/ads/{metric}.sql`）
-- [ ] ADS 产物路径：`dw/ads/{metric_or_table}/dt=YYYY-MM-DD/*.parquet`
+- [ ] ADS 产物路径：`lake/ads/{metric_or_table}/dt=YYYY-MM-DD/*.parquet`
 - [ ] 写入方式：DuckDB `COPY ... PARTITION_BY (dt)`（按 `PARTITION_DATE` 产出）
 - [ ] 幂等与标记：同一 `(metric, dt)` 单写者 + 重跑覆盖 + `_SUCCESS/manifest`
 - [ ] 增加至少 1 个指标示例并跑通（日分区产出）
