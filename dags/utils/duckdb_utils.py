@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 import duckdb
 
@@ -42,7 +43,13 @@ def configure_s3_access(connection: duckdb.DuckDBPyConnection, config: S3Connect
     connection.execute("LOAD httpfs;")
 
     connection.execute(f"SET s3_region='{config.region}';")
-    connection.execute(f"SET s3_endpoint='{config.endpoint_url}';")
+
+    endpoint = config.endpoint_url.strip()
+    parsed = urlparse(endpoint)
+    if parsed.scheme and parsed.netloc:
+        endpoint = parsed.netloc
+    connection.execute(f"SET s3_endpoint='{endpoint}';")
+
     connection.execute(f"SET s3_access_key_id='{config.access_key}';")
     connection.execute(f"SET s3_secret_access_key='{config.secret_key}';")
     if config.session_token:
