@@ -7,7 +7,7 @@ from airflow.models.dag import DAG
 from airflow.operators.python_operator import PythonOperator
 
 from dags.utils.s3_utils import S3Uploader
-from dags.utils.time_utils import get_previous_date_str, get_previous_partition_date_str
+from dags.utils.time_utils import get_date_str, get_partition_date_str
 
 TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN")
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
@@ -18,8 +18,8 @@ def fetch_stock_data_from_tushare():
     fetch market snapshot data from Tushare
     """
 
-    target_date_str = get_previous_date_str()
-    target_partition_date_str = get_previous_partition_date_str()
+    target_date_str = get_date_str()
+    target_partition_date_str = get_partition_date_str()
 
     logging.info(f"start fetching market snapshot data from Akshare: {target_date_str}")
 

@@ -31,6 +31,7 @@ from dags.utils.partition_utils import (
     publish_partition,
 )
 from dags.utils.sql_utils import load_and_render_sql
+from dags.utils.time_utils import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
@@ -111,11 +112,11 @@ def _delete_tmp_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
 
 def prepare_partition(
     table_config: dict[str, Any],
-    partition_date: str,
     bucket_name: str,
     run_id: str,
     **_: Any,
 ) -> dict[str, str]:
+    partition_date = get_partition_date_str()
     base_prefix = f"lake/ods/{table_config['dest']}"
     paths = build_partition_paths(
         base_prefix=base_prefix,
@@ -135,7 +136,6 @@ def prepare_partition(
 
 def load_partition(
     table_config: dict[str, Any],
-    partition_date: str,
     bucket_name: str,
     run_id: str,
     task_group_id: str,
@@ -144,6 +144,7 @@ def load_partition(
     ti = context["ti"]
     paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
     paths = PartitionPaths(**paths_dict)
+    partition_date = paths.partition_date
 
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
     source_path = str(table_config["src"]["properties"]["path"]).strip("/")
@@ -232,7 +233,6 @@ def validate_partition(task_group_id: str, **context: Any) -> dict[str, int]:
 
 def commit_partition(
     table_config: dict[str, Any],
-    partition_date: str,
     bucket_name: str,
     run_id: str,
     task_group_id: str,
@@ -240,6 +240,7 @@ def commit_partition(
 ) -> dict[str, str]:
     ti = context["ti"]
     paths = PartitionPaths(**ti.xcom_pull(task_ids=f"{task_group_id}.prepare"))
+    partition_date = paths.partition_date
     metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
     if not metrics:
         raise ValueError("Load metrics are required to publish a partition")
@@ -287,7 +288,6 @@ def build_table_task_group(dag: DAG, table_config: dict[str, Any]) -> TaskGroup:
             python_callable=prepare_partition,
             op_kwargs={
                 "table_config": table_config,
-                "partition_date": "{{ ds }}",
                 "bucket_name": DEFAULT_BUCKET_NAME,
                 "run_id": "{{ run_id }}",
             },
@@ -299,7 +299,6 @@ def build_table_task_group(dag: DAG, table_config: dict[str, Any]) -> TaskGroup:
             python_callable=load_partition,
             op_kwargs={
                 "table_config": table_config,
-                "partition_date": "{{ ds }}",
                 "bucket_name": DEFAULT_BUCKET_NAME,
                 "run_id": "{{ run_id }}",
                 "task_group_id": task_group_id,
@@ -318,7 +317,6 @@ def build_table_task_group(dag: DAG, table_config: dict[str, Any]) -> TaskGroup:
             python_callable=commit_partition,
             op_kwargs={
                 "table_config": table_config,
-                "partition_date": "{{ ds }}",
                 "bucket_name": DEFAULT_BUCKET_NAME,
                 "run_id": "{{ run_id }}",
                 "task_group_id": task_group_id,
