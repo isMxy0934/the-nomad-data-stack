@@ -56,9 +56,9 @@
 - [x] 配置文件：`dags/ods/config.yaml`
 - [x] SQL 约定：`dags/ods/{dest}.sql`
 - [x] 分区参数：`PARTITION_DATE`（`YYYY-MM-DD`）
-- [ ] ODS 产物路径：`dw/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
-- [ ] 完成标记：`dw/ods/{dest}/dt=YYYY-MM-DD/manifest.json`（可选 `_SUCCESS`）
-- [ ] 幂等策略：同一 `(dest, dt)` 单写者 + 重跑覆盖（publish 前清空 canonical 分区）
+- [x] ODS 产物路径：`dw/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
+- [x] 完成标记：`dw/ods/{dest}/dt=YYYY-MM-DD/manifest.json`（可选 `_SUCCESS`）
+- [x] 幂等策略：同一 `(dest, dt)` 单写者 + 重跑覆盖（publish 前清空 canonical 分区）
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
 
@@ -72,9 +72,9 @@
 
 > commit protocol 是 M1 的核心：禁止直接写 canonical；必须 tmp → validate → publish → 标记完成。
 
-- [ ] `dags/utils/partition_utils.py`：生成 tmp/canonical 前缀、生成 manifest、写入完成标记
-- [ ] `dags/utils/partition_utils.py`：publish 实现（清空 canonical dt 前缀 → copy tmp dt 前缀 → 写 manifest.json → 可选写 `_SUCCESS`）
-- [ ] `tests/utils/test_partition_utils.py`：覆盖路径生成与 manifest 字段（不依赖真实 S3）
+- [x] `dags/utils/partition_utils.py`：生成 tmp/canonical 前缀、生成 manifest、写入完成标记
+- [x] `dags/utils/partition_utils.py`：publish 实现（清空 canonical dt 前缀 → copy tmp dt 前缀 → 写 manifest.json → 可选写 `_SUCCESS`）
+- [x] `tests/utils/test_partition_utils.py`：覆盖路径生成与 manifest 字段（不依赖真实 S3）
 
 验收：
 - [ ] 单测通过，且路径严格符合 `dt=YYYY-MM-DD`
