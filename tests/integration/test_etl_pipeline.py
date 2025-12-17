@@ -18,13 +18,17 @@ def test_single_table_etl_pipeline(
     integration_prefix,
     load_test_csv,
     s3_publish_partition,
+    ods_table_case,
 ):
     """Test complete ETL flow for a single table: raw data -> ODS -> validation"""
 
-    table_name = "ods_daily_stock_price_akshare"
+    table_name = ods_table_case.dest
+    csv_rel = ods_table_case.src_path.strip("/")
+    if csv_rel.startswith("lake/"):
+        csv_rel = csv_rel[len("lake/") :]
+    raw_key = f"{integration_prefix}/{csv_rel}/dt={test_date}/data.csv"
 
-    csv_content = load_test_csv("stock_price_akshare.csv", test_date)
-    raw_key = f"{integration_prefix}/raw/daily/stock_price/akshare/dt={test_date}/data.csv"
+    csv_content = load_test_csv(ods_table_case.csv_fixture, test_date)
     minio_client.put_object(Bucket=test_bucket_name, Key=raw_key, Body=csv_content)
 
     # 2. 执行ODS处理流程（直接使用核心工具，不依赖Airflow）

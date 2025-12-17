@@ -171,6 +171,13 @@ uv run python -m scripts.duckdb_catalog_migrate
 uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/_integration/ods
 ```
 
+新增 ODS 表（例如 `ods_daily_fund_price_akshare`）的最小步骤：
+
+1. 在 `dags/ods/config.yaml` 增加一条 `dest + src.path`
+2. 新增 SQL：`dags/ods/<dest>.sql`（确保输出包含 `${PARTITION_DATE}` 并产出 `dt`）
+3. 运行 ODS Loader 产出 `lake/ods/<dest>/dt=...` 分区
+4. 刷新 catalog：`uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/ods`
+
 之后在 DuckDB UI（或 CLI）里打开 `./.duckdb/catalog.duckdb`，即可：
 
 - `SELECT * FROM ods.ods_daily_stock_price_akshare;`（探索：会列举分区）

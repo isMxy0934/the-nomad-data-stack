@@ -3,15 +3,16 @@ name: Integration Tests
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
-    inputs:
-      target_table:
-        description: 'Target table to test'
-        required: false
-        default: 'ods_daily_stock_price_akshare'
-        type: choice
-        options:
-        - 'ods_daily_stock_price_akshare'
+      workflow_dispatch:
+        inputs:
+          target_table:
+            description: 'Target table to test'
+            required: false
+            default: 'ods_daily_stock_price_akshare'
+            type: choice
+            options:
+            - 'ods_daily_stock_price_akshare'
+            - 'ods_daily_fund_price_akshare'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -91,6 +92,7 @@ jobs:
         S3_SECRET_KEY: minioadmin
         S3_BUCKET_NAME: stock-data
         TEST_DATE: '2024-01-15'
+        INTEGRATION_TARGET_TABLE: ${{ inputs.target_table }}
 
     - name: Stop MinIO
       if: always()
