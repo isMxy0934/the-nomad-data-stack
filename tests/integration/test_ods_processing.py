@@ -5,6 +5,7 @@ from pathlib import Path
 
 from dags.utils.duckdb_utils import (
     configure_s3_access,
+    copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
 )
@@ -56,8 +57,14 @@ def _run_single_partition(
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"
     rendered_sql = load_and_render_sql(sql_template_path, {"PARTITION_DATE": partition_date})
 
-    tmp_parquet_uri = f"{paths.tmp_prefix}/data.parquet"
-    execute_sql(conn, f"COPY ({rendered_sql}) TO '{tmp_parquet_uri}' (FORMAT PARQUET);")
+    copy_partitioned_parquet(
+        conn,
+        query=rendered_sql,
+        destination=paths.tmp_prefix,
+        partition_column="dt",
+        filename_pattern="file_{uuid}",
+        use_tmp_file=True,
+    )
 
     row_count = int(conn.execute(f"SELECT COUNT(*) FROM ({rendered_sql})").fetchone()[0])
     tmp_bucket, tmp_prefix_key = parse_s3_uri(paths.tmp_prefix)

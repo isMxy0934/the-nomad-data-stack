@@ -13,11 +13,11 @@ from typing import Any
 
 from airflow import DAG
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.standard.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator
 
-from dags.utils.catalog_migrations import apply_migrations
-from dags.utils.catalog_utils import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
-from dags.utils.duckdb_utils import (
+from utils.catalog_migrations import apply_migrations
+from utils.catalog_utils import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
+from utils.duckdb_utils import (
     S3ConnectionConfig,
     configure_s3_access,
     create_temporary_connection,

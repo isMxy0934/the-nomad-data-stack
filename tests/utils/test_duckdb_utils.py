@@ -80,6 +80,11 @@ def test_copy_partitioned_parquet_writes_partitioned_files(tmp_path: Path):
 
     assert partition_dir.exists()
     assert len(files) >= 1
+    cols = [
+        row[0]
+        for row in conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{files[0]}');").fetchall()
+    ]
+    assert "dt" not in cols
 
 
 @pytest.mark.parametrize(
