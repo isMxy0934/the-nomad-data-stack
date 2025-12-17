@@ -114,7 +114,7 @@ def prepare_partition(
     run_id: str,
     **_: Any,
 ) -> dict[str, str]:
-    base_prefix = f"dw/ods/{table_config['dest']}"
+    base_prefix = f"lake/ods/{table_config['dest']}"
     paths = build_partition_paths(
         base_prefix=base_prefix,
         partition_date=partition_date,

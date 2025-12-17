@@ -1,10 +1,6 @@
 import sys
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
 from airflow.models import Connection
 from airflow.utils.task_group import TaskGroup
 
@@ -16,6 +12,10 @@ from dags.ods_loader_dag import (
 )
 from dags.utils.duckdb_utils import S3ConnectionConfig
 
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 
 def test_load_ods_config_parses_entries(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
@@ -25,7 +25,7 @@ def test_load_ods_config_parses_entries(tmp_path: Path):
   src:
     type: s3
     properties:
-      path: raw/sample
+      path: lake/raw/sample
 """,
         encoding="utf-8",
     )
@@ -34,7 +34,7 @@ def test_load_ods_config_parses_entries(tmp_path: Path):
 
     assert len(entries) == 1
     assert entries[0]["dest"] == "sample_table"
-    assert entries[0]["src"]["properties"]["path"] == "raw/sample"
+    assert entries[0]["src"]["properties"]["path"] == "lake/raw/sample"
 
 
 def test_get_table_pool_name_prefixes_dest():
@@ -77,9 +77,7 @@ def test_build_s3_connection_config_reads_extras():
 def test_create_ods_loader_dag_builds_task_groups():
     dag = create_ods_loader_dag()
     task_groups = [
-        group
-        for group in dag.task_group.children.values()
-        if isinstance(group, TaskGroup)
+        group for group in dag.task_group.children.values() if isinstance(group, TaskGroup)
     ]
 
     dest_ids = {group.group_id for group in task_groups}

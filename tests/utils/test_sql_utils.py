@@ -55,3 +55,15 @@ def test_load_and_render_sql_end_to_end(tmp_path):
     rendered = load_and_render_sql(sql_file, {"PARTITION_DATE": "2024-02-02"})
 
     assert rendered == "SELECT 1 AS col, '2024-02-02' AS dt"
+
+
+def test_load_and_render_sql_strips_trailing_semicolons(tmp_path: Path):
+    sql_file = tmp_path / "query.sql"
+    sql_file.write_text(
+        "SELECT 1 AS col, '${PARTITION_DATE}' AS dt;\n",
+        encoding="utf-8",
+    )
+
+    rendered = load_and_render_sql(sql_file, {"PARTITION_DATE": "2024-02-02"})
+
+    assert rendered == "SELECT 1 AS col, '2024-02-02' AS dt"

@@ -58,10 +58,14 @@ def render_sql(sql: str, variables: Mapping[str, str]) -> str:
         missing = exc.args[0]
         raise MissingTemplateVariableError(f"Missing template variable: {missing}") from exc
 
-    if not rendered.strip():
+    normalized = rendered.strip()
+    while normalized.endswith(";"):
+        normalized = normalized[:-1].rstrip()
+
+    if not normalized:
         raise ValueError("Rendered SQL is empty")
 
-    return rendered
+    return normalized
 
 
 def load_and_render_sql(path: str | Path, variables: Mapping[str, str]) -> str:

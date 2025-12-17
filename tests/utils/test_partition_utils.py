@@ -20,17 +20,17 @@ if str(ROOT_DIR) not in sys.path:
 
 def test_build_partition_paths_generates_expected_prefixes():
     paths = build_partition_paths(
-        base_prefix="dw/ods/sample_table",
+        base_prefix="lake/ods/sample_table",
         partition_date="2024-03-01",
         run_id="abc123",
         bucket_name="stock-data",
     )
 
     assert paths == PartitionPaths(
-        canonical_prefix="s3://stock-data/dw/ods/sample_table/dt=2024-03-01",
-        tmp_prefix="s3://stock-data/dw/ods/sample_table/_tmp/run_abc123/dt=2024-03-01",
-        manifest_path="s3://stock-data/dw/ods/sample_table/dt=2024-03-01/manifest.json",
-        success_flag_path="s3://stock-data/dw/ods/sample_table/dt=2024-03-01/_SUCCESS",
+        canonical_prefix="s3://stock-data/lake/ods/sample_table/dt=2024-03-01",
+        tmp_prefix="s3://stock-data/lake/ods/sample_table/_tmp/run_abc123/dt=2024-03-01",
+        manifest_path="s3://stock-data/lake/ods/sample_table/dt=2024-03-01/manifest.json",
+        success_flag_path="s3://stock-data/lake/ods/sample_table/dt=2024-03-01/_SUCCESS",
     )
 
 
@@ -60,7 +60,11 @@ def test_build_manifest_contains_required_fields():
     "uri,bucket,key",
     [
         ("s3://bucket/path/to/file", "bucket", "path/to/file"),
-        ("s3://stock-data/dw/ods/table/dt=2024-01-01", "stock-data", "dw/ods/table/dt=2024-01-01"),
+        (
+            "s3://stock-data/lake/ods/table/dt=2024-01-01",
+            "stock-data",
+            "lake/ods/table/dt=2024-01-01",
+        ),
     ],
 )
 def test_parse_s3_uri_parses_bucket_and_key(uri: str, bucket: str, key: str):
@@ -74,20 +78,20 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
     s3_hook = MagicMock()
     s3_hook.list_keys.side_effect = [
         [
-            "dw/ods/table/dt=2024-03-01/file_1.parquet",
-            "dw/ods/table/dt=2024-03-01/file_2.parquet",
+            "lake/ods/table/dt=2024-03-01/file_1.parquet",
+            "lake/ods/table/dt=2024-03-01/file_2.parquet",
         ],
         [
-            "dw/ods/table/_tmp/run_abc123/dt=2024-03-01/file_1.parquet",
-            "dw/ods/table/_tmp/run_abc123/dt=2024-03-01/file_2.parquet",
+            "lake/ods/table/_tmp/run_abc123/dt=2024-03-01/file_1.parquet",
+            "lake/ods/table/_tmp/run_abc123/dt=2024-03-01/file_2.parquet",
         ],
     ]
 
     paths = PartitionPaths(
-        canonical_prefix="s3://bucket/dw/ods/table/dt=2024-03-01",
-        tmp_prefix="s3://bucket/dw/ods/table/_tmp/run_abc123/dt=2024-03-01",
-        manifest_path="s3://bucket/dw/ods/table/dt=2024-03-01/manifest.json",
-        success_flag_path="s3://bucket/dw/ods/table/dt=2024-03-01/_SUCCESS",
+        canonical_prefix="s3://bucket/lake/ods/table/dt=2024-03-01",
+        tmp_prefix="s3://bucket/lake/ods/table/_tmp/run_abc123/dt=2024-03-01",
+        manifest_path="s3://bucket/lake/ods/table/dt=2024-03-01/manifest.json",
+        success_flag_path="s3://bucket/lake/ods/table/dt=2024-03-01/_SUCCESS",
     )
     manifest = {
         "dest": "ods_table",
@@ -106,8 +110,8 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
     s3_hook.delete_objects.assert_called_once_with(
         bucket="bucket",
         keys=[
-            "dw/ods/table/dt=2024-03-01/file_1.parquet",
-            "dw/ods/table/dt=2024-03-01/file_2.parquet",
+            "lake/ods/table/dt=2024-03-01/file_1.parquet",
+            "lake/ods/table/dt=2024-03-01/file_2.parquet",
         ],
     )
 
@@ -116,13 +120,13 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
     assert (
         copy_calls[0]
         .kwargs["source_bucket_key"]
-        .startswith("dw/ods/table/_tmp/run_abc123/dt=2024-03-01/")
+        .startswith("lake/ods/table/_tmp/run_abc123/dt=2024-03-01/")
     )
-    assert copy_calls[0].kwargs["dest_bucket_key"].startswith("dw/ods/table/dt=2024-03-01/")
+    assert copy_calls[0].kwargs["dest_bucket_key"].startswith("lake/ods/table/dt=2024-03-01/")
 
     manifest_args = s3_hook.load_string.call_args_list[0].kwargs
     assert manifest_args["bucket_name"] == "bucket"
-    assert manifest_args["key"] == "dw/ods/table/dt=2024-03-01/manifest.json"
+    assert manifest_args["key"] == "lake/ods/table/dt=2024-03-01/manifest.json"
     json.loads(manifest_args["string_data"])
 
     success_args = s3_hook.load_string.call_args_list[1].kwargs

@@ -58,7 +58,7 @@ def test_configure_s3_access_sets_expected_settings():
 
     assert conn.statements[0] == "INSTALL httpfs;"
     assert conn.statements[1] == "LOAD httpfs;"
-    assert "SET s3_endpoint='http://minio:9000';" in conn.statements
+    assert "SET s3_endpoint='minio:9000';" in conn.statements
     assert conn.statements[-1] == "SET s3_use_ssl=false;"
 
 

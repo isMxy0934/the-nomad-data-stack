@@ -32,7 +32,7 @@ def fetch_fund_data_from_tushare():
         return None
 
     s3_uploader = S3Uploader()
-    file_key = f"raw/daily/fund_price/tushare/{target_partition_date_str}.csv"
+    file_key = f"lake/raw/daily/fund_price/tushare/dt={target_partition_date_str}/data.csv"
 
     try:
         s3_uploader.upload_bytes(df.to_csv(index=False).encode("utf-8"), file_key, replace=True)

@@ -1,0 +1,68 @@
+name: Integration Smoke Tests
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target_table:
+        description: 'Target table to test'
+        required: false
+        default: 'ods_daily_stock_price_akshare'
+        type: choice
+        options:
+        - 'ods_daily_stock_price_akshare'
+
+jobs:
+  smoke_test:
+    runs-on: ubuntu-latest
+    
+    services:
+      minio:
+        image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+        ports:
+          - 9000:9000
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        options: >-
+          --name minio
+          --health-cmd "curl -f http://localhost:9000/minio/health/ready || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    
+    - name: Install dependencies
+      run: |
+        uv sync --group dev
+    
+    - name: Set up MinIO client
+      run: |
+        curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+        chmod +x /usr/local/bin/mc
+        mc alias set local http://localhost:9000 minioadmin minioadmin
+    
+    - name: Run smoke tests
+      run: |
+        uv run pytest tests/integration/ -v --tb=short
+      env:
+        AWS_EC2_METADATA_DISABLED: "true"
+        S3_ENDPOINT: http://localhost:9000
+        S3_ACCESS_KEY: minioadmin
+        S3_SECRET_KEY: minioadmin
+        S3_BUCKET_NAME: stock-data
+        TEST_DATE: '2024-01-15'

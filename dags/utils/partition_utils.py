@@ -47,7 +47,7 @@ def build_partition_paths(
     """Construct canonical and temporary prefixes for a partition run.
 
     Args:
-        base_prefix: Base key prefix without bucket (for example ``dw/ods/table_name``).
+        base_prefix: Base key prefix without bucket (for example ``lake/ods/table_name``).
         partition_date: Partition value in ``YYYY-MM-DD`` format.
         run_id: Unique identifier for this execution (used in tmp prefix).
         bucket_name: Target bucket name.
