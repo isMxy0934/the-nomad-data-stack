@@ -1,8 +1,7 @@
 import sys
 from pathlib import Path
 
-from freezegun import freeze_time
-
+from dags.utils.freezegun_utils import freeze_time
 from dags.utils.time_utils import (
     get_current_date_str,
     get_current_partition_date_str,
