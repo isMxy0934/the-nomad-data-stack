@@ -29,7 +29,7 @@ def test_single_table_etl_pipeline(
 
     # 2. 执行ODS处理流程（直接使用核心工具，不依赖Airflow）
     run_id = f"test-run-{table_name}"
-    base_prefix = f"dw/_integration/ods/{table_name}"
+    base_prefix = f"{integration_prefix}/ods/{table_name}"
     paths = build_partition_paths(
         base_prefix=base_prefix,
         partition_date=test_date,
@@ -81,7 +81,7 @@ def verify_table_processed(minio_client, bucket, table, test_date):
     # 检查 Parquet 文件
     objects = minio_client.list_objects_v2(
         Bucket=bucket,
-        Prefix=f"dw/_integration/ods/{table}/dt={test_date}/",
+        Prefix=f"lake/_integration/ods/{table}/dt={test_date}/",
     )
 
     assert objects.get("Contents"), f"No files found for table {table}"
@@ -92,7 +92,7 @@ def verify_table_processed(minio_client, bucket, table, test_date):
     # 检查 manifest.json
     manifest_response = minio_client.get_object(
         Bucket=bucket,
-        Key=f"dw/_integration/ods/{table}/dt={test_date}/manifest.json",
+        Key=f"lake/_integration/ods/{table}/dt={test_date}/manifest.json",
     )
     manifest = json.loads(manifest_response["Body"].read())
     assert manifest["file_count"] == len(parquet_files)

@@ -28,7 +28,7 @@ def test_bucket_name() -> str:
 def integration_prefix() -> str:
     """Root prefix for integration test data inside the bucket."""
 
-    return "_integration"
+    return "lake/_integration"
 
 
 @pytest.fixture(scope="session")
@@ -184,4 +184,3 @@ def s3_publish_partition(minio_client, s3_delete_prefix):
 def setup_minio_bucket(minio_client, test_bucket_name, integration_prefix, s3_delete_prefix):
     """Auto-setup for MinIO bucket before each test."""
     s3_delete_prefix(test_bucket_name, f"{integration_prefix}/")
-    s3_delete_prefix(test_bucket_name, "dw/_integration/")

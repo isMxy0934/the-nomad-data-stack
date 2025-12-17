@@ -28,7 +28,7 @@ def _run_single_partition(
     csv_key = f"{integration_prefix}/raw/daily/stock_price/akshare/dt={partition_date}/data.csv"
     csv_path = f"s3://{test_bucket_name}/{csv_key}"
 
-    base_prefix = f"dw/_integration/ods/{table_name}"
+    base_prefix = f"{integration_prefix}/ods/{table_name}"
     paths = build_partition_paths(
         base_prefix=base_prefix,
         partition_date=partition_date,
@@ -110,7 +110,7 @@ def verify_ods_output(minio_client, bucket, table, date):
     # 检查 Parquet 文件
     objects = minio_client.list_objects_v2(
         Bucket=bucket,
-        Prefix=f"dw/_integration/ods/{table}/dt={date}/",
+        Prefix=f"lake/_integration/ods/{table}/dt={date}/",
     )
     parquet_files = [
         obj["Key"] for obj in objects.get("Contents", []) if obj["Key"].endswith(".parquet")
@@ -118,12 +118,12 @@ def verify_ods_output(minio_client, bucket, table, date):
     assert len(parquet_files) > 0
 
     keys = {obj["Key"] for obj in objects.get("Contents", [])}
-    assert f"dw/_integration/ods/{table}/dt={date}/_SUCCESS" in keys
+    assert f"lake/_integration/ods/{table}/dt={date}/_SUCCESS" in keys
 
     # 检查 manifest.json
     manifest_response = minio_client.get_object(
         Bucket=bucket,
-        Key=f"dw/_integration/ods/{table}/dt={date}/manifest.json",
+        Key=f"lake/_integration/ods/{table}/dt={date}/manifest.json",
     )
     manifest = json.loads(manifest_response["Body"].read())
     assert manifest["file_count"] == len(parquet_files)
@@ -162,7 +162,7 @@ def test_ods_loader_idempotency(
         s3_publish_partition=s3_publish_partition,
     )
 
-    sentinel_key = f"dw/_integration/ods/{table_name}/dt={test_date}/SENTINEL"
+    sentinel_key = f"lake/_integration/ods/{table_name}/dt={test_date}/SENTINEL"
     minio_client.put_object(Bucket=test_bucket_name, Key=sentinel_key, Body=b"sentinel")
 
     manifest_2 = _run_single_partition(
@@ -178,18 +178,18 @@ def test_ods_loader_idempotency(
 
     objects = minio_client.list_objects_v2(
         Bucket=test_bucket_name,
-        Prefix=f"dw/_integration/ods/{table_name}/dt={test_date}/",
+        Prefix=f"lake/_integration/ods/{table_name}/dt={test_date}/",
     )
     keys = {obj["Key"] for obj in objects.get("Contents", [])}
     assert sentinel_key not in keys
-    assert f"dw/_integration/ods/{table_name}/dt={test_date}/manifest.json" in keys
-    assert f"dw/_integration/ods/{table_name}/dt={test_date}/_SUCCESS" in keys
+    assert f"lake/_integration/ods/{table_name}/dt={test_date}/manifest.json" in keys
+    assert f"lake/_integration/ods/{table_name}/dt={test_date}/_SUCCESS" in keys
     assert any(key.endswith(".parquet") for key in keys)
     assert manifest_1["run_id"] != manifest_2["run_id"]
 
     manifest_response = minio_client.get_object(
         Bucket=test_bucket_name,
-        Key=f"dw/_integration/ods/{table_name}/dt={test_date}/manifest.json",
+        Key=f"lake/_integration/ods/{table_name}/dt={test_date}/manifest.json",
     )
     persisted_manifest = json.loads(manifest_response["Body"].read())
     assert persisted_manifest["run_id"] == manifest_2["run_id"]

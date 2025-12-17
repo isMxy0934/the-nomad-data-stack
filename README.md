@@ -28,10 +28,11 @@
 
 默认使用 `dt=YYYY-MM-DD`（Hive 风格）作为分区列：
 
-- ODS：`dw/ods/{table}/dt=YYYY-MM-DD/*.parquet`
-- DWD：`dw/dwd/{table}/dt=YYYY-MM-DD/*.parquet`
-- DIM（默认不分区）：`dw/dim/{table}/*.parquet`（如需版本化：`as_of=YYYY-MM-DD` 或 `version=...`）
-- ADS：`dw/ads/{metric_or_table}/dt=YYYY-MM-DD/*.parquet`
+- RAW：`lake/raw/{domain}/dt=YYYY-MM-DD/*.csv`
+- ODS：`lake/ods/{table}/dt=YYYY-MM-DD/*.parquet`
+- DWD：`lake/dwd/{table}/dt=YYYY-MM-DD/*.parquet`
+- DIM（默认不分区）：`lake/dim/{table}/*.parquet`（如需版本化：`as_of=YYYY-MM-DD` 或 `version=...`）
+- ADS：`lake/ads/{metric_or_table}/dt=YYYY-MM-DD/*.parquet`
 
 ### SQL 驱动（配置 + 模板）
 
@@ -48,7 +49,7 @@ ODS（以及后续层）通过配置文件声明“要处理哪些表”，并�
 - src:
     type: "s3"          # 指 S3 协议（MinIO）
     properties:
-      path: "raw/daily/stock_price/akshare"  # 源数据（通常为 CSV）所在的 MinIO 前缀
+      path: "lake/raw/daily/stock_price/akshare"  # 源数据（通常为 CSV）所在的 MinIO 前缀
   dest: "ods_daily_stock_price_akshare"
 ```
 
@@ -83,7 +84,7 @@ CREATE SCHEMA IF NOT EXISTS ods;
 CREATE OR REPLACE VIEW ods.ods_daily_stock_price_akshare__dt AS
 SELECT *
 FROM read_parquet(
-  's3://<bucket>/dw/ods/ods_daily_stock_price_akshare/dt=${PARTITION_DATE}/*.parquet',
+  's3://<bucket>/lake/ods/ods_daily_stock_price_akshare/dt=${PARTITION_DATE}/*.parquet',
   hive_partitioning=true
 );
 ```
@@ -93,7 +94,7 @@ FROM read_parquet(
 CREATE OR REPLACE VIEW ods.ods_daily_stock_price_akshare AS
 SELECT *
 FROM read_parquet(
-  's3://<bucket>/dw/ods/ods_daily_stock_price_akshare/dt=*/**/*.parquet',
+  's3://<bucket>/lake/ods/ods_daily_stock_price_akshare/dt=*/**/*.parquet',
   hive_partitioning=true
 );
 ```
@@ -114,7 +115,7 @@ COPY (
     ...,
     CAST('${PARTITION_DATE}' AS DATE) AS dt
   FROM ...
-) TO 's3://<bucket>/dw/ods/ods_daily_stock_price_akshare/_tmp/run_${RUN_ID}'
+) TO 's3://<bucket>/lake/ods/ods_daily_stock_price_akshare/_tmp/run_${RUN_ID}'
 (FORMAT parquet, PARTITION_BY (dt), FILENAME_PATTERN 'file_{uuid}', WRITE_PARTITION_COLUMNS false, USE_TMP_FILE true);
 
 -- 2. 校验产出质量（row_count/file_count/schema_hash）
@@ -155,7 +156,7 @@ COPY (
 依赖关系：
 
 - ODS：`extractor_*` → `ods_loader_*`
-- DWD：等待对应 ODS 分区完成 → 执行 `dwd/{table}.sql` → 写入 `dw/dwd/...`
+- DWD：等待对应 ODS 分区完成 → 执行 `dwd/{table}.sql` → 写入 `lake/dwd/...`
 
 ### 本地启动（Docker Compose）
 

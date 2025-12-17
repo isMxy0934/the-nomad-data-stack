@@ -25,7 +25,7 @@ def test_load_ods_config_parses_entries(tmp_path: Path):
   src:
     type: s3
     properties:
-      path: raw/sample
+      path: lake/raw/sample
 """,
         encoding="utf-8",
     )
@@ -34,7 +34,7 @@ def test_load_ods_config_parses_entries(tmp_path: Path):
 
     assert len(entries) == 1
     assert entries[0]["dest"] == "sample_table"
-    assert entries[0]["src"]["properties"]["path"] == "raw/sample"
+    assert entries[0]["src"]["properties"]["path"] == "lake/raw/sample"
 
 
 def test_get_table_pool_name_prefixes_dest():
