@@ -14,9 +14,9 @@ TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN")
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
 
-def fetch_stock_data_from_akshare():
+def fetch_stock_data_from_tushare():
     """
-    fetch market snapshot data from Akshare
+    fetch market snapshot data from Tushare
     """
     
     target_date_str = get_previous_date_str()
@@ -51,6 +51,6 @@ dag = DAG(
 
 fetch_market_snapshot = PythonOperator(
     task_id='fetch_stock_data_from_akshare',
-    python_callable=fetch_stock_data_from_akshare,
+    python_callable=fetch_stock_data_from_tushare,
     dag=dag,
 )
