@@ -3,16 +3,16 @@ from pathlib import Path
 
 import pytest
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
-
 from dags.utils.sql_utils import (  # pylint: disable=wrong-import-position
     MissingTemplateVariableError,
     load_and_render_sql,
     load_sql,
     render_sql,
 )
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
 
 def test_load_sql_raises_for_missing_file(tmp_path):

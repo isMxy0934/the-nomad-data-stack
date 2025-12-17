@@ -5,10 +5,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
-
 from dags.utils.partition_utils import (  # pylint: disable=wrong-import-position
     PartitionPaths,
     build_manifest,
@@ -16,6 +12,10 @@ from dags.utils.partition_utils import (  # pylint: disable=wrong-import-positio
     parse_s3_uri,
     publish_partition,
 )
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
 
 def test_build_partition_paths_generates_expected_prefixes():

@@ -49,7 +49,6 @@ def fetch_fund_data_from_akshare():
         "涨跌幅": "pct_chg",
     }
 
-    available_cols = [c for c in rename_map.keys() if c in df.columns]
     df = df.rename(columns=rename_map)
 
     target_columns = [
