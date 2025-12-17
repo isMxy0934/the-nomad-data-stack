@@ -27,8 +27,10 @@ def test_build_partition_paths_generates_expected_prefixes():
     )
 
     assert paths == PartitionPaths(
+        partition_date="2024-03-01",
         canonical_prefix="s3://stock-data/lake/ods/sample_table/dt=2024-03-01",
-        tmp_prefix="s3://stock-data/lake/ods/sample_table/_tmp/run_abc123/dt=2024-03-01",
+        tmp_prefix="s3://stock-data/lake/ods/sample_table/_tmp/run_abc123",
+        tmp_partition_prefix="s3://stock-data/lake/ods/sample_table/_tmp/run_abc123/dt=2024-03-01",
         manifest_path="s3://stock-data/lake/ods/sample_table/dt=2024-03-01/manifest.json",
         success_flag_path="s3://stock-data/lake/ods/sample_table/dt=2024-03-01/_SUCCESS",
     )
@@ -88,8 +90,10 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
     ]
 
     paths = PartitionPaths(
+        partition_date="2024-03-01",
         canonical_prefix="s3://bucket/lake/ods/table/dt=2024-03-01",
-        tmp_prefix="s3://bucket/lake/ods/table/_tmp/run_abc123/dt=2024-03-01",
+        tmp_prefix="s3://bucket/lake/ods/table/_tmp/run_abc123",
+        tmp_partition_prefix="s3://bucket/lake/ods/table/_tmp/run_abc123/dt=2024-03-01",
         manifest_path="s3://bucket/lake/ods/table/dt=2024-03-01/manifest.json",
         success_flag_path="s3://bucket/lake/ods/table/dt=2024-03-01/_SUCCESS",
     )
@@ -100,7 +104,7 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
         "file_count": 2,
         "row_count": 20,
         "status": "success",
-        "source_prefix": paths.tmp_prefix,
+        "source_prefix": paths.tmp_partition_prefix,
         "target_prefix": paths.canonical_prefix,
         "generated_at": "2024-03-02T00:00:00Z",
     }

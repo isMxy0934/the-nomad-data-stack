@@ -28,11 +28,14 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW_METADATA_DB_URL}
       - AIRFLOW_CONN_MINIO_S3=${AIRFLOW_CONN_MINIO_S3}
+      - PYTHONPATH=/opt/airflow
       # - AIRFLOW__WEBSERVER__UPDATE_FAB_PERMS=False
       # - AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT=300
       # - AIRFLOW__WEBSERVER__WORKER_REFRESH_BATCH_SIZE=0
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
     ports:
       - "8080:8080"
@@ -60,8 +63,11 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW_METADATA_DB_URL}
       - AIRFLOW_CONN_MINIO_S3=${AIRFLOW_CONN_MINIO_S3}
+      - PYTHONPATH=/opt/airflow
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
     depends_on:
       airflow-init:
@@ -86,8 +92,11 @@ services:
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW_METADATA_DB_URL}
       - AIRFLOW_CONN_MINIO_S3=${AIRFLOW_CONN_MINIO_S3}
+      - PYTHONPATH=/opt/airflow
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
     depends_on:
       airflow-init:
@@ -110,6 +119,7 @@ services:
       - .env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW_METADATA_DB_URL}
+      - PYTHONPATH=/opt/airflow
     command: >
       bash -c "
       airflow db migrate &&
@@ -117,6 +127,8 @@ services:
       "
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
 
   minio:

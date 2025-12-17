@@ -39,8 +39,14 @@ def create_temporary_connection(database: str | Path | None = None) -> duckdb.Du
 def configure_s3_access(connection: duckdb.DuckDBPyConnection, config: S3ConnectionConfig) -> None:
     """Enable HTTPFS in DuckDB and configure S3/MinIO access settings."""
 
-    connection.execute("INSTALL httpfs;")
-    connection.execute("LOAD httpfs;")
+    # Prefer loading an already-installed extension to avoid network access in
+    # restricted environments (e.g. CI with no outbound network, offline dev).
+    # Fallback to INSTALL only when LOAD is unavailable.
+    try:
+        connection.execute("LOAD httpfs;")
+    except Exception:  # noqa: BLE001
+        connection.execute("INSTALL httpfs;")
+        connection.execute("LOAD httpfs;")
 
     connection.execute(f"SET s3_region='{config.region}';")
 
@@ -95,5 +101,15 @@ def copy_partitioned_parquet(
         options.append("USE_TMP_FILE true")
 
     copy_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(options) + ");"
-
-    connection.execute(copy_sql)
+    try:
+        connection.execute(copy_sql)
+    except duckdb.NotImplementedException:
+        # DuckDB compatibility: some versions don't support combining USE_TMP_FILE
+        # with PARTITION_BY. Fall back to a normal partitioned COPY.
+        if not use_tmp_file:
+            raise
+        fallback_options = [opt for opt in options if opt != "USE_TMP_FILE true"]
+        fallback_sql = (
+            "COPY (" + query + f") TO '{destination}' (" + ", ".join(fallback_options) + ");"
+        )
+        connection.execute(fallback_sql)

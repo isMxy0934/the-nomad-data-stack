@@ -101,12 +101,23 @@
 
 #### P5：端到端 integration test （脚本化验收）
 
-- [ ] `make integration`（或 `scripts/integration_m1.sh`）：extractor → ods_loader → 校验 ODS 分区产物与完成标记
+- [ ] `make integration`：extractor → ods_loader → 校验 ODS 分区产物与完成标记
 - [ ] 校验项：parquet 存在 + 完成标记存在 + 支持精确分区路径读取
 
 #### P6：schema（可延后，非阻塞 M1 最小闭环）
 
 - [ ] `dags/utils/schema_utils.py`：表 schema 定义、类型校验（先从 1 张表开始）
+
+#### P7：DuckDB 分析 Catalog（可选，但强烈建议）
+
+> 目标：分析时不需要手写 `read_parquet('s3://...')`，可以直接 `SELECT * FROM ods.xxx`。
+
+- [x] `scripts/duckdb_catalog_refresh.py`：扫描 `lake/ods`（或 `lake/_integration/ods`）并创建/更新 `ods.*` 视图与 `ods.<table>_dt()` 宏
+- [x] `scripts/validate_duckdb_catalog.py`：本地验证脚本（不依赖 MinIO）
+- [x] 单元测试：`tests/utils/test_catalog_utils.py` 覆盖 SQL 生成与宏语法
+- [x] 迁移机制：`catalog/migrations/*.sql` + `catalog_meta.schema_migrations`（用于“基础 schema / 公共 macro”等演进）
+- [x] `scripts/duckdb_catalog_migrate.py` + `scripts/validate_duckdb_catalog_migrations.py`
+- [x] 单元测试：`tests/utils/test_catalog_migrations.py`
 
 ---
 

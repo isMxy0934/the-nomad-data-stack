@@ -6,10 +6,13 @@ import json
 import os
 import sys
 from collections.abc import Callable, Generator
+from dataclasses import dataclass
 from pathlib import Path
 
 import boto3
 import pytest
+import yaml
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 # 设置测试环境路径
@@ -31,6 +34,54 @@ def integration_prefix() -> str:
     return "lake/_integration"
 
 
+@dataclass(frozen=True)
+class OdsTableCase:
+    dest: str
+    src_path: str
+    csv_fixture: str
+
+
+def _load_ods_config() -> list[dict]:
+    config_path = ROOT_DIR / "dags" / "ods" / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if not isinstance(config, list):
+        raise ValueError("ODS config must be a list")
+    return config
+
+
+def _ods_cases() -> list[OdsTableCase]:
+    fixture_map = {
+        "ods_daily_stock_price_akshare": "stock_price_akshare.csv",
+        "ods_daily_fund_price_akshare": "fund_price_akshare.csv",
+    }
+
+    cases: list[OdsTableCase] = []
+    for entry in _load_ods_config():
+        dest = entry.get("dest")
+        src = (entry.get("src") or {}).get("properties", {}).get("path")
+        if not dest or not src:
+            continue
+        fixture = fixture_map.get(dest)
+        if not fixture:
+            continue
+        cases.append(OdsTableCase(dest=str(dest), src_path=str(src), csv_fixture=fixture))
+
+    target = os.getenv("INTEGRATION_TARGET_TABLE", "").strip()
+    if target:
+        cases = [case for case in cases if case.dest == target]
+        if not cases:
+            raise ValueError(f"Unknown INTEGRATION_TARGET_TABLE: {target}")
+
+    return cases
+
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    if "ods_table_case" not in metafunc.fixturenames:
+        return
+    cases = _ods_cases()
+    metafunc.parametrize("ods_table_case", cases, ids=[case.dest for case in cases])
+
+
 @pytest.fixture(scope="session")
 def minio_client(test_bucket_name: str) -> Generator[boto3.client, None, None]:
     """Real MinIO client for integration tests."""
@@ -39,12 +90,21 @@ def minio_client(test_bucket_name: str) -> Generator[boto3.client, None, None]:
     secret_key = os.getenv("S3_SECRET_KEY", "minioadmin")
     region = os.getenv("S3_REGION", "us-east-1")
 
+    # Fail fast when MinIO is not running/reachable; otherwise boto3 can appear to "hang"
+    # due to retries and long default timeouts.
+    client_config = Config(
+        connect_timeout=float(os.getenv("S3_CONNECT_TIMEOUT", "2")),
+        read_timeout=float(os.getenv("S3_READ_TIMEOUT", "5")),
+        retries={"max_attempts": int(os.getenv("S3_MAX_ATTEMPTS", "2"))},
+    )
+
     client = boto3.client(
         "s3",
         endpoint_url=endpoint_url,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
         region_name=region,
+        config=client_config,
     )
 
     # 确保 bucket 存在
@@ -150,7 +210,7 @@ def s3_publish_partition(minio_client, s3_delete_prefix):
 
     def publish_partition(paths, manifest: dict) -> None:
         canonical_bucket, canonical_prefix_key = parse_s3_uri(paths.canonical_prefix)
-        tmp_bucket, tmp_prefix_key = parse_s3_uri(paths.tmp_prefix)
+        tmp_bucket, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
         if canonical_bucket != tmp_bucket:
             raise AssertionError("tmp/canonical buckets must match in integration tests")
 
