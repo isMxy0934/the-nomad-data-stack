@@ -30,9 +30,8 @@ from dags.utils.partition_utils import (
     parse_s3_uri,
     publish_partition,
 )
-
-from dags.utils.time_utils import get_partition_date_str
 from dags.utils.sql_utils import load_and_render_sql
+from dags.utils.time_utils import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
