@@ -1,16 +1,16 @@
 import sys
 from pathlib import Path
 
+import pytest
 from airflow.models import Connection
 from airflow.utils.task_group import TaskGroup
-import pytest
 
 from dags.ods_loader_dag import (
     build_s3_connection_config,
     create_ods_loader_dag,
     get_table_pool_name,
-    load_partition,
     load_ods_config,
+    load_partition,
 )
 from dags.utils.duckdb_utils import S3ConnectionConfig
 

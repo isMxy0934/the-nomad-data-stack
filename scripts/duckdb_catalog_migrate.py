@@ -39,7 +39,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     args.catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -59,4 +61,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -73,10 +73,7 @@ def build_layer_view_sql(*, bucket: str, layer: LayerSpec, table: str) -> str:
     else:
         select_sql = f"SELECT * FROM {reader}('{path}', hive_partitioning={hive_partitioning})"
 
-    return (
-        f"CREATE OR REPLACE VIEW {schema_sql}.{table_sql} AS\n"
-        f"{select_sql};"
-    )
+    return f"CREATE OR REPLACE VIEW {schema_sql}.{table_sql} AS\n{select_sql};"
 
 
 def build_layer_dt_macro_sql(*, bucket: str, layer: LayerSpec, table: str) -> str:

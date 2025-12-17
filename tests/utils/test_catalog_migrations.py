@@ -44,4 +44,3 @@ def test_checksum_mismatch_fails_by_default(tmp_path: Path):
     file_path.write_text("CREATE SCHEMA IF NOT EXISTS ods; -- changed", encoding="utf-8")
     with pytest.raises(ValueError, match="Checksum mismatch"):
         apply_migrations(conn, migrations_dir=migrations)
-

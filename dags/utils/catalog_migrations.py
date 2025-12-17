@@ -56,7 +56,10 @@ def load_applied_migrations(connection: duckdb.DuckDBPyConnection) -> dict[str, 
     rows = connection.execute(
         f"SELECT filename, checksum FROM {CATALOG_META_SCHEMA}.{CATALOG_MIGRATIONS_TABLE};"
     ).fetchall()
-    return {filename: AppliedMigration(filename=filename, checksum=checksum) for filename, checksum in rows}
+    return {
+        filename: AppliedMigration(filename=filename, checksum=checksum)
+        for filename, checksum in rows
+    }
 
 
 def apply_migrations(
@@ -107,4 +110,3 @@ def apply_migrations(
         applied_now.append(filename)
 
     return applied_now
-

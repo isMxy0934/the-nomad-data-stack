@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from airflow import DAG
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.operators.python import PythonOperator
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.utils.catalog_migrations import apply_migrations
 from dags.utils.catalog_utils import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
@@ -151,4 +151,3 @@ def create_catalog_dag() -> DAG:
 
 
 dag = create_catalog_dag()
-

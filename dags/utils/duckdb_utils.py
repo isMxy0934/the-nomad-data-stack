@@ -109,5 +109,7 @@ def copy_partitioned_parquet(
         if not use_tmp_file:
             raise
         fallback_options = [opt for opt in options if opt != "USE_TMP_FILE true"]
-        fallback_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(fallback_options) + ");"
+        fallback_sql = (
+            "COPY (" + query + f") TO '{destination}' (" + ", ".join(fallback_options) + ");"
+        )
         connection.execute(fallback_sql)

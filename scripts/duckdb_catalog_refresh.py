@@ -133,7 +133,9 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     s3_client = boto3.client(
         "s3",
@@ -158,7 +160,12 @@ def main() -> int:
         use_ssl=args.endpoint.startswith("https"),
         url_style=_env("S3_URL_STYLE", "path"),
     )
-    logger.info("Refreshing catalog %s with %d tables from %s", args.catalog_path, len(tables), args.base_prefix)
+    logger.info(
+        "Refreshing catalog %s with %d tables from %s",
+        args.catalog_path,
+        len(tables),
+        args.base_prefix,
+    )
     apply_catalog(
         catalog_path=args.catalog_path,
         bucket=args.bucket,

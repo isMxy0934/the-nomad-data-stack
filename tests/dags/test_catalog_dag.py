@@ -14,4 +14,3 @@ def test_create_catalog_dag_builds_tasks():
     migrate = dag.get_task("migrate_catalog")
     refresh = dag.get_task("refresh_ods_catalog")
     assert migrate.downstream_task_ids == {refresh.task_id}
-

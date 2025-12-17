@@ -1,2 +1,1 @@
 """Airflow DAGs package."""
-
