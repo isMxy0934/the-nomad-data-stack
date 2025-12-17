@@ -29,3 +29,10 @@ def get_previous_partition_date_str(tz="Asia/Shanghai") -> str:
     timezone = pytz.timezone(tz)
     previous_day = datetime.now(timezone) - timedelta(days=1)
     return previous_day.strftime("%Y-%m-%d")
+
+# set partition date
+def get_partition_date_str(tz="Asia/Shanghai") -> str:
+    return get_previous_partition_date_str(tz)
+
+def get_date_str(tz="Asia/Shanghai") -> str:
+    return get_previous_date_str(tz)

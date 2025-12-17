@@ -21,9 +21,8 @@
 
 - **M0 基础可运行**：本地 `docker compose up` 后 Airflow/MinIO/Postgres 可用，Extractor DAG 可写入 MinIO。
 - **M1 ODS 打通**：ODS Loader 能从 MinIO 读原始数据（CSV）→ DuckDB 执行 SQL → 写 ODS 分区 Parquet → 写 `_SUCCESS` 完成标记。
-- **M2 DWD/DIM 打通**：读取 ODS（逻辑表）→ 写 DWD/DIM 产物（分区/非分区策略清晰）→ 完成标记。
-- **M3 ADS/Metrics 打通**：指标 SQL 驱动，按日运行并**物化落盘**到 ADS 分区（Parquet），可回放可审计。
-- **M4 治理与运维**：小文件 compaction、schema 校验与演进、失败重试与回放、可观测与审计完善。
+- **M2 DW 打通（配置驱动）**：基于 `dags/dw_config.yaml` + `dags/**`（目录即配置）生成 DAG；按配置顺序解析层与表并创建 TaskGroup；像 ODS 一样执行（依赖判定 → DuckDB 计算 → tmp 写入 → validate → promote → manifest/_SUCCESS）。
+- **M3 治理与运维**：小文件 compaction、schema 校验与演进、失败重试与回放、可观测与审计完善。
 
 ---
 
@@ -41,11 +40,11 @@
 ## M1：ODS Loader（优先级最高）
 
 ### 验收口径（Definition of Done）
-- [ ] 指定 `dest + dt` 跑一次，产出 Parquet + `manifest.json`（可选 `_SUCCESS`）
-- [ ] 下游能按精确分区路径读取，不触发全量列举（避免 S3 ListObjectsV2 成本）
-- [ ] 重跑同一 `dt` 不会混入旧文件（commit protocol 通过）
-- [ ] 结构化日志输出：`table/dt/run_id/location/file_count/row_count/status`
-- [ ] `make integration`：集成验收脚本验证完整链路
+- [x] 指定 `dest + dt` 跑一次，产出 Parquet + `manifest.json`（可选 `_SUCCESS`）
+- [x] 下游能按精确分区路径读取，不触发全量列举（避免 S3 ListObjectsV2 成本）
+- [x] 重跑同一 `dt` 不会混入旧文件（commit protocol 通过）
+- [x] 结构化日志输出：`table/dt/run_id/location/file_count/row_count/status`
+- [x] `make integration`：集成验收脚本验证完整链路
 
 ### 执行顺序（按优先级，按步骤验收）
 
@@ -77,7 +76,7 @@
 - [x] `tests/utils/test_partition_utils.py`：覆盖路径生成与 manifest 字段（不依赖真实 S3）
 
 验收：
-- [ ] 单测通过，且路径严格符合 `dt=YYYY-MM-DD`
+- [x] 单测通过，且路径严格符合 `dt=YYYY-MM-DD`
 
 #### P3：`duckdb_utils`（DuckDB 临时计算 + S3/MinIO 读写能力）
 
@@ -97,18 +96,18 @@
 - [x] 单写者：为每张表创建 Airflow pool（slots=1），写分区任务必须指定该 pool
 
 验收：
-- [ ] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
+- [x] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
 
 #### P5：端到端 integration test （脚本化验收）
 
-- [ ] `make integration`：extractor → ods_loader → 校验 ODS 分区产物与完成标记
-- [ ] 校验项：parquet 存在 + 完成标记存在 + 支持精确分区路径读取
+- [x] `make integration`：extractor → ods_loader → 校验 ODS 分区产物与完成标记
+- [x] 校验项：parquet 存在 + 完成标记存在 + 支持精确分区路径读取
 
 #### P6：schema（可延后，非阻塞 M1 最小闭环）
 
-- [ ] `dags/utils/schema_utils.py`：表 schema 定义、类型校验（先从 1 张表开始）
+- [x] `dags/utils/schema_utils.py`：表 schema 定义、类型校验（先从 1 张表开始）
 
-#### P7：DuckDB 分析 Catalog（可选，但强烈建议）
+#### P7：DuckDB 分析 Catalog
 
 > 目标：分析时不需要手写 `read_parquet('s3://...')`，可以直接 `SELECT * FROM ods.xxx`。
 
@@ -121,40 +120,48 @@
 
 ---
 
+## M2：DW 打通（配置驱动：DWD/DIM/DWM/DWS/ADS）
+
+### 2.0 约定（先写清楚，再写代码）
+
+- [ ] 配置文件：`dags/dw_config.yaml`（按定义顺序解析层；显式声明层依赖；可选同层表依赖）
+- [ ] 目录即配置：`dags/{layer}/...`（按 layer 目录扫描表定义；无需再引入第二份表清单）
+- [ ] SQL 约定：`dags/{layer}/{table}.sql`（必要时允许同名 `dags/{layer}/{table}.yaml` 承载分区/输出等元信息）
+- [ ] 分区参数：`${PARTITION_DATE}`（`YYYY-MM-DD`，与 ODS 一致）
+- [ ] 产物路径：
+  - 分区表：`lake/{layer}/{table}/dt=YYYY-MM-DD/*.parquet`（遵循 commit protocol）
+  - 非分区表（DIM full / 快照类）：`lake/{layer}/{table}/*.parquet`（同样走 tmp → promote，禁止原地覆盖）
+- [ ] 完成标记：与 ODS 一致，写 `manifest.json` + 可选 `_SUCCESS`，并作为下游依赖判定依据
+- [ ] 单写者：同一 `(layer, table, dt)` 只能一个任务写入（Airflow pool/并发限制）
+
+### 2.1 解析与依赖建模（核心：可测试）
+
+- [ ] `dw_config.yaml` 解析：读取层顺序/层依赖/同层表依赖，并做严格校验（未知 layer、循环依赖等）
+- [ ] 目录扫描：按约定扫描 `dags/**`，产出“待执行表清单”（layer/table/sql_path/meta_path）
+- [ ] 依赖判定：跨层依赖通过 `_SUCCESS`；同层依赖通过“上游 task 完成 +（可选）上游 `_SUCCESS`”
+- [ ] 单元测试：覆盖解析、扫描、拓扑排序与错误分支
+
+### 2.2 DW 执行与提交（复用 M1 组件）
+
+- [ ] 统一执行函数：复用 `duckdb_utils` + `partition_utils`（tmp 写入 → validate → publish → 标记完成 → cleanup）
+- [ ] 分区表写入：DuckDB `COPY ... PARTITION_BY (dt)`，dt 由 `${PARTITION_DATE}` 注入
+- [ ] 非分区表写入：仍按“临时前缀 → promote 到 canonical”落地（避免读到中间态）
+- [ ] 校验口径：至少文件数/行数与路径一致性校验（对齐 ODS）
+
+### 2.3 Airflow DAG 生成：`dags/dw_dags.py`
+
+- [ ] 按 `dw_config.yaml` 顺序：逐层创建 TaskGroup；层内按目录扫描结果创建子 TaskGroup/Tasks
+- [ ] 与 ODS 对齐的流程：prepare → load → validate → commit → cleanup
+- [ ] pool 策略：为每张表（或每层）提供默认 pool（slots=1），确保单写者
+
+### 2.4 端到端验证（最小闭环）
+
+- [ ] 增加至少 1 个 DWD 表（SQL + 目录约定）并从 ODS 跑通一个 `dt`
+- [ ] 增加至少 1 个 ADS 指标/宽表（SQL + 目录约定）并跑通一个 `dt`（物化落盘，可回放审计）
+
 ---
 
-## M2：DWD / DIM 打通
-
-### 2.1 统一渲染 DAG：`dw_dags.py`
-
-- [ ] 配置入口：新增 `dags/dw/config.yaml`（或 `dags/dwd/config.yaml` + `dags/ads/config.yaml`）
-- [ ] 每条配置字段：`layer, dest, sql, depends_on, partitioned, output_path`
-- [ ] 依赖判定：等待上游 `_SUCCESS` 文件存在
-- [ ] 执行流程：注册上游逻辑表 → 执行 SQL → 写目标层 Parquet → 完成标记
-
-### 2.2 DIM 分区策略落地
-
-- [ ] DIM 默认不分区：`lake/dim/{table}/*.parquet`
-- [ ] DIM 版本化（可选）：`as_of=YYYY-MM-DD` 或 `version=...`
-
-### 2.3 端到端验证
-
-- [ ] 增加至少 1 张 DWD 表示例（SQL + 配置）
-- [ ] 从 ODS → DWD 跑通一个 `dt`
-
----
-
-## M3：ADS / Metrics 打通
-
-- [ ] 指标层配置与 SQL 约定（例如 `dags/ads/config.yaml` + `dags/ads/{metric}.sql`）
-- [ ] ADS 产物路径：`lake/ads/{metric_or_table}/dt=YYYY-MM-DD/*.parquet`
-- [ ] 写入方式：DuckDB `COPY ... PARTITION_BY (dt)`（按 `PARTITION_DATE` 产出）
-- [ ] 幂等与标记：同一 `(metric, dt)` 单写者 + 重跑覆盖 + `_SUCCESS/manifest`
-- [ ] 增加至少 1 个指标示例并跑通（日分区产出）
-
----
-
-## M4：治理与运维
+## M3：治理与运维
 
 - [ ] Compaction：按表/按月合并小文件（独立 DAG 或按需触发）
 - [ ] Schema 声明：每表提供 schema（YAML/DDL）
