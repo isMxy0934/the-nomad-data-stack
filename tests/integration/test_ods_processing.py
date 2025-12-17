@@ -81,8 +81,7 @@ def _run_single_partition(
 
     execute_sql(
         conn,
-        f"CREATE OR REPLACE VIEW tmp_{table_name} AS "
-        f"SELECT * FROM read_csv_auto('{csv_path}');",
+        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}');",
     )
 
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"

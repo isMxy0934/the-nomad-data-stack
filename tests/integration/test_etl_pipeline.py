@@ -76,8 +76,7 @@ def test_single_table_etl_pipeline(minio_client, test_bucket_name, test_s3_confi
     csv_path = f"s3://{test_bucket_name}/raw/daily/stock_price/akshare/dt={test_date}/data.csv"
     execute_sql(
         conn,
-        f"CREATE OR REPLACE VIEW tmp_{table_name} AS "
-        f"SELECT * FROM read_csv_auto('{csv_path}');",
+        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}');",
     )
 
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"
@@ -111,34 +110,25 @@ def prepare_single_table_data(minio_client, bucket, test_date):
 
     # 上传测试数据
     key = f"raw/daily/stock_price/akshare/dt={test_date}/data.csv"
-    minio_client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=csv_content
-    )
+    minio_client.put_object(Bucket=bucket, Key=key, Body=csv_content)
 
 
 def verify_table_processed(minio_client, bucket, table, test_date):
     """Helper to verify table processing"""
 
     # 检查 Parquet 文件
-    objects = minio_client.list_objects_v2(
-        Bucket=bucket,
-        Prefix=f"dw/ods/{table}/dt={test_date}/"
-    )
+    objects = minio_client.list_objects_v2(Bucket=bucket, Prefix=f"dw/ods/{table}/dt={test_date}/")
 
-    assert objects.get('Contents'), f"No files found for table {table}"
+    assert objects.get("Contents"), f"No files found for table {table}"
 
-    parquet_files = [obj['Key'] for obj in objects['Contents']
-                    if obj['Key'].endswith('.parquet')]
+    parquet_files = [obj["Key"] for obj in objects["Contents"] if obj["Key"].endswith(".parquet")]
     assert len(parquet_files) > 0, f"No parquet files found for table {table}"
 
     # 检查 manifest.json
     manifest_response = minio_client.get_object(
-        Bucket=bucket,
-        Key=f"dw/ods/{table}/dt={test_date}/manifest.json"
+        Bucket=bucket, Key=f"dw/ods/{table}/dt={test_date}/manifest.json"
     )
-    manifest = json.loads(manifest_response['Body'].read())
-    assert manifest['file_count'] == len(parquet_files)
-    assert manifest['status'] == 'success'
-    assert manifest['row_count'] > 0
+    manifest = json.loads(manifest_response["Body"].read())
+    assert manifest["file_count"] == len(parquet_files)
+    assert manifest["status"] == "success"
+    assert manifest["row_count"] > 0
