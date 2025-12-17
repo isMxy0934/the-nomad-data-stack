@@ -3606,6 +3606,7 @@ dependencies = [
 dev = [
     { name = "apache-airflow" },
     { name = "apache-airflow-providers-amazon" },
+    { name = "apache-airflow-providers-standard" },
     { name = "freezegun" },
     { name = "ruff" },
 ]
@@ -3623,6 +3624,7 @@ requires-dist = [
 dev = [
     { name = "apache-airflow", specifier = ">=3.1.5" },
     { name = "apache-airflow-providers-amazon", specifier = ">=9.18.1" },
+    { name = "apache-airflow-providers-standard", specifier = ">=1.0.0" },
     { name = "freezegun", specifier = ">=1.5.5" },
     { name = "ruff", specifier = ">=0.14.9" },
 ]

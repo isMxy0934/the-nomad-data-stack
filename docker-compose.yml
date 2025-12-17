@@ -33,6 +33,8 @@ services:
       # - AIRFLOW__WEBSERVER__WORKER_REFRESH_BATCH_SIZE=0
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
     ports:
       - "8080:8080"
@@ -62,6 +64,8 @@ services:
       - AIRFLOW_CONN_MINIO_S3=${AIRFLOW_CONN_MINIO_S3}
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
     depends_on:
       airflow-init:
@@ -88,6 +92,8 @@ services:
       - AIRFLOW_CONN_MINIO_S3=${AIRFLOW_CONN_MINIO_S3}
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
     depends_on:
       airflow-init:
@@ -117,6 +123,8 @@ services:
       "
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./catalog:/opt/airflow/catalog
+      - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
 
   minio:

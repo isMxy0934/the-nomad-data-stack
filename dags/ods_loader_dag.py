@@ -10,11 +10,11 @@ from typing import Any
 import yaml
 from airflow import DAG
 from airflow.models import Connection
+from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.providers.standard.operators.empty import EmptyOperator
-from airflow.providers.standard.operators.python import PythonOperator
-from airflow.sdk import TaskGroup
-from airflow.task.trigger_rule import TriggerRule
+from airflow.utils.task_group import TaskGroup
+from airflow.utils.trigger_rule import TriggerRule
 
 from dags.utils.duckdb_utils import (
     S3ConnectionConfig,

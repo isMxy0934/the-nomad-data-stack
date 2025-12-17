@@ -5,3 +5,4 @@ apache-airflow-providers-amazon
 yfinance
 tushare
 akshare
+duckdb

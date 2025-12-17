@@ -153,6 +153,48 @@ COPY (
 - `dags/utils/*`：通用工具（如 S3 上传、日期分区）
 - `dags/ods_loader_dag.py`：ODS 加载 DAG（读取 `config.yaml`，按 SQL 落 Parquet，并写入 `_SUCCESS` 完成标记）
 
+### DuckDB 分析 Catalog（推荐）
+
+为了在 DuckDB UI 里可以直接 `SELECT * FROM ods.xxx`（而不是手写 `read_parquet('s3://...')`），本项目提供一个**持久化的 DuckDB catalog**，只保存 `SCHEMA + VIEW + MACRO`（不保存数据）。
+
+刷新（从 MinIO 扫描 ODS 表清单并创建/更新视图）：
+
+```bash
+uv run python -m scripts.duckdb_catalog_migrate
+uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/ods
+```
+
+如果你当前只有集成测试数据：
+
+```bash
+uv run python -m scripts.duckdb_catalog_migrate
+uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/_integration/ods
+```
+
+之后在 DuckDB UI（或 CLI）里打开 `./.duckdb/catalog.duckdb`，即可：
+
+- `SELECT * FROM ods.ods_daily_stock_price_akshare;`（探索：会列举分区）
+- `SELECT * FROM ods.ods_daily_stock_price_akshare_dt('2024-01-15');`（精确分区：不需要列举）
+
+#### 迁移机制（折中方案）
+
+为了让 catalog 的“基础 schema / 公共 macro”等具备可追溯的演进能力，提供轻量迁移：
+
+- 迁移目录：`catalog/migrations/*.sql`（按文件名排序执行）
+- 已应用记录：写入 `catalog_meta.schema_migrations`（仅记录文件名+checksum+时间）
+
+本地验证（不依赖 MinIO）：
+
+```bash
+uv run python -m scripts.validate_duckdb_catalog_migrations
+```
+
+#### Airflow 维护（推荐）
+
+如果你希望由 Airflow 统一维护 catalog（migrate + refresh），可触发 DAG：`duckdb_catalog_dag`（见 `dags/dw_catalog_dag.py`）。
+
+注意：为了保证单写者，DAG 默认使用 pool `duckdb_catalog_pool`（slots=1），需要你在 Airflow UI/CLI 里创建该 pool。
+
 依赖关系：
 
 - ODS：`extractor_*` → `ods_loader_*`
