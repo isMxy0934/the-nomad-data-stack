@@ -1,4 +1,4 @@
-"""Test end-to-end ETL pipeline integration - single table smoke test."""
+"""Test end-to-end ETL pipeline integration - single table integration test."""
 
 import json
 from pathlib import Path
