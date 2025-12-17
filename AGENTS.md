@@ -26,3 +26,21 @@
 - 错误处理充分
 - 日志记录详细
 - 单元测试覆盖核心逻辑
+
+## 质量保障流程
+
+### 自动化检查
+- ✅ **GitHub Actions CI/CD**：每次推送/PR 自动执行测试和代码质量检查
+- ✅ **单元测试**：pytest 自动运行所有测试用例
+- ✅ **代码规范检查**：ruff 自动检查代码风格和潜在问题
+- ✅ **覆盖率监控**：Codecov 跟踪测试覆盖率
+
+### 本地开发检查
+# 运行测试
+uv run python -m pytest tests/ -v
+
+# 代码质量检查
+uv run ruff check .
+
+# 代码格式化
+uv run ruff format .
