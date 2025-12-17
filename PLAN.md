@@ -34,7 +34,7 @@
 - [x] MinIO 可用：控制台可访问（`localhost:9001`），bucket/凭证可用
 - [x] Airflow 连接串：`AIRFLOW_CONN_MINIO_S3` 可用（能 list/read/write）
 - [x] Extractor 验证：手动触发任一 extractor DAG，确认 CSV 成功写入 MinIO
-- [x] `make smoke`：集成验收脚本（docker compose up → 触发 extractor → 校验 CSV 成功写入 MinIO）
+- [x] `make integration`：集成验收脚本（docker compose up → 触发 extractor → 校验 CSV 成功写入 MinIO）
 
 ---
 
@@ -45,7 +45,7 @@
 - [ ] 下游能按精确分区路径读取，不触发全量列举（避免 S3 ListObjectsV2 成本）
 - [ ] 重跑同一 `dt` 不会混入旧文件（commit protocol 通过）
 - [ ] 结构化日志输出：`table/dt/run_id/location/file_count/row_count/status`
-- [ ] `make smoke`：集成验收脚本验证完整链路
+- [ ] `make integration`：集成验收脚本验证完整链路
 
 ### 执行顺序（按优先级，按步骤验收）
 
@@ -99,9 +99,9 @@
 验收：
 - [ ] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
 
-#### P5：端到端 smoke（脚本化验收）
+#### P5：端到端 integration test （脚本化验收）
 
-- [ ] `make smoke`（或 `scripts/smoke_m1.sh`）：extractor → ods_loader → 校验 ODS 分区产物与完成标记
+- [ ] `make integration`（或 `scripts/integration_m1.sh`）：extractor → ods_loader → 校验 ODS 分区产物与完成标记
 - [ ] 校验项：parquet 存在 + 完成标记存在 + 支持精确分区路径读取
 
 #### P6：schema（可延后，非阻塞 M1 最小闭环）
