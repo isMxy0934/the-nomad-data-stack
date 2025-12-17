@@ -3,11 +3,13 @@ from pathlib import Path
 
 from airflow.models import Connection
 from airflow.utils.task_group import TaskGroup
+import pytest
 
 from dags.ods_loader_dag import (
     build_s3_connection_config,
     create_ods_loader_dag,
     get_table_pool_name,
+    load_partition,
     load_ods_config,
 )
 from dags.utils.duckdb_utils import S3ConnectionConfig
@@ -82,3 +84,46 @@ def test_create_ods_loader_dag_builds_task_groups():
 
     dest_ids = {group.group_id for group in task_groups}
     assert "ods_daily_stock_price_akshare" in dest_ids
+
+
+def test_load_partition_noops_when_no_source_files(monkeypatch: pytest.MonkeyPatch):
+    pushed: dict[str, object] = {}
+
+    class DummyTI:
+        def xcom_pull(self, task_ids: str, key: str | None = None):  # noqa: ANN001
+            assert task_ids == "sample.prepare"
+            return {
+                "partition_date": "2025-12-17",
+                "canonical_prefix": "s3://stock-data/lake/ods/sample/dt=2025-12-17",
+                "tmp_prefix": "s3://stock-data/lake/ods/sample/_tmp/run_rid",
+                "tmp_partition_prefix": "s3://stock-data/lake/ods/sample/_tmp/run_rid/dt=2025-12-17",
+                "manifest_path": "s3://stock-data/lake/ods/sample/dt=2025-12-17/manifest.json",
+                "success_flag_path": "s3://stock-data/lake/ods/sample/dt=2025-12-17/_SUCCESS",
+            }
+
+        def xcom_push(self, key: str, value: object) -> None:
+            pushed[key] = value
+
+    class DummyS3Hook:
+        def __init__(self, **_kwargs):  # noqa: ANN003
+            pass
+
+        def list_keys(self, bucket_name: str, prefix: str):  # noqa: ANN001
+            assert bucket_name == "stock-data"
+            assert prefix == "lake/raw/sample/dt=2025-12-17/"
+            return []
+
+    import dags.ods_loader_dag as module
+
+    monkeypatch.setattr(module, "S3Hook", DummyS3Hook)
+
+    metrics = load_partition(
+        table_config={"dest": "sample", "src": {"properties": {"path": "lake/raw/sample"}}},
+        partition_date="2025-12-17",
+        bucket_name="stock-data",
+        run_id="rid",
+        task_group_id="sample",
+        ti=DummyTI(),
+    )
+    assert metrics["has_data"] == 0
+    assert pushed["load_metrics"] == metrics

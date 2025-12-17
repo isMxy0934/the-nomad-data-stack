@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +11,6 @@ from typing import Any
 import yaml
 from airflow import DAG
 from airflow.models import Connection
-from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
@@ -37,6 +37,8 @@ DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
 CONFIG_PATH = Path(__file__).parent / "ods" / "config.yaml"
 SQL_DIR = Path(__file__).parent / "ods"
 POOL_PREFIX = "ods_pool_"
+
+logger = logging.getLogger(__name__)
 
 
 def load_ods_config(path: Path) -> list[dict[str, Any]]:
@@ -144,12 +146,27 @@ def load_partition(
     paths = PartitionPaths(**paths_dict)
 
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+    source_path = str(table_config["src"]["properties"]["path"]).strip("/")
+    source_prefix = f"{source_path}/dt={partition_date}/"
+    source_keys = s3_hook.list_keys(bucket_name=bucket_name, prefix=source_prefix) or []
+    csv_keys = [key for key in source_keys if key.endswith(".csv")]
+    if not csv_keys:
+        logger.info(
+            "No source CSV found under s3://%s/%s (partition_date=%s, table=%s); no-op.",
+            bucket_name,
+            source_prefix,
+            partition_date,
+            table_config.get("dest"),
+        )
+        metrics = {"row_count": 0, "file_count": 0, "has_data": 0}
+        ti.xcom_push(key="load_metrics", value=metrics)
+        return metrics
+
     s3_config = build_s3_connection_config(s3_hook)
 
     connection = create_temporary_connection()
     configure_s3_access(connection, s3_config)
 
-    source_path = table_config["src"]["properties"]["path"]
     source_uri = f"s3://{bucket_name}/{source_path}/dt={partition_date}/*.csv"
     staging_view = f"tmp_{table_config['dest']}"
 
@@ -181,7 +198,7 @@ def load_partition(
 
     file_count = len(_list_parquet_keys(s3_hook, paths.tmp_prefix))
 
-    metrics = {"row_count": row_count, "file_count": file_count}
+    metrics = {"row_count": row_count, "file_count": file_count, "has_data": 1}
     ti.xcom_push(key="load_metrics", value=metrics)
     return metrics
 
@@ -195,6 +212,12 @@ def validate_partition(task_group_id: str, **context: Any) -> dict[str, int]:
 
     paths = PartitionPaths(**paths_dict)
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+    if not int(metrics.get("has_data", 1)):
+        file_count = len(_list_parquet_keys(s3_hook, paths.tmp_prefix))
+        if file_count != 0:
+            raise ValueError("Expected no parquet files in tmp prefix for empty source partition")
+        return metrics
+
     file_count = len(_list_parquet_keys(s3_hook, paths.tmp_prefix))
 
     if file_count == 0:
@@ -220,6 +243,13 @@ def commit_partition(
     metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
     if not metrics:
         raise ValueError("Load metrics are required to publish a partition")
+    if not int(metrics.get("has_data", 1)):
+        logger.info(
+            "No data for %s (dt=%s); skipping publish.",
+            table_config.get("dest"),
+            partition_date,
+        )
+        return {"published": "0"}
 
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
     manifest = build_manifest(
@@ -325,13 +355,9 @@ def create_ods_loader_dag() -> DAG:
     )
 
     with dag:
-        start = EmptyOperator(task_id="start")
-        finish = EmptyOperator(task_id="finish")
-
         configs = load_ods_config(CONFIG_PATH)
         for table_config in configs:
-            task_group = build_table_task_group(dag, table_config)
-            start >> task_group >> finish
+            build_table_task_group(dag, table_config)
 
     return dag
 
