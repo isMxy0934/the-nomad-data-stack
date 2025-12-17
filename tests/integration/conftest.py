@@ -2,7 +2,11 @@
 
 import os
 import sys
+import json
+import csv
+import io
 from collections.abc import Generator
+from collections.abc import Callable
 from pathlib import Path
 
 import boto3
@@ -19,6 +23,13 @@ if str(ROOT_DIR) not in sys.path:
 def test_bucket_name() -> str:
     """Test bucket name for MinIO/S3 operations."""
     return os.getenv("S3_BUCKET_NAME", "stock-data")
+
+
+@pytest.fixture(scope="session")
+def integration_prefix() -> str:
+    """Root prefix for integration test data inside the bucket."""
+
+    return "_integration"
 
 
 @pytest.fixture(scope="session")
@@ -76,6 +87,30 @@ def test_data_dir() -> Path:
     return Path(__file__).parent / "test_data"
 
 
+@pytest.fixture(scope="session")
+def load_test_csv(test_data_dir: Path) -> Callable[[str, str], str]:
+    """Load a CSV fixture file and filter rows for a target date (first column equals date)."""
+
+    def loader(filename: str, partition_date: str) -> str:
+        path = test_data_dir / filename
+        raw = path.read_text(encoding="utf-8")
+        input_buf = io.StringIO(raw)
+        reader = csv.reader(input_buf)
+        rows = list(reader)
+        if not rows:
+            raise ValueError(f"CSV fixture is empty: {path}")
+
+        header = rows[0]
+        filtered = [row for row in rows[1:] if row and row[0] == partition_date]
+        output_buf = io.StringIO()
+        writer = csv.writer(output_buf, lineterminator="\n")
+        writer.writerow(header)
+        writer.writerows(filtered)
+        return output_buf.getvalue()
+
+    return loader
+
+
 @pytest.fixture(scope="function")
 def temp_output_dir(tmp_path: Path) -> Path:
     """Temporary directory for test outputs."""
@@ -90,9 +125,64 @@ def test_date() -> str:
     return os.getenv("TEST_DATE", "2024-01-15")
 
 
+@pytest.fixture(scope="session")
+def s3_delete_prefix(minio_client) -> Callable[[str, str], None]:
+    """Delete all objects under a prefix."""
+
+    def delete_prefix(bucket: str, prefix: str) -> None:
+        paginator = minio_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            contents = page.get("Contents", [])
+            if not contents:
+                continue
+            minio_client.delete_objects(
+                Bucket=bucket,
+                Delete={"Objects": [{"Key": obj["Key"]} for obj in contents]},
+            )
+
+    return delete_prefix
+
+
+@pytest.fixture(scope="session")
+def s3_publish_partition(minio_client, s3_delete_prefix):
+    """Publish a partition from tmp prefix into canonical prefix and write markers."""
+
+    from dags.utils.partition_utils import parse_s3_uri
+
+    def publish_partition(paths, manifest: dict) -> None:
+        canonical_bucket, canonical_prefix_key = parse_s3_uri(paths.canonical_prefix)
+        tmp_bucket, tmp_prefix_key = parse_s3_uri(paths.tmp_prefix)
+        if canonical_bucket != tmp_bucket:
+            raise AssertionError("tmp/canonical buckets must match in integration tests")
+
+        canonical_prefix_key = canonical_prefix_key.rstrip("/") + "/"
+        tmp_prefix_key = tmp_prefix_key.rstrip("/") + "/"
+
+        s3_delete_prefix(canonical_bucket, canonical_prefix_key)
+
+        paginator = minio_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=tmp_bucket, Prefix=tmp_prefix_key):
+            for obj in page.get("Contents", []):
+                src_key = obj["Key"]
+                rel = src_key[len(tmp_prefix_key) :]
+                dest_key = canonical_prefix_key + rel
+                minio_client.copy_object(
+                    Bucket=canonical_bucket,
+                    Key=dest_key,
+                    CopySource={"Bucket": tmp_bucket, "Key": src_key},
+                )
+
+        manifest_bucket, manifest_key = parse_s3_uri(paths.manifest_path)
+        minio_client.put_object(Bucket=manifest_bucket, Key=manifest_key, Body=json.dumps(manifest))
+
+        success_bucket, success_key = parse_s3_uri(paths.success_flag_path)
+        minio_client.put_object(Bucket=success_bucket, Key=success_key, Body=b"")
+
+    return publish_partition
+
+
 @pytest.fixture(autouse=True)
-def setup_minio_bucket(minio_client, test_bucket_name):
+def setup_minio_bucket(minio_client, test_bucket_name, integration_prefix, s3_delete_prefix):
     """Auto-setup for MinIO bucket before each test."""
-    # 这里可以添加通用的 bucket 清理或设置逻辑
-    # 目前保持简单，只确保 bucket 存在
-    pass
+    s3_delete_prefix(test_bucket_name, f"{integration_prefix}/")
+    s3_delete_prefix(test_bucket_name, "dw/_integration/")
