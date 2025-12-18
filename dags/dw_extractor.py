@@ -185,8 +185,8 @@ def create_dw_extractor_dag() -> DAG:
     with dag:
         for spec in specs:
             with TaskGroup(group_id=spec.target) as group:
-                gate = ShortCircuitOperator(
-                    task_id="gate",
+                check = ShortCircuitOperator(
+                    task_id="check",
                     python_callable=_should_run_target,
                     op_kwargs={"target": spec.target},
                 )
@@ -209,7 +209,7 @@ def create_dw_extractor_dag() -> DAG:
 
                 done = EmptyOperator(task_id="done")
 
-                gate >> fetch >> write_raw >> done
+                check >> fetch >> write_raw >> done
 
             # Expose groups at DAG level
             group  # noqa: B018

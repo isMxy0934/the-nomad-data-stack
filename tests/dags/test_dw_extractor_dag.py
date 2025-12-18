@@ -15,7 +15,7 @@ def test_dw_extractor_dag_builds_expected_groups():
 
     specs = load_extractor_specs()
     for spec in specs:
-        assert f"{spec.target}.gate" in dag.task_ids
+        assert f"{spec.target}.check" in dag.task_ids
         assert f"{spec.target}.fetch" in dag.task_ids
         assert f"{spec.target}.write_raw" in dag.task_ids
         assert f"{spec.target}.done" in dag.task_ids
