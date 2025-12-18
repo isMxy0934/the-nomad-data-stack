@@ -5,6 +5,7 @@ import pytest
 
 from dags.utils.dw_config_utils import (  # pylint: disable=wrong-import-position
     DWConfigError,
+    SourceSpec,
     TableSpec,
     discover_tables_for_layer,
     load_dw_config,
@@ -25,6 +26,11 @@ layer_dependencies:
   dwd: ["ods"]
   dim: ["dwd"]
 
+sources:
+  ods_example:
+    path: lake/raw/example
+    format: csv
+
 table_dependencies:
   dwd:
     dwd_table_b: ["dwd_table_a"]
@@ -37,6 +43,7 @@ table_dependencies:
     config = load_dw_config(config_path)
     assert config.layer_dependencies["dim"] == ["dwd"]
     assert config.table_dependencies["dwd"]["dwd_table_b"] == ["dwd_table_a"]
+    assert config.sources["ods_example"] == SourceSpec(path="lake/raw/example", format="csv")
 
     ordered_layers = order_layers(config)
     assert ordered_layers == ["ods", "dwd", "dim"]

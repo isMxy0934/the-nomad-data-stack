@@ -16,27 +16,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def _create_tmp_raw_view(*, conn, table_name: str, csv_path: str) -> None:  # noqa: ANN001
-    if table_name == "ods_daily_fund_price_akshare":
-        execute_sql(
-            conn,
-            f"""
-            CREATE OR REPLACE VIEW tmp_{table_name} AS
-            SELECT
-              fund_code AS symbol,
-              CAST(NULL AS VARCHAR) AS name,
-              nav AS close,
-              nav AS high,
-              nav AS low,
-              CAST(0 AS DOUBLE) AS vol,
-              CAST(0 AS DOUBLE) AS amount,
-              nav AS pre_close,
-              CAST(0 AS DOUBLE) AS pct_chg,
-              REPLACE(CAST(date AS VARCHAR), '-', '') AS trade_date
-            FROM read_csv_auto('{csv_path}', hive_partitioning=false);
-            """,
-        )
-        return
-
     execute_sql(
         conn,
         f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
@@ -144,7 +123,7 @@ def test_ods_loader_basic_flow(
 
 def verify_ods_output(minio_client, bucket, table, date):
     """Helper to verify ODS output files"""
-    # 检查 Parquet 文件
+
     objects = minio_client.list_objects_v2(
         Bucket=bucket,
         Prefix=f"lake/_integration/ods/{table}/dt={date}/",
@@ -157,7 +136,6 @@ def verify_ods_output(minio_client, bucket, table, date):
     keys = {obj["Key"] for obj in objects.get("Contents", [])}
     assert f"lake/_integration/ods/{table}/dt={date}/_SUCCESS" in keys
 
-    # 检查 manifest.json
     manifest_response = minio_client.get_object(
         Bucket=bucket,
         Key=f"lake/_integration/ods/{table}/dt={date}/manifest.json",
