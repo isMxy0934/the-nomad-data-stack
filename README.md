@@ -34,6 +34,19 @@
 - DIM（默认不分区）：`lake/dim/{table}/*.parquet`（如需版本化：`as_of=YYYY-MM-DD` 或 `version=...`）
 - ADS：`lake/ads/{metric_or_table}/dt=YYYY-MM-DD/*.parquet`
 
+### 架构设计决策与已知约束
+
+为了保持架构轻量（避免引入 Hive Metastore、Iceberg 等重组件），本项目做出以下权衡：
+
+1. **分区时间逻辑（T-1）**：
+   - 默认使用 `get_partition_date_str()` 获取 **运行日期的前一天** 作为 `dt`。
+   - **决策**：这是基于“每日批处理”场景的简化假设。这意味着重跑任务会基于“当前运行时间”计算 `dt`，而非 Airflow 的逻辑时间（`execution_date`）。如需回填历史数据，需手动指定或临时调整逻辑，这点与标准 Airflow 最佳实践不同，是有意为之。
+
+2. **Commit Protocol（非原子覆盖）**：
+   - **机制**：写入临时目录 -> 校验 -> **删除旧分区 (Delete)** -> **移动新分区 (Copy)** -> 写入标记。
+   - **风险**：S3 不支持原子目录重命名。如果在 Delete 成功后 Copy 失败，会导致数据丢失。
+   - **决策**：在轻量级架构下接受此风险。生产环境建议开启 S3 版本控制作为兜底，或在未来引入 Table Format (Iceberg) 解决。
+
 ### SQL 驱动（配置 + 模板）
 
 #### 1) 配置驱动（表清单）

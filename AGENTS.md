@@ -11,6 +11,20 @@
   - DW：层依赖见 `dags/dw_config.yaml`，表通过扫描 `dags/{layer}/*.sql` 发现（空层/缺目录跳过，不生成占位）。
 - **单写者原则**：同一 `(table, dt)` 同时只能一个任务写入；通过 Airflow `pool`/并发限制保证。
 
+## 关键架构上下文 (Critical Architecture Context)
+
+以下设计决策是基于业务场景（每日批处理 + 轻量级）的权衡，**在没有明确重构指令前，请勿修改**：
+
+1.  **分区时间（T-1）**：
+    *   代码逻辑：`dags/utils/time_utils.py` 中的 `get_partition_date_str()` 默认取 `now() - 1 day`。
+    *   原因：简化了 DAG 的参数传递，任务总是处理“昨天的”数据。
+    *   **禁止**：不要将其重构为 Airflow `{{ ds }}` 或 `{{ data_interval_start }}`，除非你准备重写所有 SQL 模板和回填逻辑。
+
+2.  **Commit Protocol（非原子）**：
+    *   代码逻辑：`dags/utils/partition_utils.py` 中的 `publish_partition` 执行顺序是：`_delete_prefix` -> `_copy_prefix`。
+    *   原因：纯 S3 架构不支持原子重命名（Atomic Rename）。
+    *   **禁止**：不要试图引入“先写后切指针”的复杂逻辑（除非引入 Hive Metastore/Iceberg），也不要试图用 `OVERWRITE_OR_IGNORE` 替代 Delete。我们接受极小概率的数据丢失风险（Delete 成功 Copy 失败）。
+
 ## 数据与分区约定
 
 - 分区列：`dt=YYYY-MM-DD`（Hive 风格），不要修改分区命名约定。
