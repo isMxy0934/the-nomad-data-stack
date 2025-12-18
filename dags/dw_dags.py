@@ -157,13 +157,24 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_groups[dep] >> task_groups[table]
 
         # Trigger Downstream Layers
-        downstream_layers = [
+        potential_downstream = [
             l for l, deps in config.layer_dependencies.items()
             if layer in deps
         ]
 
-        if downstream_layers:
-            for ds_layer in downstream_layers:
+        # Filter out downstream layers that have no SQL tables
+        valid_downstream = []
+        for ds_layer in potential_downstream:
+            if discover_tables_for_layer(ds_layer, SQL_BASE_DIR):
+                valid_downstream.append(ds_layer)
+            else:
+                logger.warning(
+                    "Layer '%s' depends on %s but has no tables; skipping trigger.",
+                    ds_layer, layer
+                )
+
+        if valid_downstream:
+            for ds_layer in valid_downstream:
                 trigger = TriggerDagRunOperator(
                     task_id=f"trigger_dw_{ds_layer}",
                     trigger_dag_id=f"dw_{ds_layer}",
@@ -174,7 +185,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 for tg in task_groups.values():
                     tg >> trigger
         else:
-            # If no downstream layers, trigger dw_finish_dag
+            # No valid downstream layers, trigger finish
             trigger_finish = TriggerDagRunOperator(
                 task_id="trigger_dw_finish",
                 trigger_dag_id="dw_finish_dag",

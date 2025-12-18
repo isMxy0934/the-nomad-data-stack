@@ -36,6 +36,8 @@ DEFAULT_MIGRATIONS_DIR = Path(
 DEFAULT_LAYER_BASE_PREFIX = os.getenv("DUCKDB_CATALOG_ODS_PREFIX", "lake/ods")
 DEFAULT_LAYER_SCHEMA = os.getenv("DUCKDB_CATALOG_ODS_SCHEMA", "ods")
 
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
+
 
 def _build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
     connection = s3_hook.get_connection(s3_hook.aws_conn_id)
@@ -145,7 +147,7 @@ def create_catalog_dag() -> DAG:
 
         trigger_ods = TriggerDagRunOperator(
             task_id="trigger_ods_loader",
-            trigger_dag_id="ods_loader",
+            trigger_dag_id="ods_loader_dag",
             wait_for_completion=False,  # Fire and forget
             reset_dag_run=True,  # Allow re-triggering same date
         )

@@ -12,7 +12,6 @@ import yaml
 from airflow import DAG
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.sensors.external_task import ExternalTaskSensor
 
 from dags.utils.duckdb_utils import (
     configure_s3_access,
@@ -20,7 +19,7 @@ from dags.utils.duckdb_utils import (
     create_temporary_connection,
     execute_sql,
 )
-from dags.utils.dw_config_utils import load_dw_config
+from dags.utils.dw_config_utils import discover_tables_for_layer, load_dw_config
 from dags.utils.etl_utils import (
     DEFAULT_AWS_CONN_ID,
     build_etl_task_group,
@@ -30,13 +29,14 @@ from dags.utils.etl_utils import (
 from dags.utils.partition_utils import PartitionPaths
 from dags.utils.sql_utils import load_and_render_sql
 
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 CONFIG_PATH = Path(__file__).parent / "ods" / "config.yaml"
 DW_CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_DIR = Path(__file__).parent / "ods"
+DW_BASE_DIR = Path(__file__).parent
 
 logger = logging.getLogger(__name__)
 
-DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
 def load_ods_config(path: Path) -> list[dict[str, Any]]:
     """Load and validate the ODS configuration file."""
@@ -174,24 +174,45 @@ def create_ods_loader_dag() -> DAG:
         try:
             dw_config = load_dw_config(DW_CONFIG_PATH)
             # Find layers that depend on 'ods'
-            downstream_layers = [
+            potential_layers = [
                 layer
                 for layer, deps in dw_config.layer_dependencies.items()
                 if "ods" in deps
             ]
 
-            for layer in downstream_layers:
-                trigger = TriggerDagRunOperator(
-                    task_id=f"trigger_dw_{layer}",
-                    trigger_dag_id=f"dw_{layer}",
+            # Filter out layers that don't have any SQL tables
+            valid_layers = []
+            for layer in potential_layers:
+                if discover_tables_for_layer(layer, DW_BASE_DIR):
+                    valid_layers.append(layer)
+                else:
+                    logger.warning(
+                        "Layer '%s' depends on ods but has no tables; skipping trigger.", layer
+                    )
+
+            if valid_layers:
+                for layer in valid_layers:
+                    trigger = TriggerDagRunOperator(
+                        task_id=f"trigger_dw_{layer}",
+                        trigger_dag_id=f"dw_{layer}",
+                        wait_for_completion=False,
+                        reset_dag_run=True,
+                    )
+                    for tg in etl_tasks:
+                        tg >> trigger
+            else:
+                # No valid DW layers to trigger, so we finish here
+                finish_trigger = TriggerDagRunOperator(
+                    task_id="trigger_dw_finish",
+                    trigger_dag_id="dw_finish_dag",
                     wait_for_completion=False,
                     reset_dag_run=True,
                 )
-                # Trigger runs after ALL ODS tables are loaded
                 for tg in etl_tasks:
-                    tg >> trigger
+                    tg >> finish_trigger
+
         except Exception:
-            logger.exception("Failed to load DW config for downstream triggers")
+            logger.exception("Failed to load DW config or trigger downstream")
 
     return dag
 

@@ -14,6 +14,6 @@ with DAG(
 ) as dag:
     trigger_catalog = TriggerDagRunOperator(
         task_id="trigger_catalog",
-        trigger_dag_id="duckdb_catalog_dag",
+        trigger_dag_id="dw_catalog_dag",
         reset_dag_run=True,
     )
