@@ -133,6 +133,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
         start_date=datetime(2024, 1, 1),
         catchup=False,
         max_active_runs=1,
+        tags=["dw"],
     )
 
     with dag:
