@@ -86,7 +86,9 @@ def _fetch_to_tmp(*, target: str, fetcher: str, **context) -> dict[str, object]:
     return {"has_data": 1, "record_count": payload.record_count, "tmp_file": str(tmp_file)}
 
 
-def _write_raw(*, target: str, destination_key_template: str, task_group_id: str, **context) -> str | None:  # noqa: ANN001,E501
+def _write_raw(
+    *, target: str, destination_key_template: str, task_group_id: str, **context
+) -> str | None:  # noqa: ANN001,E501
     ti = context["ti"]
     fetched = ti.xcom_pull(task_ids=f"{task_group_id}.fetch") or {}
     if not int(fetched.get("has_data", 0)):
