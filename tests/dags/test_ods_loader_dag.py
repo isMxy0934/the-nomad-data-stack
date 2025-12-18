@@ -6,13 +6,12 @@ from airflow.models import Connection
 from airflow.utils.task_group import TaskGroup
 
 from dags.ods_loader_dag import (
-    build_s3_connection_config,
     create_ods_loader_dag,
-    get_table_pool_name,
     load_ods_config,
     load_partition,
 )
 from dags.utils.duckdb_utils import S3ConnectionConfig
+from dags.utils.etl_utils import build_s3_connection_config
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
@@ -37,10 +36,6 @@ def test_load_ods_config_parses_entries(tmp_path: Path):
     assert len(entries) == 1
     assert entries[0]["dest"] == "sample_table"
     assert entries[0]["src"]["properties"]["path"] == "lake/raw/sample"
-
-
-def test_get_table_pool_name_prefixes_dest():
-    assert get_table_pool_name("orders") == "ods_pool_orders"
 
 
 def test_build_s3_connection_config_reads_extras():

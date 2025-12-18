@@ -6,10 +6,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from dags.utils.partition_utils import (  # pylint: disable=wrong-import-position
+    NonPartitionPaths,
     PartitionPaths,
     build_manifest,
+    build_non_partition_paths,
     build_partition_paths,
     parse_s3_uri,
+    publish_non_partition,
     publish_partition,
 )
 
@@ -33,6 +36,21 @@ def test_build_partition_paths_generates_expected_prefixes():
         tmp_partition_prefix="s3://stock-data/lake/ods/sample_table/_tmp/run_abc123/dt=2024-03-01",
         manifest_path="s3://stock-data/lake/ods/sample_table/dt=2024-03-01/manifest.json",
         success_flag_path="s3://stock-data/lake/ods/sample_table/dt=2024-03-01/_SUCCESS",
+    )
+
+
+def test_build_non_partition_paths_generates_expected_prefixes():
+    paths = build_non_partition_paths(
+        base_prefix="lake/dim/dim_customer",
+        run_id="abc123",
+        bucket_name="stock-data",
+    )
+
+    assert paths == NonPartitionPaths(
+        canonical_prefix="s3://stock-data/lake/dim/dim_customer",
+        tmp_prefix="s3://stock-data/lake/dim/dim_customer/_tmp/run_abc123",
+        manifest_path="s3://stock-data/lake/dim/dim_customer/manifest.json",
+        success_flag_path="s3://stock-data/lake/dim/dim_customer/_SUCCESS",
     )
 
 
@@ -136,6 +154,48 @@ def test_publish_partition_cleans_and_promotes_prefixes(tmp_path):
     success_args = s3_hook.load_string.call_args_list[1].kwargs
     assert success_args["key"].endswith("_SUCCESS")
     assert success_args["bucket_name"] == "bucket"
+
+
+def test_publish_non_partition_promotes_tmp_prefix():
+    s3_hook = MagicMock()
+    s3_hook.list_keys.side_effect = [
+        [
+            "lake/dim/table/file_1.parquet",
+            "lake/dim/table/file_2.parquet",
+        ],
+        [
+            "lake/dim/table/_tmp/run_abc123/file_1.parquet",
+            "lake/dim/table/_tmp/run_abc123/file_2.parquet",
+        ],
+    ]
+
+    paths = NonPartitionPaths(
+        canonical_prefix="s3://bucket/lake/dim/table",
+        tmp_prefix="s3://bucket/lake/dim/table/_tmp/run_abc123",
+        manifest_path="s3://bucket/lake/dim/table/manifest.json",
+        success_flag_path="s3://bucket/lake/dim/table/_SUCCESS",
+    )
+    manifest = {
+        "dest": "dim_table",
+        "partition_date": "2024-03-01",
+        "run_id": "abc123",
+        "file_count": 2,
+        "row_count": 20,
+        "status": "success",
+        "source_prefix": paths.tmp_prefix,
+        "target_prefix": paths.canonical_prefix,
+        "generated_at": "2024-03-02T00:00:00Z",
+    }
+
+    publish_non_partition(s3_hook=s3_hook, paths=paths, manifest=manifest)
+
+    s3_hook.delete_objects.assert_called_once()
+    copy_calls = s3_hook.copy_object.call_args_list
+    assert len(copy_calls) == 2
+    assert copy_calls[0].kwargs["dest_bucket_key"].startswith("lake/dim/table/")
+
+    manifest_args = s3_hook.load_string.call_args_list[0].kwargs
+    assert manifest_args["key"] == "lake/dim/table/manifest.json"
 
 
 @pytest.mark.parametrize(
