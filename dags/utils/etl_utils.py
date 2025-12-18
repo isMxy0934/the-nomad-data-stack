@@ -254,9 +254,18 @@ def refresh_catalog_entry(
     base_prefix: str,
     bucket_name: str,
     is_partitioned: bool,
-    **_: Any,
+    task_group_id: str,
+    **context: Any,
 ) -> None:
     """Refresh the DuckDB catalog view for a specific table."""
+    ti = context["ti"]
+    metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
+
+    # If load step reported no data, skip refresh to avoid DuckDB "No files found" error
+    if metrics and not int(metrics.get("has_data", 1)):
+        logger.info("No data loaded for %s; skipping catalog refresh.", dest_name)
+        return
+
     CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     # Infer layer info from base_prefix (e.g., lake/ods/table -> lake/ods)
@@ -386,6 +395,7 @@ def build_etl_task_group(
                 "base_prefix": base_prefix,
                 "bucket_name": DEFAULT_BUCKET_NAME,
                 "is_partitioned": is_partitioned,
+                "task_group_id": task_group_id,
             },
             pool=DUCKDB_CATALOG_POOL,  # Serialized execution
             trigger_rule=TriggerRule.ALL_SUCCESS,  # Only refresh if everything succeeded
