@@ -14,7 +14,7 @@ import logging
 import os
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = Path(__file__).parent / "extractor" / "config.yaml"
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
+
+default_args = {
+    "retries": 3,
+    "retry_delay": timedelta(minutes=1),
+}
 
 
 def _safe_segment(value: str) -> str:
@@ -175,6 +180,7 @@ def create_dw_extractor_dag() -> DAG:
         catchup=False,
         tags=["extractor"],
         max_active_runs=1,
+        default_args=default_args,
     )
 
     with dag:
