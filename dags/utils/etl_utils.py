@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from airflow import DAG
@@ -14,7 +15,12 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from dags.utils.duckdb_utils import S3ConnectionConfig
+from dags.utils.catalog_utils import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
+from dags.utils.duckdb_utils import (
+    S3ConnectionConfig,
+    configure_s3_access,
+    create_temporary_connection,
+)
 from dags.utils.partition_utils import (
     NonPartitionPaths,
     PartitionPaths,
@@ -29,6 +35,9 @@ from dags.utils.time_utils import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
+CATALOG_PATH = Path(".duckdb") / "catalog.duckdb"
+DUCKDB_CATALOG_POOL = "duckdb_catalog_pool"
+
 logger = logging.getLogger(__name__)
 
 
@@ -240,6 +249,54 @@ def cleanup_dataset(task_group_id: str, **context: Any) -> None:
     delete_tmp_prefix(s3_hook, paths_dict["tmp_prefix"])
 
 
+def refresh_catalog_entry(
+    dest_name: str,
+    base_prefix: str,
+    bucket_name: str,
+    is_partitioned: bool,
+    **_: Any,
+) -> None:
+    """Refresh the DuckDB catalog view for a specific table."""
+    CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    # Infer layer info from base_prefix (e.g., lake/ods/table -> lake/ods)
+    # This assumes the standard layout: lake/{layer}/{table}
+    parts = base_prefix.strip("/").split("/")
+    if len(parts) >= 3:
+        layer_prefix = "/".join(parts[:-1])
+        layer_name = parts[1]  # lake, ods, table -> ods
+    else:
+        # Fallback/Edge case
+        layer_prefix = "lake/unknown"
+        layer_name = "public"
+
+    layer = LayerSpec(
+        schema=layer_name,
+        base_prefix=layer_prefix,
+        partitioned_by_dt=is_partitioned,
+    )
+
+    logger.info("Refreshing catalog for %s.%s", layer_name, dest_name)
+
+    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+    s3_config = build_s3_connection_config(s3_hook)
+
+    connection = create_temporary_connection(database=CATALOG_PATH)
+    configure_s3_access(connection, s3_config)
+
+    # Ensure schema exists
+    connection.execute(f"CREATE SCHEMA IF NOT EXISTS {layer_name};")
+
+    # Update View
+    view_sql = build_layer_view_sql(bucket=bucket_name, layer=layer, table=dest_name)
+    connection.execute(view_sql)
+
+    # Update Macro (if partitioned)
+    if is_partitioned:
+        macro_sql = build_layer_dt_macro_sql(bucket=bucket_name, layer=layer, table=dest_name)
+        connection.execute(macro_sql)
+
+
 def build_etl_task_group(
     dag: DAG,
     task_group_id: str,
@@ -250,7 +307,7 @@ def build_etl_task_group(
     is_partitioned: bool = True,
     pool_name: str | None = None,
 ) -> TaskGroup:
-    """Build a standard ETL task group (prepare -> load -> validate -> commit -> cleanup).
+    """Build a standard ETL task group (prepare -> load -> validate -> commit -> cleanup -> refresh).
 
     Args:
         dag: The Airflow DAG.
@@ -321,6 +378,19 @@ def build_etl_task_group(
             trigger_rule=TriggerRule.ALL_DONE,
         )
 
-        prepare >> load >> validate >> commit >> cleanup
+        refresh = PythonOperator(
+            task_id="refresh_catalog",
+            python_callable=refresh_catalog_entry,
+            op_kwargs={
+                "dest_name": dest_name,
+                "base_prefix": base_prefix,
+                "bucket_name": DEFAULT_BUCKET_NAME,
+                "is_partitioned": is_partitioned,
+            },
+            pool=DUCKDB_CATALOG_POOL,  # Serialized execution
+            trigger_rule=TriggerRule.ALL_SUCCESS,  # Only refresh if everything succeeded
+        )
+
+        prepare >> load >> validate >> commit >> cleanup >> refresh
 
     return group

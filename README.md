@@ -146,9 +146,6 @@ COPY (
 
 运行约束（强约束）：
 
-- **单写者**：同一 `(table, dt)` 在任一时刻只允许一个任务写入（通过 Airflow pool 或 concurrency 限制保证）。
-  - 用 **pool**（按表或按分区写入资源建 pool），把写分区任务放进同一个 pool
-  - 或用 DAG 的 `max_active_runs` / `concurrency` / task 的并发限制
 - **幂等重跑**：
   - ✅ **主方案（强推荐）**：写临时前缀 → 校验（row_count/file_count/schema_hash）→ 写 `_SUCCESS`/manifest → 切换/清理旧分区前缀
   - ⚠️ `OVERWRITE_OR_IGNORE` 仅作为"某些环境可用的优化"，不能作为可靠语义（尤其在 S3/MinIO 上不支持 overwriting）
@@ -181,7 +178,6 @@ DW 层（DWD/DIM/DWM/DWS/ADS）由 `dags/dw_dags.py` 根据 `dags/dw_config.yaml
 - `_SUCCESS` 语义：
   - 由“写该分区的任务”决定是否产出；无数据视为成功但不写 `_SUCCESS`，仅记录日志
   - 下游不额外检查 `_SUCCESS`；读不到当日分区即空输入处理并成功退出（上游失败由 Airflow 依赖自然阻塞）
-- Pool：每张 DW 表默认创建 pool（`dw_pool_{table}`，slots=1）确保单写者
 - 依赖：`dw_config.yaml` 中的 `layer_dependencies` 决定 DAG 构建顺序；`table_dependencies` 用于同层拓扑排序并自动添加依赖关系
 
 ### DuckDB 分析 Catalog（推荐）
@@ -230,8 +226,6 @@ uv run python -m scripts.validate_duckdb_catalog_migrations
 #### Airflow 维护（推荐）
 
 如果你希望由 Airflow 统一维护 catalog（migrate + refresh），可触发 DAG：`duckdb_catalog_dag`（见 `dags/dw_catalog_dag.py`）。
-
-注意：为了保证单写者，DAG 默认使用 pool `duckdb_catalog_pool`（slots=1），需要你在 Airflow UI/CLI 里创建该 pool。
 
 依赖关系：
 

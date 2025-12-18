@@ -7,7 +7,7 @@ from dags.dw_catalog_dag import create_catalog_dag
 
 def test_create_catalog_dag_builds_tasks():
     dag: DAG = create_catalog_dag()
-    assert dag.dag_id == "duckdb_catalog_dag"
+    assert dag.dag_id == "dw_catalog_dag"
     assert "migrate_catalog" in dag.task_ids
     assert "refresh_ods_catalog" in dag.task_ids
 

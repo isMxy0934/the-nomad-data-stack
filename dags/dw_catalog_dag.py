@@ -13,6 +13,7 @@ from typing import Any
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.utils.catalog_migrations import apply_migrations
@@ -23,6 +24,7 @@ from dags.utils.duckdb_utils import (
     create_temporary_connection,
 )
 
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
 
@@ -114,7 +116,7 @@ def refresh_ods_catalog(
 
 def create_catalog_dag() -> DAG:
     with DAG(
-        dag_id="duckdb_catalog_dag",
+        dag_id=DAG_ID,
         start_date=datetime(2024, 1, 1),
         schedule=None,
         catchup=False,
@@ -141,7 +143,14 @@ def create_catalog_dag() -> DAG:
             },
         )
 
-        migrate >> refresh_ods
+        trigger_ods = TriggerDagRunOperator(
+            task_id="trigger_ods_loader",
+            trigger_dag_id="ods_loader",
+            wait_for_completion=False,  # Fire and forget
+            reset_dag_run=True,  # Allow re-triggering same date
+        )
+
+        migrate >> refresh_ods >> trigger_ods
 
     return dag
 

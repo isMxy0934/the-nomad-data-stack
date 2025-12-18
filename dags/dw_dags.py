@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from airflow import DAG
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 
@@ -128,7 +129,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
         dag_id=f"dw_{layer}",
         description=f"DW layer DAG for {layer}",
         default_args=default_args,
-        schedule="@daily",
+        schedule=None,  # Triggered by upstream layers
         start_date=datetime(2024, 1, 1),
         catchup=False,
         max_active_runs=1,
@@ -137,7 +138,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
     with dag:
         task_groups: dict[str, TaskGroup] = {}
         for table in ordered_tables:
-            task_groups[table.name] = build_etl_task_group(
+            tg = build_etl_task_group(
                 dag=dag,
                 task_group_id=table.name,
                 dest_name=table.name,
@@ -146,13 +147,42 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 load_op_kwargs={"table_spec": table},
                 is_partitioned=table.is_partitioned,
             )
-
+            task_groups[table.name] = tg
+            
         for table, deps in dependencies.items():
             if table not in task_groups:
                 continue
             for dep in deps:
                 if dep in task_groups:
                     task_groups[dep] >> task_groups[table]
+
+        # Trigger Downstream Layers
+        downstream_layers = [
+            l for l, deps in config.layer_dependencies.items()
+            if layer in deps
+        ]
+
+        if downstream_layers:
+            for ds_layer in downstream_layers:
+                trigger = TriggerDagRunOperator(
+                    task_id=f"trigger_dw_{ds_layer}",
+                    trigger_dag_id=f"dw_{ds_layer}",
+                    wait_for_completion=False,
+                    reset_dag_run=True,
+                )
+                # Trigger only after ALL tables in current layer are done
+                for tg in task_groups.values():
+                    tg >> trigger
+        else:
+            # If no downstream layers, trigger dw_finish_dag
+            trigger_finish = TriggerDagRunOperator(
+                task_id="trigger_dw_finish",
+                trigger_dag_id="dw_finish_dag",
+                wait_for_completion=False,
+                reset_dag_run=True,
+            )
+            for tg in task_groups.values():
+                tg >> trigger_finish
 
     return dag
 
@@ -161,6 +191,10 @@ def build_dw_dags() -> dict[str, DAG]:
     config = load_dw_config(CONFIG_PATH)
     dag_map: dict[str, DAG] = {}
     for layer in order_layers(config):
+        # ODS layer is handled by ods_loader_dag.py with special CSV loading logic
+        if layer == "ods":
+            continue
+
         try:
             dag = create_layer_dag(layer, config)
         except DWConfigError:

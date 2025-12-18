@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +10,9 @@ from typing import Any
 
 import yaml
 from airflow import DAG
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.sensors.external_task import ExternalTaskSensor
 
 from dags.utils.duckdb_utils import (
     configure_s3_access,
@@ -17,6 +20,7 @@ from dags.utils.duckdb_utils import (
     create_temporary_connection,
     execute_sql,
 )
+from dags.utils.dw_config_utils import load_dw_config
 from dags.utils.etl_utils import (
     DEFAULT_AWS_CONN_ID,
     build_etl_task_group,
@@ -27,10 +31,12 @@ from dags.utils.partition_utils import PartitionPaths
 from dags.utils.sql_utils import load_and_render_sql
 
 CONFIG_PATH = Path(__file__).parent / "ods" / "config.yaml"
+DW_CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_DIR = Path(__file__).parent / "ods"
 
 logger = logging.getLogger(__name__)
 
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
 def load_ods_config(path: Path) -> list[dict[str, Any]]:
     """Load and validate the ODS configuration file."""
@@ -139,10 +145,10 @@ def create_ods_loader_dag() -> DAG:
     }
 
     dag = DAG(
-        dag_id="ods_loader",
+        dag_id=DAG_ID,
         description="Load ODS partitions from raw data into partitioned parquet",
         default_args=default_args,
-        schedule="@daily",
+        schedule=None,
         start_date=datetime(2024, 1, 1),
         catchup=False,
         max_active_runs=1,
@@ -150,9 +156,10 @@ def create_ods_loader_dag() -> DAG:
 
     with dag:
         configs = load_ods_config(CONFIG_PATH)
+        etl_tasks = []
         for table_config in configs:
             dest = table_config["dest"]
-            build_etl_task_group(
+            tg = build_etl_task_group(
                 dag=dag,
                 task_group_id=dest,
                 dest_name=dest,
@@ -161,6 +168,30 @@ def create_ods_loader_dag() -> DAG:
                 load_op_kwargs={"table_config": table_config},
                 is_partitioned=True,
             )
+            etl_tasks.append(tg)
+        
+        # Trigger Downstream DW DAGs
+        try:
+            dw_config = load_dw_config(DW_CONFIG_PATH)
+            # Find layers that depend on 'ods'
+            downstream_layers = [
+                layer
+                for layer, deps in dw_config.layer_dependencies.items()
+                if "ods" in deps
+            ]
+
+            for layer in downstream_layers:
+                trigger = TriggerDagRunOperator(
+                    task_id=f"trigger_dw_{layer}",
+                    trigger_dag_id=f"dw_{layer}",
+                    wait_for_completion=False,
+                    reset_dag_run=True,
+                )
+                # Trigger runs after ALL ODS tables are loaded
+                for tg in etl_tasks:
+                    tg >> trigger
+        except Exception:
+            logger.exception("Failed to load DW config for downstream triggers")
 
     return dag
 

@@ -57,7 +57,7 @@
 - [x] 分区参数：`PARTITION_DATE`（`YYYY-MM-DD`）
 - [x] ODS 产物路径：`lake/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
 - [x] 完成标记：`lake/ods/{dest}/dt=YYYY-MM-DD/manifest.json`（可选 `_SUCCESS`）
-- [x] 幂等策略：同一 `(dest, dt)` 单写者 + 重跑覆盖（publish 前清空 canonical 分区）
+- [x] 幂等策略：同一 `(dest, dt)` 重跑覆盖（publish 前清空 canonical 分区）
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
 
@@ -93,7 +93,6 @@
 - [x] `dags/ods_loader_dag.py`：每表 TaskGroup：prepare → load → validate → commit → cleanup
 - [x] `dags/ods_loader_dag.py`：load 使用 DuckDB 写 tmp 前缀（`COPY ... PARTITION_BY (dt)`）
 - [x] `dags/ods_loader_dag.py`：commit 调用 `partition_utils` publish + 写完成标记
-- [x] 单写者：为每张表创建 Airflow pool（slots=1），写分区任务必须指定该 pool
 
 验收：
 - [x] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`
@@ -133,7 +132,6 @@
   - 非分区表（DIM full / 快照类）：`lake/{layer}/{table}/*.parquet`（同样走 tmp → promote，禁止原地覆盖）
 - [x] DAG 生成：每层生成一个独立 DAG：`dw_{layer}`（例如 `dw_dwd`、`dw_ads`）
 - [x] 完成标记：写入 `_SUCCESS`（核心约定）；无数据视为成功但不写 `_SUCCESS`，只记录日志
-- [x] 单写者：同一 `(layer, table, dt)` 只能一个任务写入（Airflow pool/并发限制）
 
 ### 2.1 解析与依赖建模（核心：可测试）
 
@@ -156,7 +154,6 @@
 - [x] 逐层生成 DAG：仅当该层发现 `*.sql` 才生成 `dw_{layer}` DAG（空层跳过）
 - [x] 层内按目录扫描结果创建 tasks（可选用 TaskGroup 按表分组）
 - [x] 与 ODS 对齐的流程：prepare → load → validate → commit → cleanup
-- [x] pool 策略：为每张表提供默认 pool（slots=1），确保单写者
 
 ### 2.4 端到端验证（最小闭环）
 
