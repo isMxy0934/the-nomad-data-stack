@@ -63,7 +63,14 @@ def load_partition(
 ) -> dict[str, int]:
     ti = context["ti"]
     paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
-    paths = PartitionPaths(**paths_dict)
+    paths = PartitionPaths(
+        partition_date=paths_dict["partition_date"],
+        canonical_prefix=paths_dict["canonical_prefix"],
+        tmp_prefix=paths_dict["tmp_prefix"],
+        tmp_partition_prefix=paths_dict["tmp_partition_prefix"],
+        manifest_path=paths_dict["manifest_path"],
+        success_flag_path=paths_dict["success_flag_path"],
+    )
     partition_date = paths.partition_date
 
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
