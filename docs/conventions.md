@@ -8,7 +8,7 @@
 - ODS：按表 SQL 做轻标准化，落 Parquet 分区
 - DW（DWD/DIM/DWM/DWS/ADS）：按层 SQL 读取上游逻辑表，落 Parquet（分区或非分区）
 
-Extractor DAGs 当前集中定义在 `dags/extractor_dags.py`，每个“指标/来源”一个独立 DAG（例如 fund_price_akshare / fund_price_tushare）。
+Extractor DAG 当前为单一 DAG：`dags/dw_extractor.py`（`dw_extractor`），按 `dags/extractor/config.yaml` 生成多个 TaskGroup（例如 fund_price_akshare / fund_price_tushare）。
 
 ### 分区与路径
 

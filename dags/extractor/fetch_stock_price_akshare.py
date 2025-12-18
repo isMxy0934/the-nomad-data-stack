@@ -1,10 +1,10 @@
-import akshare as ak
-
 from dags.utils.extractor_utils import CsvPayload
 from dags.utils.time_utils import get_date_str
 
 
 def fetch_stock_price_akshare() -> CsvPayload | None:
+    import akshare as ak
+
     target_date_str = get_date_str()
     df = ak.stock_zh_a_spot_em(trade_date=target_date_str)
     if df is None or df.empty:

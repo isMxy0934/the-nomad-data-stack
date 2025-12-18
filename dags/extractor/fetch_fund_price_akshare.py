@@ -1,10 +1,10 @@
-import akshare as ak
-
 from dags.utils.extractor_utils import CsvPayload
 from dags.utils.time_utils import get_date_str
 
 
 def fetch_fund_price_akshare() -> CsvPayload | None:
+    import akshare as ak
+
     df = ak.fund_etf_category_sina(symbol="ETF基金")
     if df is None or df.empty:
         return None
