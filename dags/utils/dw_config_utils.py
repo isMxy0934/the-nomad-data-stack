@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
 
 import yaml
 
@@ -35,7 +35,9 @@ class DWConfigError(ValueError):
     """Raised when DW configuration is invalid."""
 
 
-def _validate_layer_dependencies(layer_dependencies: Mapping[str, Sequence[str]]) -> dict[str, list[str]]:
+def _validate_layer_dependencies(
+    layer_dependencies: Mapping[str, Sequence[str]],
+) -> dict[str, list[str]]:
     normalized: dict[str, list[str]] = {}
     for layer, deps in layer_dependencies.items():
         if not isinstance(deps, Sequence):
@@ -51,12 +53,14 @@ def _validate_table_dependencies(
     for layer, deps in table_dependencies.items():
         if not isinstance(deps, Mapping):
             raise DWConfigError("table_dependencies entries must be mappings")
-        normalized[layer] = {table: [str(d) for d in depends_on] for table, depends_on in deps.items()}
+        normalized[layer] = {
+            table: [str(d) for d in depends_on] for table, depends_on in deps.items()
+        }
     return normalized
 
 
 def _toposort(nodes: set[str], edges: Mapping[str, list[str]]) -> list[str]:
-    in_degree = {node: 0 for node in nodes}
+    in_degree = dict.fromkeys(nodes, 0)
     for node, deps in edges.items():
         for dep in deps:
             if dep not in nodes:
@@ -148,7 +152,9 @@ def discover_tables_for_layer(layer: str, base_dir: Path) -> list[TableSpec]:
     return tables
 
 
-def order_tables_within_layer(tables: list[TableSpec], dependencies: Mapping[str, list[str]]) -> list[TableSpec]:
+def order_tables_within_layer(
+    tables: list[TableSpec], dependencies: Mapping[str, list[str]]
+) -> list[TableSpec]:
     """Topologically sort tables within a layer according to dependencies."""
 
     if not tables:

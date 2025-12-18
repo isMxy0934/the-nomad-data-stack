@@ -3,38 +3,29 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 from airflow import DAG
-from airflow.models import Connection
-from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from airflow.utils.task_group import TaskGroup
-from airflow.utils.trigger_rule import TriggerRule
 
 from dags.utils.duckdb_utils import (
-    S3ConnectionConfig,
     configure_s3_access,
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
 )
-from dags.utils.partition_utils import (
-    PartitionPaths,
-    build_manifest,
-    build_partition_paths,
-    parse_s3_uri,
-    publish_partition,
+from dags.utils.etl_utils import (
+    DEFAULT_AWS_CONN_ID,
+    build_etl_task_group,
+    build_s3_connection_config,
+    list_parquet_keys,
 )
+from dags.utils.partition_utils import PartitionPaths
 from dags.utils.sql_utils import load_and_render_sql
-from dags.utils.time_utils import get_partition_date_str
 
-DEFAULT_AWS_CONN_ID = "MINIO_S3"
-DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
 CONFIG_PATH = Path(__file__).parent / "ods" / "config.yaml"
 SQL_DIR = Path(__file__).parent / "ods"
 POOL_PREFIX = "ods_pool_"
@@ -68,70 +59,6 @@ def get_table_pool_name(dest: str) -> str:
     """Return the Airflow pool name for a destination table."""
 
     return f"{POOL_PREFIX}{dest}"
-
-
-def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
-    """Construct DuckDB S3 settings from an Airflow connection."""
-
-    connection: Connection = s3_hook.get_connection(s3_hook.aws_conn_id)
-    extras = connection.extra_dejson or {}
-
-    endpoint = extras.get("endpoint_url") or extras.get("host")
-    if not endpoint:
-        raise ValueError("S3 connection must define endpoint_url")
-
-    url_style = extras.get("s3_url_style", "path")
-    region = extras.get("region_name", "us-east-1")
-    use_ssl = bool(extras.get("use_ssl", endpoint.startswith("https")))
-
-    return S3ConnectionConfig(
-        endpoint_url=endpoint,
-        access_key=connection.login or "",
-        secret_key=connection.password or "",
-        region=region,
-        use_ssl=use_ssl,
-        url_style=url_style,
-        session_token=extras.get("session_token"),
-    )
-
-
-def _list_parquet_keys(s3_hook: S3Hook, prefix_uri: str) -> list[str]:
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = key_prefix.strip("/") + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    return [key for key in keys if key.endswith(".parquet")]
-
-
-def _delete_tmp_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = key_prefix.strip("/") + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    if keys:
-        s3_hook.delete_objects(bucket=bucket, keys=keys)
-
-
-def prepare_partition(
-    table_config: dict[str, Any],
-    bucket_name: str,
-    run_id: str,
-    **_: Any,
-) -> dict[str, str]:
-    partition_date = get_partition_date_str()
-    base_prefix = f"lake/ods/{table_config['dest']}"
-    paths = build_partition_paths(
-        base_prefix=base_prefix,
-        partition_date=partition_date,
-        run_id=run_id,
-        bucket_name=bucket_name,
-    )
-    return {
-        "partition_date": partition_date,
-        "canonical_prefix": paths.canonical_prefix,
-        "tmp_prefix": paths.tmp_prefix,
-        "tmp_partition_prefix": paths.tmp_partition_prefix,
-        "manifest_path": paths.manifest_path,
-        "success_flag_path": paths.success_flag_path,
-    }
 
 
 def load_partition(
@@ -197,142 +124,11 @@ def load_partition(
     )
     row_count = int(row_count_relation.fetchone()[0])
 
-    file_count = len(_list_parquet_keys(s3_hook, paths.tmp_prefix))
+    file_count = len(list_parquet_keys(s3_hook, paths.tmp_prefix))
 
     metrics = {"row_count": row_count, "file_count": file_count, "has_data": 1}
     ti.xcom_push(key="load_metrics", value=metrics)
     return metrics
-
-
-def validate_partition(task_group_id: str, **context: Any) -> dict[str, int]:
-    ti = context["ti"]
-    paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
-    metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
-    if not metrics:
-        raise ValueError("Load metrics are missing; load step did not run correctly")
-
-    paths = PartitionPaths(**paths_dict)
-    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-    if not int(metrics.get("has_data", 1)):
-        file_count = len(_list_parquet_keys(s3_hook, paths.tmp_prefix))
-        if file_count != 0:
-            raise ValueError("Expected no parquet files in tmp prefix for empty source partition")
-        return metrics
-
-    file_count = len(_list_parquet_keys(s3_hook, paths.tmp_prefix))
-
-    if file_count == 0:
-        raise ValueError("No parquet files were written to the tmp prefix")
-    if file_count != metrics["file_count"]:
-        raise ValueError("File count mismatch between load metrics and S3 contents")
-    if metrics["row_count"] < 0:
-        raise ValueError("Row count cannot be negative")
-
-    return metrics
-
-
-def commit_partition(
-    table_config: dict[str, Any],
-    bucket_name: str,
-    run_id: str,
-    task_group_id: str,
-    **context: Any,
-) -> dict[str, str]:
-    ti = context["ti"]
-    paths = PartitionPaths(**ti.xcom_pull(task_ids=f"{task_group_id}.prepare"))
-    partition_date = paths.partition_date
-    metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
-    if not metrics:
-        raise ValueError("Load metrics are required to publish a partition")
-    if not int(metrics.get("has_data", 1)):
-        logger.info(
-            "No data for %s (dt=%s); skipping publish.",
-            table_config.get("dest"),
-            partition_date,
-        )
-        return {"published": "0"}
-
-    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-    manifest = build_manifest(
-        dest=table_config["dest"],
-        partition_date=partition_date,
-        run_id=run_id,
-        file_count=int(metrics["file_count"]),
-        row_count=int(metrics["row_count"]),
-        source_prefix=paths.tmp_partition_prefix,
-        target_prefix=paths.canonical_prefix,
-    )
-
-    publish_result = publish_partition(
-        s3_hook=s3_hook,
-        paths=paths,
-        manifest=manifest,
-        write_success_flag=True,
-    )
-    ti.xcom_push(key="manifest", value=manifest)
-    return publish_result
-
-
-def cleanup_tmp(task_group_id: str, **context: Any) -> None:
-    ti = context["ti"]
-    paths = PartitionPaths(**ti.xcom_pull(task_ids=f"{task_group_id}.prepare"))
-    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-    _delete_tmp_prefix(s3_hook, paths.tmp_prefix)
-
-
-def build_table_task_group(dag: DAG, table_config: dict[str, Any]) -> TaskGroup:
-    task_group_id = table_config["dest"]
-    with TaskGroup(group_id=task_group_id, dag=dag) as group:
-        prepare = PythonOperator(
-            task_id="prepare",
-            python_callable=prepare_partition,
-            op_kwargs={
-                "table_config": table_config,
-                "bucket_name": DEFAULT_BUCKET_NAME,
-                "run_id": "{{ run_id }}",
-            },
-            pool=get_table_pool_name(task_group_id),
-        )
-
-        load = PythonOperator(
-            task_id="load",
-            python_callable=load_partition,
-            op_kwargs={
-                "table_config": table_config,
-                "bucket_name": DEFAULT_BUCKET_NAME,
-                "run_id": "{{ run_id }}",
-                "task_group_id": task_group_id,
-            },
-            pool=get_table_pool_name(task_group_id),
-        )
-
-        validate = PythonOperator(
-            task_id="validate",
-            python_callable=validate_partition,
-            op_kwargs={"task_group_id": task_group_id},
-        )
-
-        commit = PythonOperator(
-            task_id="commit",
-            python_callable=commit_partition,
-            op_kwargs={
-                "table_config": table_config,
-                "bucket_name": DEFAULT_BUCKET_NAME,
-                "run_id": "{{ run_id }}",
-                "task_group_id": task_group_id,
-            },
-            pool=get_table_pool_name(task_group_id),
-        )
-
-        cleanup = PythonOperator(
-            task_id="cleanup",
-            python_callable=cleanup_tmp,
-            op_kwargs={"task_group_id": task_group_id},
-            trigger_rule=TriggerRule.ALL_DONE,
-        )
-
-        prepare >> load >> validate >> commit >> cleanup
-    return group
 
 
 def create_ods_loader_dag() -> DAG:
@@ -355,7 +151,17 @@ def create_ods_loader_dag() -> DAG:
     with dag:
         configs = load_ods_config(CONFIG_PATH)
         for table_config in configs:
-            build_table_task_group(dag, table_config)
+            dest = table_config["dest"]
+            build_etl_task_group(
+                dag=dag,
+                task_group_id=dest,
+                dest_name=dest,
+                base_prefix=f"lake/ods/{dest}",
+                load_callable=load_partition,
+                load_op_kwargs={"table_config": table_config},
+                is_partitioned=True,
+                pool_name=get_table_pool_name(dest),
+            )
 
     return dag
 

@@ -160,8 +160,8 @@
 
 ### 2.4 端到端验证（最小闭环）
 
-- [ ] 增加至少 1 个 DWD 表（SQL + 目录约定）并从 ODS 跑通一个 `dt`
-- [ ] Demo 表：`dwd.dwd_daily_stock_price`（AkShare/TuShare 合并；按 `symbol, trade_date` 粒度，产出 `open_avg/close_avg`）
+- [x] 增加至少 1 个 DWD 表（SQL + 目录约定）并从 ODS 跑通一个 `dt`
+- [x] Demo 表：`dwd.dwd_daily_stock_price`（AkShare/TuShare 合并；按 `symbol, trade_date` 粒度，产出 `open_avg/close_avg`）
 
 ---
 

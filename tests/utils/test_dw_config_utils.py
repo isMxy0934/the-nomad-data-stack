@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 from dags.utils.dw_config_utils import (  # pylint: disable=wrong-import-position
-    DWConfig,
     DWConfigError,
     TableSpec,
     discover_tables_for_layer,
@@ -67,7 +66,9 @@ def test_discover_tables_requires_layer_prefix(tmp_path: Path):
     bad_sql.write_text("SELECT 1", encoding="utf-8")
 
     tables = discover_tables_for_layer("dwd", tmp_path)
-    assert tables == [TableSpec(layer="dwd", name="dwd_good", sql_path=good_sql, is_partitioned=False)]
+    assert tables == [
+        TableSpec(layer="dwd", name="dwd_good", sql_path=good_sql, is_partitioned=False)
+    ]
 
     assert discover_tables_for_layer("dim", tmp_path) == []
 
