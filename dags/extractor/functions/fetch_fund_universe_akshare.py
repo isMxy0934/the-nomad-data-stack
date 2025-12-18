@@ -32,4 +32,3 @@ def fetch_fund_universe_akshare() -> CsvPayload | None:
 
     csv_bytes = df.to_csv(index=False).encode("utf-8")
     return CsvPayload(csv_bytes=csv_bytes, record_count=len(df))
-
