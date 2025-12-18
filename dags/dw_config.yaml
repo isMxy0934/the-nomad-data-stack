@@ -5,7 +5,6 @@ layer_dependencies:
   dim:
     - "dwd"
   dwm:
-    - "dwd"
     - "dim"
   dws:
     - "dwm"

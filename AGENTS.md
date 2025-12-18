@@ -9,7 +9,6 @@
 - **约定优于配置**：目录结构即配置；
   - ODS：表清单见 `dags/ods/config.yaml`，SQL 文件按 `dags/ods/{dest}.sql` 命名。
   - DW：层依赖见 `dags/dw_config.yaml`，表通过扫描 `dags/{layer}/*.sql` 发现（空层/缺目录跳过，不生成占位）。
-- **单写者原则**：同一 `(table, dt)` 同时只能一个任务写入；通过 Airflow `pool`/并发限制保证。
 
 ## 关键架构上下文 (Critical Architecture Context)
 

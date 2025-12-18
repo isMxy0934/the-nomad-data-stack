@@ -25,17 +25,17 @@ def test_dwd_pipeline_standard_flow(
 ):
     """Test standard DW flow: RAW (CSV) -> ODS (Parquet) -> DWD (Parquet)."""
 
-    ods_table = "ods_daily_stock_price_akshare"
+    ods_table = "ods_daily_fund_price_akshare"
     dwd_table = "dwd_daily_stock_price"
 
     # ---------------------------------------------------------
     # 1. Prepare RAW data in standard location
     # ---------------------------------------------------------
-    # Path: lake/_integration/raw/daily/stock_price/akshare/dt=YYYY-MM-DD/data.csv
-    raw_base_path = "raw/daily/stock_price/akshare"
+    # Path: lake/_integration/raw/daily/fund_price/akshare/dt=YYYY-MM-DD/data.csv
+    raw_base_path = "raw/daily/fund_price/akshare"
     raw_key = f"{integration_prefix}/{raw_base_path}/dt={test_date}/data.csv"
 
-    csv_content = load_test_csv("stock_price_akshare.csv", test_date)
+    csv_content = load_test_csv("fund_price_akshare.csv", test_date)
     minio_client.put_object(Bucket=test_bucket_name, Key=raw_key, Body=csv_content)
 
     # ---------------------------------------------------------
@@ -54,11 +54,24 @@ def test_dwd_pipeline_standard_flow(
         bucket_name=test_bucket_name,
     )
 
-    # Standard ODS View creation (matching ods_loader_dag.py)
     raw_s3_uri = f"s3://{test_bucket_name}/{raw_key}"
     execute_sql(
         ods_conn,
-        f"CREATE OR REPLACE VIEW tmp_{ods_table} AS SELECT * FROM read_csv_auto('{raw_s3_uri}', hive_partitioning=false);",
+        f"""
+        CREATE OR REPLACE VIEW tmp_{ods_table} AS
+        SELECT
+          fund_code AS symbol,
+          CAST(NULL AS VARCHAR) AS name,
+          nav AS close,
+          nav AS high,
+          nav AS low,
+          CAST(0 AS DOUBLE) AS vol,
+          CAST(0 AS DOUBLE) AS amount,
+          nav AS pre_close,
+          CAST(0 AS DOUBLE) AS pct_chg,
+          REPLACE(CAST(date AS VARCHAR), '-', '') AS trade_date
+        FROM read_csv_auto('{raw_s3_uri}', hive_partitioning=false);
+        """,
     )
 
     ods_sql_path = ROOT_DIR / "dags" / "ods" / f"{ods_table}.sql"

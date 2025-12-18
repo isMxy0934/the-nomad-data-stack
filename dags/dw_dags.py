@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from airflow import DAG
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 
@@ -69,6 +70,21 @@ def load_table(
     configure_s3_access(connection, s3_config)
     _attach_catalog_if_available(connection)
 
+    # Validate that the target table exists in the catalog (Schema-on-Read DDL must be in migrations)
+    # We check if a view or table exists with the target name in the correct schema
+    check_sql = f"""
+        SELECT COUNT(*)
+        FROM information_schema.views
+        WHERE table_schema = '{table_spec.layer}'
+        AND table_name = '{table_spec.name}'
+    """
+    exists = connection.execute(check_sql).fetchone()[0]
+    if not exists:
+        raise ValueError(
+            f"Table '{table_spec.layer}.{table_spec.name}' is not registered in the catalog. "
+            f"Please add a migration script in 'catalog/migrations/' to define this table."
+        )
+
     rendered_sql = load_and_render_sql(
         table_spec.sql_path,
         {"PARTITION_DATE": partition_date},
@@ -128,16 +144,17 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
         dag_id=f"dw_{layer}",
         description=f"DW layer DAG for {layer}",
         default_args=default_args,
-        schedule="@daily",
+        schedule=None,  # Triggered by upstream layers
         start_date=datetime(2024, 1, 1),
         catchup=False,
         max_active_runs=1,
+        tags=["dw"],
     )
 
     with dag:
         task_groups: dict[str, TaskGroup] = {}
         for table in ordered_tables:
-            task_groups[table.name] = build_etl_task_group(
+            tg = build_etl_task_group(
                 dag=dag,
                 task_group_id=table.name,
                 dest_name=table.name,
@@ -146,6 +163,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 load_op_kwargs={"table_spec": table},
                 is_partitioned=table.is_partitioned,
             )
+            task_groups[table.name] = tg
 
         for table, deps in dependencies.items():
             if table not in task_groups:
@@ -154,6 +172,43 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 if dep in task_groups:
                     task_groups[dep] >> task_groups[table]
 
+        # Trigger Downstream Layers
+        potential_downstream = [
+            ds_layer for ds_layer, deps in config.layer_dependencies.items() if layer in deps
+        ]
+
+        # Filter out downstream layers that have no SQL tables
+        valid_downstream = []
+        for ds_layer in potential_downstream:
+            if discover_tables_for_layer(ds_layer, SQL_BASE_DIR):
+                valid_downstream.append(ds_layer)
+            else:
+                logger.warning(
+                    "Layer '%s' depends on %s but has no tables; skipping trigger.", ds_layer, layer
+                )
+
+        if valid_downstream:
+            for ds_layer in valid_downstream:
+                trigger = TriggerDagRunOperator(
+                    task_id=f"trigger_dw_{ds_layer}",
+                    trigger_dag_id=f"dw_{ds_layer}",
+                    wait_for_completion=False,
+                    reset_dag_run=True,
+                )
+                # Trigger only after ALL tables in current layer are done
+                for tg in task_groups.values():
+                    tg >> trigger
+        else:
+            # No valid downstream layers, trigger finish
+            trigger_finish = TriggerDagRunOperator(
+                task_id="trigger_dw_finish",
+                trigger_dag_id="dw_finish_dag",
+                wait_for_completion=False,
+                reset_dag_run=True,
+            )
+            for tg in task_groups.values():
+                tg >> trigger_finish
+
     return dag
 
 
@@ -161,6 +216,10 @@ def build_dw_dags() -> dict[str, DAG]:
     config = load_dw_config(CONFIG_PATH)
     dag_map: dict[str, DAG] = {}
     for layer in order_layers(config):
+        # ODS layer is handled by ods_loader_dag.py with special CSV loading logic
+        if layer == "ods":
+            continue
+
         try:
             dag = create_layer_dag(layer, config)
         except DWConfigError:

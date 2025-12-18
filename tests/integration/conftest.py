@@ -20,6 +20,16 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+# Integration tests depend on core utilities that may not be importable in all
+# local environments (e.g., Python < 3.11 for datetime.UTC).
+try:
+    from dags.utils.partition_utils import parse_s3_uri as _parse_s3_uri  # noqa: F401
+except ImportError as exc:  # pragma: no cover
+    pytest.skip(
+        f"Skipping integration tests: dags.utils.partition_utils import failed: {exc}",
+        allow_module_level=True,
+    )
+
 
 @pytest.fixture(scope="session")
 def test_bucket_name() -> str:

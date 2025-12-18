@@ -20,6 +20,36 @@ from dags.utils.sql_utils import load_and_render_sql
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
+def _create_tmp_raw_view(
+    *, conn: duckdb.DuckDBPyConnection, table_name: str, csv_path: str
+) -> None:
+    if table_name == "ods_daily_fund_price_akshare":
+        execute_sql(
+            conn,
+            f"""
+            CREATE OR REPLACE VIEW tmp_{table_name} AS
+            SELECT
+              fund_code AS symbol,
+              CAST(NULL AS VARCHAR) AS name,
+              nav AS close,
+              nav AS high,
+              nav AS low,
+              CAST(0 AS DOUBLE) AS vol,
+              CAST(0 AS DOUBLE) AS amount,
+              nav AS pre_close,
+              CAST(0 AS DOUBLE) AS pct_chg,
+              REPLACE(CAST(date AS VARCHAR), '-', '') AS trade_date
+            FROM read_csv_auto('{csv_path}', hive_partitioning=false);
+            """,
+        )
+        return
+
+    execute_sql(
+        conn,
+        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
+    )
+
+
 def _materialize_ods_partition(
     *,
     minio_client,
@@ -54,10 +84,7 @@ def _materialize_ods_partition(
     configure_s3_access(conn, test_s3_config)
 
     csv_path = f"s3://{test_bucket_name}/{csv_key}"
-    execute_sql(
-        conn,
-        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
-    )
+    _create_tmp_raw_view(conn=conn, table_name=table_name, csv_path=csv_path)
 
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"
     rendered_sql = load_and_render_sql(sql_template_path, {"PARTITION_DATE": partition_date})
@@ -123,6 +150,7 @@ def test_duckdb_catalog_can_query_views_and_macros(
 
     # 1) Apply migrations into the catalog DB (metadata-only).
     conn = duckdb.connect(str(catalog_db))
+    configure_s3_access(conn, test_s3_config)
     apply_migrations(conn, migrations_dir=migrations_dir)
 
     # 2) Register view + macro for this table, pointing at integration prefix.

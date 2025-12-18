@@ -14,7 +14,9 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from dags.utils.duckdb_utils import S3ConnectionConfig
+from dags.utils.duckdb_utils import (
+    S3ConnectionConfig,
+)
 from dags.utils.partition_utils import (
     NonPartitionPaths,
     PartitionPaths,
@@ -29,6 +31,7 @@ from dags.utils.time_utils import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
+
 logger = logging.getLogger(__name__)
 
 
@@ -250,7 +253,7 @@ def build_etl_task_group(
     is_partitioned: bool = True,
     pool_name: str | None = None,
 ) -> TaskGroup:
-    """Build a standard ETL task group (prepare -> load -> validate -> commit -> cleanup).
+    """Build a standard ETL task group (prepare -> load -> validate -> commit -> cleanup -> refresh).
 
     Args:
         dag: The Airflow DAG.
