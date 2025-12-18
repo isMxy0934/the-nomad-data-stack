@@ -47,7 +47,7 @@ def _attach_catalog_if_available(connection) -> None:
         logger.info("Catalog file %s not found; skipping attach.", CATALOG_PATH)
         return
     connection.execute(f"ATTACH '{CATALOG_PATH}' AS catalog (READ_ONLY);")
-    connection.execute("SET search_path=catalog, main;")
+    connection.execute("USE catalog;")
 
 
 def load_table(

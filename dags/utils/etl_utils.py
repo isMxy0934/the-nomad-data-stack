@@ -180,7 +180,15 @@ def commit_dataset(
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
 
     if partitioned:
-        paths = PartitionPaths(**paths_dict)
+        # Reconstruct PartitionPaths explicitly to avoid unexpected keyword arguments (e.g. 'partitioned')
+        paths = PartitionPaths(
+            partition_date=paths_dict["partition_date"],
+            canonical_prefix=paths_dict["canonical_prefix"],
+            tmp_prefix=paths_dict["tmp_prefix"],
+            tmp_partition_prefix=paths_dict["tmp_partition_prefix"],
+            manifest_path=paths_dict["manifest_path"],
+            success_flag_path=paths_dict["success_flag_path"],
+        )
         manifest = build_manifest(
             dest=dest_name,
             partition_date=partition_date,
