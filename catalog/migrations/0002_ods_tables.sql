@@ -7,7 +7,7 @@ CREATE OR REPLACE VIEW ods.ods_daily_stock_price_akshare AS
 SELECT * FROM read_parquet(
     's3://stock-data/lake/ods/ods_daily_stock_price_akshare/dt=*/**/*.parquet',
     hive_partitioning = true,
-    columns = {
+    schema = {
         'trade_date': 'DATE',
         'symbol': 'VARCHAR',
         'open': 'DOUBLE',
@@ -27,7 +27,7 @@ CREATE OR REPLACE VIEW ods.ods_daily_stock_price_tushare AS
 SELECT * FROM read_parquet(
     's3://stock-data/lake/ods/ods_daily_stock_price_tushare/dt=*/**/*.parquet',
     hive_partitioning = true,
-    columns = {
+    schema = {
         'ts_code': 'VARCHAR',
         'trade_date': 'DATE',
         'open': 'DOUBLE',
@@ -48,7 +48,7 @@ CREATE OR REPLACE VIEW ods.ods_daily_fund_price_akshare AS
 SELECT * FROM read_parquet(
     's3://stock-data/lake/ods/ods_daily_fund_price_akshare/dt=*/**/*.parquet',
     hive_partitioning = true,
-    columns = {
+    schema = {
         'date': 'DATE',
         'symbol': 'VARCHAR',
         'open': 'DOUBLE',
@@ -66,7 +66,7 @@ CREATE OR REPLACE VIEW ods.ods_daily_fund_price_tushare AS
 SELECT * FROM read_parquet(
     's3://stock-data/lake/ods/ods_daily_fund_price_tushare/dt=*/**/*.parquet',
     hive_partitioning = true,
-    columns = {
+    schema = {
         'ts_code': 'VARCHAR',
         'trade_date': 'DATE',
         'open': 'DOUBLE',
@@ -95,4 +95,3 @@ SELECT * FROM read_parquet('s3://stock-data/lake/ods/ods_daily_fund_price_akshar
 
 CREATE OR REPLACE MACRO ods.ods_daily_fund_price_tushare_dt(p_date) AS TABLE 
 SELECT * FROM read_parquet('s3://stock-data/lake/ods/ods_daily_fund_price_tushare/dt=' || p_date || '/**/*.parquet', hive_partitioning=true);
-
