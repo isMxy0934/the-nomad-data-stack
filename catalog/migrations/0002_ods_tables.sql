@@ -49,12 +49,8 @@ SELECT * FROM read_parquet(
 ) WHERE dt <> '1900-01-01';
 
 CREATE OR REPLACE MACRO ods.ods_daily_stock_price_akshare_dt(p_date) AS TABLE 
-SELECT * FROM read_parquet(
-    's3://stock-data/lake/ods/ods_daily_stock_price_akshare/dt=' || p_date || '/**/*.parquet', 
-    hive_partitioning=true,
-    hive_types = {'dt': 'VARCHAR'},
-    union_by_name = true
-);
+SELECT * FROM ods.ods_daily_stock_price_akshare
+WHERE dt = p_date;
 
 -------------------------------------------------------------------------------
 -- 2. ods_daily_stock_price_tushare
@@ -99,12 +95,8 @@ SELECT * FROM read_parquet(
 ) WHERE dt <> '1900-01-01';
 
 CREATE OR REPLACE MACRO ods.ods_daily_stock_price_tushare_dt(p_date) AS TABLE 
-SELECT * FROM read_parquet(
-    's3://stock-data/lake/ods/ods_daily_stock_price_tushare/dt=' || p_date || '/**/*.parquet', 
-    hive_partitioning=true,
-    hive_types = {'dt': 'VARCHAR'},
-    union_by_name = true
-);
+SELECT * FROM ods.ods_daily_stock_price_tushare
+WHERE dt = p_date;
 
 -------------------------------------------------------------------------------
 -- 3. ods_daily_fund_price_akshare
@@ -143,12 +135,8 @@ SELECT * FROM read_parquet(
 ) WHERE dt <> '1900-01-01';
 
 CREATE OR REPLACE MACRO ods.ods_daily_fund_price_akshare_dt(p_date) AS TABLE 
-SELECT * FROM read_parquet(
-    's3://stock-data/lake/ods/ods_daily_fund_price_akshare/dt=' || p_date || '/**/*.parquet', 
-    hive_partitioning=true,
-    hive_types = {'dt': 'VARCHAR'},
-    union_by_name = true
-);
+SELECT * FROM ods.ods_daily_fund_price_akshare
+WHERE dt = p_date;
 
 -------------------------------------------------------------------------------
 -- 4. ods_daily_fund_price_tushare
@@ -193,9 +181,5 @@ SELECT * FROM read_parquet(
 ) WHERE dt <> '1900-01-01';
 
 CREATE OR REPLACE MACRO ods.ods_daily_fund_price_tushare_dt(p_date) AS TABLE 
-SELECT * FROM read_parquet(
-    's3://stock-data/lake/ods/ods_daily_fund_price_tushare/dt=' || p_date || '/**/*.parquet', 
-    hive_partitioning=true,
-    hive_types = {'dt': 'VARCHAR'},
-    union_by_name = true
-);
+SELECT * FROM ods.ods_daily_fund_price_tushare
+WHERE dt = p_date;
