@@ -17,3 +17,11 @@ class ExtractorDagSpec:
 class CsvPayload:
     csv_bytes: bytes
     record_count: int
+    
+    
+@dataclass(frozen=True)
+class ExtractorSpec:
+    target: str
+    tags: list[str]
+    destination_key_template: str
+    fetcher: str  # module:function

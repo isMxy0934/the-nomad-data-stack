@@ -24,7 +24,7 @@ from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.utils.task_group import TaskGroup
 
-from dags.utils.extractor_utils import CsvPayload
+from dags.utils.extractor_utils import CsvPayload, ExtractorSpec
 from dags.utils.s3_utils import S3Uploader
 from dags.utils.time_utils import get_partition_date_str
 
@@ -32,13 +32,7 @@ logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).parent / "extractor" / "config.yaml"
 
-
-@dataclass(frozen=True)
-class ExtractorSpec:
-    target: str
-    tags: list[str]
-    destination_key_template: str
-    fetcher: str  # module:function
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
 
 def _safe_segment(value: str) -> str:
@@ -174,7 +168,7 @@ def create_dw_extractor_dag() -> DAG:
     specs = load_extractor_specs()
 
     dag = DAG(
-        dag_id="dw_extractor",
+        dag_id=DAG_ID,
         schedule=None,
         start_date=datetime(2024, 1, 1),
         catchup=False,
