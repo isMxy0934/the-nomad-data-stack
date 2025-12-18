@@ -19,7 +19,7 @@ extractors:
   #   destination_key_template: "lake/raw/daily/fund_price/tushare/dt={PARTITION_DATE}/data.csv"
   #   fetcher: "dags.extractor.fetch_fund_price_tushare:fetch_fund_price_tushare"
 
-  - target: stock_price_tushare
-    tags: ["extractor", "tushare", "stock"]
-    destination_key_template: "lake/raw/daily/stock_price/tushare/dt={PARTITION_DATE}/data.csv"
-    fetcher: "dags.extractor.functions.fetch_stock_price_tushare:fetch_stock_price_tushare"
+  # - target: stock_price_tushare
+  #   tags: ["extractor", "tushare", "stock"]
+  #   destination_key_template: "lake/raw/daily/stock_price/tushare/dt={PARTITION_DATE}/data.csv"
+  #   fetcher: "dags.extractor.functions.fetch_stock_price_tushare:fetch_stock_price_tushare"
