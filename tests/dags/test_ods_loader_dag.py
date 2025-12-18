@@ -2,8 +2,14 @@ import sys
 from pathlib import Path
 
 import pytest
-from airflow.models import Connection
-from airflow.utils.task_group import TaskGroup
+
+airflow = pytest.importorskip("airflow")
+from airflow.models import Connection  # noqa: E402
+from airflow.utils.task_group import TaskGroup  # noqa: E402
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from dags.ods_loader_dag import (
     create_ods_loader_dag,
@@ -12,10 +18,6 @@ from dags.ods_loader_dag import (
 )
 from dags.utils.duckdb_utils import S3ConnectionConfig
 from dags.utils.etl_utils import build_s3_connection_config
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
 
 
 def test_load_ods_config_parses_entries(tmp_path: Path):
@@ -78,7 +80,10 @@ def test_create_ods_loader_dag_builds_task_groups():
     ]
 
     dest_ids = {group.group_id for group in task_groups}
-    assert "ods_daily_stock_price_akshare" in dest_ids
+    config_path = ROOT_DIR / "dags" / "ods" / "config.yaml"
+    entries = load_ods_config(config_path)
+    expected = {entry["dest"] for entry in entries}
+    assert expected.issubset(dest_ids)
 
 
 def test_load_partition_noops_when_no_source_files(monkeypatch: pytest.MonkeyPatch):

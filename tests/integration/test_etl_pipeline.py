@@ -15,6 +15,34 @@ from dags.utils.sql_utils import load_and_render_sql
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
+def _create_tmp_raw_view(*, conn, table_name: str, csv_path: str) -> None:  # noqa: ANN001
+    if table_name == "ods_daily_fund_price_akshare":
+        execute_sql(
+            conn,
+            f"""
+            CREATE OR REPLACE VIEW tmp_{table_name} AS
+            SELECT
+              fund_code AS symbol,
+              CAST(NULL AS VARCHAR) AS name,
+              nav AS close,
+              nav AS high,
+              nav AS low,
+              CAST(0 AS DOUBLE) AS vol,
+              CAST(0 AS DOUBLE) AS amount,
+              nav AS pre_close,
+              CAST(0 AS DOUBLE) AS pct_chg,
+              REPLACE(CAST(date AS VARCHAR), '-', '') AS trade_date
+            FROM read_csv_auto('{csv_path}', hive_partitioning=false);
+            """,
+        )
+        return
+
+    execute_sql(
+        conn,
+        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
+    )
+
+
 def test_single_table_etl_pipeline(
     minio_client,
     test_bucket_name,
@@ -50,10 +78,7 @@ def test_single_table_etl_pipeline(
     configure_s3_access(conn, test_s3_config)
 
     csv_path = f"s3://{test_bucket_name}/{raw_key}"
-    execute_sql(
-        conn,
-        f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
-    )
+    _create_tmp_raw_view(conn=conn, table_name=table_name, csv_path=csv_path)
 
     sql_template_path = ROOT_DIR / "dags" / "ods" / f"{table_name}.sql"
     rendered_sql = load_and_render_sql(sql_template_path, {"PARTITION_DATE": test_date})
