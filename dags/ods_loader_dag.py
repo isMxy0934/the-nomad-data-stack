@@ -175,9 +175,7 @@ def create_ods_loader_dag() -> DAG:
             dw_config = load_dw_config(DW_CONFIG_PATH)
             # Find layers that depend on 'ods'
             potential_layers = [
-                layer
-                for layer, deps in dw_config.layer_dependencies.items()
-                if "ods" in deps
+                layer for layer, deps in dw_config.layer_dependencies.items() if "ods" in deps
             ]
 
             # Filter out layers that don't have any SQL tables

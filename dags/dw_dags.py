@@ -158,8 +158,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
 
         # Trigger Downstream Layers
         potential_downstream = [
-            ds_layer for ds_layer, deps in config.layer_dependencies.items()
-            if layer in deps
+            ds_layer for ds_layer, deps in config.layer_dependencies.items() if layer in deps
         ]
 
         # Filter out downstream layers that have no SQL tables
@@ -169,8 +168,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 valid_downstream.append(ds_layer)
             else:
                 logger.warning(
-                    "Layer '%s' depends on %s but has no tables; skipping trigger.",
-                    ds_layer, layer
+                    "Layer '%s' depends on %s but has no tables; skipping trigger.", ds_layer, layer
                 )
 
         if valid_downstream:
