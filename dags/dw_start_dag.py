@@ -5,7 +5,7 @@ from airflow import DAG
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-Trigger_DAG_ID = "dw_catalog_dag"
+Trigger_DAG_ID = "dw_extractor_dag"
 with DAG(
     dag_id=DAG_ID,
     start_date=datetime(2024, 1, 1),

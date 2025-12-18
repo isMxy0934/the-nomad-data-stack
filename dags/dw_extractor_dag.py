@@ -21,7 +21,9 @@ import yaml
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.task_group import TaskGroup
+from airflow.utils.trigger_rule import TriggerRule
 
 from dags.utils.extractor_utils import CsvPayload, ExtractorSpec
 from dags.utils.s3_utils import S3Uploader
@@ -176,6 +178,7 @@ def create_dw_extractor_dag() -> DAG:
     )
 
     with dag:
+        groups: list[TaskGroup] = []
         for spec in specs:
             with TaskGroup(group_id=spec.target) as group:
                 check = ShortCircuitOperator(
@@ -206,6 +209,19 @@ def create_dw_extractor_dag() -> DAG:
 
             # Expose groups at DAG level
             group  # noqa: B018
+            groups.append(group)
+
+        all_done = EmptyOperator(task_id="all_done", trigger_rule=TriggerRule.ALL_DONE)
+        trigger_catalog = TriggerDagRunOperator(
+            task_id="trigger_dw_catalog_dag",
+            trigger_dag_id="dw_catalog_dag",
+            wait_for_completion=False,
+            reset_dag_run=True,
+            trigger_rule=TriggerRule.ALL_DONE,
+        )
+        for group in groups:
+            group >> all_done
+        all_done >> trigger_catalog
 
     return dag
 
