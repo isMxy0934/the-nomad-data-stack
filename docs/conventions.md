@@ -8,6 +8,8 @@
 - ODS：按表 SQL 做轻标准化，落 Parquet 分区
 - DW（DWD/DIM/DWM/DWS/ADS）：按层 SQL 读取上游逻辑表，落 Parquet（分区或非分区）
 
+Extractor DAGs 当前集中定义在 `dags/extractor_dags.py`，每个“指标/来源”一个独立 DAG（例如 fund_price_akshare / fund_price_tushare）。
+
 ### 分区与路径
 
 - 分区列：`dt=YYYY-MM-DD`（Hive 风格）
@@ -40,4 +42,3 @@
 
 - DW 层 SQL 文件名必须带 layer 前缀：
   - 例如：`dags/dwd/dwd_daily_stock_price.sql` → 逻辑表 `dwd.dwd_daily_stock_price`
-

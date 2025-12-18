@@ -1,0 +1,32 @@
+extractors:
+  - dag_id: extractor_fund_data_from_akshare_daily_dag
+    task_id: fetch_fund_price_akshare
+    schedule: "35 18 * * *"
+    start_date: "2025-12-13"
+    tags: ["extractor", "akshare", "fund", "fund_price_akshare"]
+    destination_key_template: "lake/raw/daily/fund_price/akshare/dt={PARTITION_DATE}/data.csv"
+    fetcher: "dags.extractor.fetch_fund_price_akshare:fetch_fund_price_akshare"
+
+  - dag_id: extractor_stock_data_from_akshare_daily_dag
+    task_id: fetch_stock_price_akshare
+    schedule: "30 18 * * *"
+    start_date: "2025-12-13"
+    tags: ["extractor", "akshare", "stock", "stock_price_akshare"]
+    destination_key_template: "lake/raw/daily/stock_price/akshare/dt={PARTITION_DATE}/data.csv"
+    fetcher: "dags.extractor.fetch_stock_price_akshare:fetch_stock_price_akshare"
+
+  - dag_id: extractor_fund_data_from_tushare_daily_dag
+    task_id: fetch_fund_price_tushare
+    schedule: "45 18 * * *"
+    start_date: "2025-12-13"
+    tags: ["extractor", "tushare", "fund", "fund_price_tushare"]
+    destination_key_template: "lake/raw/daily/fund_price/tushare/dt={PARTITION_DATE}/data.csv"
+    fetcher: "dags.extractor.fetch_fund_price_tushare:fetch_fund_price_tushare"
+
+  - dag_id: extractor_stock_data_from_tushare_daily_dag
+    task_id: fetch_stock_price_tushare
+    schedule: "30 18 * * *"
+    start_date: "2025-12-13"
+    tags: ["extractor", "tushare", "stock", "stock_price_tushare"]
+    destination_key_template: "lake/raw/daily/stock_price/tushare/dt={PARTITION_DATE}/data.csv"
+    fetcher: "dags.extractor.fetch_stock_price_tushare:fetch_stock_price_tushare"
