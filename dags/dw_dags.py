@@ -38,7 +38,6 @@ from dags.utils.sql_utils import load_and_render_sql
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent
 CATALOG_PATH = Path(".duckdb") / "catalog.duckdb"
-POOL_PREFIX = "dw_pool_"
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +115,6 @@ def load_table(
     return metrics
 
 
-def get_table_pool_name(table_name: str) -> str:
-    return f"{POOL_PREFIX}{table_name}"
-
-
 def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
     tables = discover_tables_for_layer(layer, SQL_BASE_DIR)
     if not tables:
@@ -150,7 +145,6 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 load_callable=load_table,
                 load_op_kwargs={"table_spec": table},
                 is_partitioned=table.is_partitioned,
-                pool_name=get_table_pool_name(table.name),
             )
 
         for table, deps in dependencies.items():

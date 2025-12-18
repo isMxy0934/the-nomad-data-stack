@@ -28,7 +28,6 @@ from dags.utils.sql_utils import load_and_render_sql
 
 CONFIG_PATH = Path(__file__).parent / "ods" / "config.yaml"
 SQL_DIR = Path(__file__).parent / "ods"
-POOL_PREFIX = "ods_pool_"
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +52,6 @@ def load_ods_config(path: Path) -> list[dict[str, Any]]:
             raise ValueError("ODS entry requires both 'dest' and 'src'")
         validated.append(entry)
     return validated
-
-
-def get_table_pool_name(dest: str) -> str:
-    """Return the Airflow pool name for a destination table."""
-
-    return f"{POOL_PREFIX}{dest}"
 
 
 def load_partition(
@@ -160,7 +153,6 @@ def create_ods_loader_dag() -> DAG:
                 load_callable=load_partition,
                 load_op_kwargs={"table_config": table_config},
                 is_partitioned=True,
-                pool_name=get_table_pool_name(dest),
             )
 
     return dag

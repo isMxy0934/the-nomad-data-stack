@@ -34,8 +34,6 @@ DEFAULT_MIGRATIONS_DIR = Path(
 DEFAULT_LAYER_BASE_PREFIX = os.getenv("DUCKDB_CATALOG_ODS_PREFIX", "lake/ods")
 DEFAULT_LAYER_SCHEMA = os.getenv("DUCKDB_CATALOG_ODS_SCHEMA", "ods")
 
-CATALOG_POOL = os.getenv("DUCKDB_CATALOG_POOL", "duckdb_catalog_pool")
-
 
 def _build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
     connection = s3_hook.get_connection(s3_hook.aws_conn_id)
@@ -130,7 +128,6 @@ def create_catalog_dag() -> DAG:
                 "catalog_path": str(DEFAULT_CATALOG_PATH),
                 "migrations_dir": str(DEFAULT_MIGRATIONS_DIR),
             },
-            pool=CATALOG_POOL,
         )
 
         refresh_ods = PythonOperator(
@@ -142,7 +139,6 @@ def create_catalog_dag() -> DAG:
                 "base_prefix": DEFAULT_LAYER_BASE_PREFIX,
                 "schema": DEFAULT_LAYER_SCHEMA,
             },
-            pool=CATALOG_POOL,
         )
 
         migrate >> refresh_ods
