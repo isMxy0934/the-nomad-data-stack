@@ -51,6 +51,51 @@ def _attach_catalog_if_available(connection) -> None:
     connection.execute("USE catalog;")
 
 
+def _register_ods_raw_view(
+    *,
+    connection,
+    s3_hook: S3Hook,
+    config: DWConfig,
+    table_name: str,
+    bucket_name: str,
+    partition_date: str,
+) -> bool:
+    source = config.sources.get(table_name)
+    if not source:
+        raise ValueError(
+            f"Missing sources entry for ODS table '{table_name}'. "
+            f"Add sources.{table_name} to {CONFIG_PATH}."
+        )
+
+    if source.format.lower() != "csv":
+        raise ValueError(
+            f"Unsupported ODS source format for '{table_name}': '{source.format}' (only csv supported)"
+        )
+
+    source_path = source.path.strip("/")
+    source_prefix = f"{source_path}/dt={partition_date}/"
+    source_keys = s3_hook.list_keys(bucket_name=bucket_name, prefix=source_prefix) or []
+    csv_keys = [key for key in source_keys if key.endswith(".csv")]
+    if not csv_keys:
+        logger.info(
+            "No source CSV found under s3://%s/%s (partition_date=%s, table=%s); no-op.",
+            bucket_name,
+            source_prefix,
+            partition_date,
+            table_name,
+        )
+        return False
+
+    source_uri = f"s3://{bucket_name}/{source_path}/dt={partition_date}/*.csv"
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TEMP VIEW tmp_{table_name} AS
+        SELECT * FROM read_csv_auto('{source_uri}', hive_partitioning=false);
+        """
+    )
+    return True
+
+
 def load_table(
     table_spec: TableSpec,
     bucket_name: str,
@@ -71,7 +116,6 @@ def load_table(
     _attach_catalog_if_available(connection)
 
     # Validate that the target table exists in the catalog (Schema-on-Read DDL must be in migrations)
-    # We check if a view or table exists with the target name in the correct schema
     check_sql = f"""
         SELECT COUNT(*)
         FROM information_schema.views
@@ -84,6 +128,26 @@ def load_table(
             f"Table '{table_spec.layer}.{table_spec.name}' is not registered in the catalog. "
             f"Please add a migration script in 'catalog/migrations/' to define this table."
         )
+
+    if table_spec.layer == "ods":
+        config = load_dw_config(CONFIG_PATH)
+        has_source_data = _register_ods_raw_view(
+            connection=connection,
+            s3_hook=s3_hook,
+            config=config,
+            table_name=table_spec.name,
+            bucket_name=bucket_name,
+            partition_date=str(partition_date),
+        )
+        if not has_source_data:
+            metrics = {
+                "row_count": 0,
+                "file_count": 0,
+                "has_data": 0,
+                "partitioned": int(partitioned),
+            }
+            ti.xcom_push(key="load_metrics", value=metrics)
+            return metrics
 
     rendered_sql = load_and_render_sql(
         table_spec.sql_path,
@@ -172,12 +236,10 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 if dep in task_groups:
                     task_groups[dep] >> task_groups[table]
 
-        # Trigger Downstream Layers
         potential_downstream = [
             ds_layer for ds_layer, deps in config.layer_dependencies.items() if layer in deps
         ]
 
-        # Filter out downstream layers that have no SQL tables
         valid_downstream = []
         for ds_layer in potential_downstream:
             if discover_tables_for_layer(ds_layer, SQL_BASE_DIR):
@@ -195,11 +257,9 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     wait_for_completion=False,
                     reset_dag_run=True,
                 )
-                # Trigger only after ALL tables in current layer are done
                 for tg in task_groups.values():
                     tg >> trigger
         else:
-            # No valid downstream layers, trigger finish
             trigger_finish = TriggerDagRunOperator(
                 task_id="trigger_dw_finish",
                 trigger_dag_id="dw_finish_dag",
@@ -216,10 +276,6 @@ def build_dw_dags() -> dict[str, DAG]:
     config = load_dw_config(CONFIG_PATH)
     dag_map: dict[str, DAG] = {}
     for layer in order_layers(config):
-        # ODS layer is handled by ods_loader_dag.py with special CSV loading logic
-        if layer == "ods":
-            continue
-
         try:
             dag = create_layer_dag(layer, config)
         except DWConfigError:

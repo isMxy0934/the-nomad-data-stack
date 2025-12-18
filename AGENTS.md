@@ -7,7 +7,7 @@
 - **存储与计算分离**：数据事实只在 MinIO（`lake/...`）；ETL/验证阶段的 DuckDB 连接应使用内存库或临时文件，不作为共享数据库。
 - **分析 Catalog（metadata-only）**：允许维护一个持久化 DuckDB 文件 `./.duckdb/catalog.duckdb`，仅保存 `SCHEMA + VIEW + MACRO`，不存数据；用于交互分析 `SELECT * FROM ods.xxx`。
 - **约定优于配置**：目录结构即配置；
-  - ODS：表清单见 `dags/ods/config.yaml`，SQL 文件按 `dags/ods/{dest}.sql` 命名。
+  - ODS：sources 配置见 `dags/dw_config.yaml` 的 `sources:`，SQL 文件按 `dags/ods/{dest}.sql` 命名。
   - DW：层依赖见 `dags/dw_config.yaml`，表通过扫描 `dags/{layer}/*.sql` 发现（空层/缺目录跳过，不生成占位）。
 
 ## 关键架构上下文 (Critical Architecture Context)
@@ -37,7 +37,7 @@
 
 - 禁止 in-place overwrite 远端分区。
 - 标准流程：写入临时前缀 → 校验（行数/文件数等）→ promote 到 canonical 分区 → 写入 `manifest.json` + `_SUCCESS` → 清理临时前缀。
-- 相关实现：`dags/utils/partition_utils.py`、`dags/ods_loader_dag.py`。
+- 相关实现：`dags/utils/partition_utils.py`、`dags/dw_dags.py`。
 
 ## M2：DW（DWD/DIM/ADS）约定摘要
 

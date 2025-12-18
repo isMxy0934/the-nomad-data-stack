@@ -10,7 +10,7 @@
 - [x] 计划：`PLAN.md` 已建立并可勾选追踪
 - [x] 基础设施：`docker-compose.yml` 已包含 Airflow + Postgres + MinIO
 - [x] Extractor DAG：`dags/extractor/*` 已存在（AkShare/TuShare → MinIO CSV）
-- [x] ODS 配置与示例 SQL：`dags/ods/config.yaml`、`dags/ods/*.sql` 已存在
+- [x] ODS 配置与示例 SQL：`dags/dw_config.yaml` (sources)、`dags/ods/*.sql` 已存在
 - [x] 工具类：`dags/utils/s3_utils.py`、`dags/utils/time_utils.py` 已存在
 
 > 说明：以上是“文件/结构已存在”，不等价于“已跑通验证”。跑通验证会在对应任务项里单独勾选。
@@ -52,7 +52,7 @@
 
 #### P0：锁定约定（先写清楚，再写代码）
 
-- [x] 配置文件：`dags/ods/config.yaml`
+- [x] 配置文件：`dags/dw_config.yaml` (sources)
 - [x] SQL 约定：`dags/ods/{dest}.sql`
 - [x] 分区参数：`PARTITION_DATE`（`YYYY-MM-DD`）
 - [x] ODS 产物路径：`lake/ods/{dest}/dt=YYYY-MM-DD/*.parquet`（落盘）
@@ -89,10 +89,6 @@
 
 #### P4：ODS Loader DAG（拼装层）
 
-- [x] `dags/ods_loader_dag.py`：从 `dags/ods/config.yaml` 读取表清单并动态生成任务
-- [x] `dags/ods_loader_dag.py`：每表 TaskGroup：prepare → load → validate → commit → cleanup
-- [x] `dags/ods_loader_dag.py`：load 使用 DuckDB 写 tmp 前缀（`COPY ... PARTITION_BY (dt)`）
-- [x] `dags/ods_loader_dag.py`：commit 调用 `partition_utils` publish + 写完成标记
 
 验收：
 - [x] 端到端跑通 `ods_daily_stock_price_akshare` 的一个 `dt`

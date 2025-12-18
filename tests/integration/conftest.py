@@ -51,12 +51,13 @@ class OdsTableCase:
     csv_fixture: str
 
 
-def _load_ods_config() -> list[dict]:
-    config_path = ROOT_DIR / "dags" / "ods" / "config.yaml"
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    if not isinstance(config, list):
-        raise ValueError("ODS config must be a list")
-    return config
+def _load_ods_sources() -> dict[str, dict]:
+    config_path = ROOT_DIR / "dags" / "dw_config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    sources = config.get("sources") or {}
+    if not isinstance(sources, dict):
+        raise ValueError("dw_config.yaml sources must be a mapping")
+    return sources
 
 
 def _ods_cases() -> list[OdsTableCase]:
@@ -66,15 +67,16 @@ def _ods_cases() -> list[OdsTableCase]:
     }
 
     cases: list[OdsTableCase] = []
-    for entry in _load_ods_config():
-        dest = entry.get("dest")
-        src = (entry.get("src") or {}).get("properties", {}).get("path")
-        if not dest or not src:
+    for dest, spec in _load_ods_sources().items():
+        if not isinstance(spec, dict):
             continue
-        fixture = fixture_map.get(dest)
+        src_path = spec.get("path")
+        if not dest or not src_path:
+            continue
+        fixture = fixture_map.get(str(dest))
         if not fixture:
             continue
-        cases.append(OdsTableCase(dest=str(dest), src_path=str(src), csv_fixture=fixture))
+        cases.append(OdsTableCase(dest=str(dest), src_path=str(src_path), csv_fixture=fixture))
 
     target = os.getenv("INTEGRATION_TARGET_TABLE", "").strip()
     if target:
@@ -170,7 +172,33 @@ def load_test_csv(test_data_dir: Path) -> Callable[[str, str], str]:
             raise ValueError(f"CSV fixture is empty: {path}")
 
         header = rows[0]
-        filtered = [row for row in rows[1:] if row and row[0] == partition_date]
+        date_idx: int | None = None
+        trade_date_idx: int | None = None
+        for idx, col in enumerate(header):
+            if col == "date":
+                date_idx = idx
+            if col == "trade_date":
+                trade_date_idx = idx
+
+        if date_idx is not None:
+            filtered = [
+                row
+                for row in rows[1:]
+                if row and len(row) > date_idx and row[date_idx] == partition_date
+            ]
+        elif trade_date_idx is not None:
+            yyyymmdd = partition_date.replace("-", "")
+            filtered = [
+                row
+                for row in rows[1:]
+                if row
+                and len(row) > trade_date_idx
+                and (row[trade_date_idx] == partition_date or row[trade_date_idx] == yyyymmdd)
+            ]
+        else:
+            # Some fixtures are already pre-filtered by day (no explicit date column).
+            filtered = [row for row in rows[1:] if row]
+
         output_buf = io.StringIO()
         writer = csv.writer(output_buf, lineterminator="\n")
         writer.writerow(header)

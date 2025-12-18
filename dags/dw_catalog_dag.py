@@ -66,8 +66,8 @@ def create_catalog_dag() -> DAG:
         )
 
         trigger_ods = TriggerDagRunOperator(
-            task_id="trigger_ods_loader",
-            trigger_dag_id="ods_loader_dag",
+            task_id="trigger_dw_ods",
+            trigger_dag_id="dw_ods",
             wait_for_completion=False,
             reset_dag_run=True,
         )

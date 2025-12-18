@@ -14,11 +14,20 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class SourceSpec:
+    """Represents a source dataset that seeds an ODS table."""
+
+    path: str
+    format: str = "csv"
+
+
+@dataclass(frozen=True)
 class DWConfig:
     """Resolved DW configuration including layer and table dependencies."""
 
     layer_dependencies: dict[str, list[str]]
     table_dependencies: dict[str, dict[str, list[str]]]
+    sources: dict[str, SourceSpec]
 
 
 @dataclass(frozen=True)
@@ -59,6 +68,21 @@ def _validate_table_dependencies(
     return normalized
 
 
+def _validate_sources(sources: Mapping[str, object]) -> dict[str, SourceSpec]:
+    normalized: dict[str, SourceSpec] = {}
+    for table, raw in sources.items():
+        if not isinstance(raw, Mapping):
+            raise DWConfigError("sources entries must be mappings")
+        path = raw.get("path")
+        if not isinstance(path, str) or not path.strip():
+            raise DWConfigError(f"sources.{table}.path must be a non-empty string")
+        fmt = raw.get("format", "csv")
+        if not isinstance(fmt, str) or not fmt.strip():
+            raise DWConfigError(f"sources.{table}.format must be a non-empty string")
+        normalized[str(table)] = SourceSpec(path=path.strip(), format=fmt.strip())
+    return normalized
+
+
 def _toposort(nodes: set[str], edges: Mapping[str, list[str]]) -> list[str]:
     in_degree = dict.fromkeys(nodes, 0)
     for node, deps in edges.items():
@@ -92,14 +116,18 @@ def load_dw_config(path: Path) -> DWConfig:
     config = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     layer_dependencies_raw = config.get("layer_dependencies") or {}
     table_dependencies_raw = config.get("table_dependencies") or {}
+    sources_raw = config.get("sources") or {}
 
     if not isinstance(layer_dependencies_raw, Mapping):
         raise DWConfigError("layer_dependencies must be a mapping")
     if not isinstance(table_dependencies_raw, Mapping):
         raise DWConfigError("table_dependencies must be a mapping")
+    if not isinstance(sources_raw, Mapping):
+        raise DWConfigError("sources must be a mapping")
 
     layer_dependencies = _validate_layer_dependencies(layer_dependencies_raw)
     table_dependencies = _validate_table_dependencies(table_dependencies_raw)
+    sources = _validate_sources(sources_raw)
 
     layer_nodes = set(layer_dependencies.keys())
     for deps in layer_dependencies.values():
@@ -114,7 +142,11 @@ def load_dw_config(path: Path) -> DWConfig:
             table_nodes.update(dependency_list)
         _toposort(table_nodes, deps)
 
-    return DWConfig(layer_dependencies=layer_dependencies, table_dependencies=table_dependencies)
+    return DWConfig(
+        layer_dependencies=layer_dependencies,
+        table_dependencies=table_dependencies,
+        sources=sources,
+    )
 
 
 def order_layers(config: DWConfig) -> list[str]:

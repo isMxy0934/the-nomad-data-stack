@@ -53,7 +53,7 @@
 
 ODS（以及后续层）通过配置文件声明“要处理哪些表”，并约定 `dest.sql` 为对应 SQL 文件名：
 
-- 配置：`dags/ods/config.yaml`
+- 配置：`dags/dw_config.yaml`（`sources:`）
 - SQL：`dags/ods/{dest}.sql`
 
 `config.yaml` 示例（节选）：
@@ -159,11 +159,10 @@ COPY (
 当前 `dags/` 下的目录/职责：
 
 - `dags/extractor/*`：采集 DAG（写入 MinIO，通常为 CSV）
-- `dags/ods/*`：ODS 配置与 SQL
-- `dags/dw_config.yaml`：DW 分层依赖配置（层依赖 + 可选同层表依赖）
+- `dags/ods/*`：ODS SQL（按表）
+- `dags/dw_config.yaml`：统一配置（层依赖 + 可选同层表依赖 + ODS sources）
 - `dags/dw_dags.py`：DW DAG 生成入口（按 `dw_config.yaml` + 目录扫描生成 `dw_{layer}` DAG）
 - `dags/utils/*`：通用工具（如 S3 上传、日期分区）
-- `dags/ods_loader_dag.py`：ODS 加载 DAG（读取 `config.yaml`，按 SQL 落 Parquet，并写入 `_SUCCESS` 完成标记）
 
 #### M2：DW（配置驱动，目录即配置）
 
@@ -200,9 +199,9 @@ uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/_integration/
 
 新增 ODS 表（例如 `ods_daily_fund_price_akshare`）的最小步骤：
 
-1. 在 `dags/ods/config.yaml` 增加一条 `dest + src.path`
+1. 在 `dags/dw_config.yaml` 的 `sources:` 增加一条 `ods_table -> path/format`
 2. 新增 SQL：`dags/ods/<dest>.sql`（确保输出包含 `${PARTITION_DATE}` 并产出 `dt`）
-3. 运行 ODS Loader 产出 `lake/ods/<dest>/dt=...` 分区
+3. 运行 `dw_ods` 产出 `lake/ods/<dest>/dt=...` 分区
 4. 刷新 catalog：`uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/ods`
 
 之后在 DuckDB UI（或 CLI）里打开 `./.duckdb/catalog.duckdb`，即可：
@@ -229,8 +228,8 @@ uv run python -m scripts.validate_duckdb_catalog_migrations
 
 依赖关系：
 
-- 推荐编排：`duckdb_catalog_dag` → `ods_loader` → `dw_{layer}`（按 `dw_config.yaml` 顺序）
-- ODS：`extractor_*` → `ods_loader`
+- 推荐编排：`dw_catalog_dag` → `dw_ods` → `dw_{layer}`（按 `dw_config.yaml` 顺序）
+- ODS：`extractor_*` → `dw_ods`
 - DW：`dw_{layer}` 读取逻辑表（`ods.*`/上游层）→ 写入 `lake/{layer}/...`
 
 ### 本地启动（Docker Compose）

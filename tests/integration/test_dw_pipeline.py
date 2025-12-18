@@ -31,7 +31,6 @@ def test_dwd_pipeline_standard_flow(
     # ---------------------------------------------------------
     # 1. Prepare RAW data in standard location
     # ---------------------------------------------------------
-    # Path: lake/_integration/raw/daily/fund_price/akshare/dt=YYYY-MM-DD/data.csv
     raw_base_path = "raw/daily/fund_price/akshare"
     raw_key = f"{integration_prefix}/{raw_base_path}/dt={test_date}/data.csv"
 
@@ -44,7 +43,6 @@ def test_dwd_pipeline_standard_flow(
     ods_conn = create_temporary_connection()
     configure_s3_access(ods_conn, test_s3_config)
 
-    # Standard ODS paths
     ods_run_id = f"test-run-ods-{test_date}"
     ods_base_prefix = f"{integration_prefix}/ods/{ods_table}"
     ods_paths = build_partition_paths(
@@ -59,18 +57,7 @@ def test_dwd_pipeline_standard_flow(
         ods_conn,
         f"""
         CREATE OR REPLACE VIEW tmp_{ods_table} AS
-        SELECT
-          fund_code AS symbol,
-          CAST(NULL AS VARCHAR) AS name,
-          nav AS close,
-          nav AS high,
-          nav AS low,
-          CAST(0 AS DOUBLE) AS vol,
-          CAST(0 AS DOUBLE) AS amount,
-          nav AS pre_close,
-          CAST(0 AS DOUBLE) AS pct_chg,
-          REPLACE(CAST(date AS VARCHAR), '-', '') AS trade_date
-        FROM read_csv_auto('{raw_s3_uri}', hive_partitioning=false);
+        SELECT * FROM read_csv_auto('{raw_s3_uri}', hive_partitioning=false);
         """,
     )
 
@@ -86,7 +73,6 @@ def test_dwd_pipeline_standard_flow(
         use_tmp_file=True,
     )
 
-    # Calculate ODS metrics and publish
     ods_row_count = int(
         ods_conn.execute(f"SELECT COUNT(*) FROM ({ods_rendered_sql})").fetchone()[0]
     )
@@ -114,7 +100,6 @@ def test_dwd_pipeline_standard_flow(
     dw_conn = create_temporary_connection()
     configure_s3_access(dw_conn, test_s3_config)
 
-    # Register ODS Catalog (Schema + Macro)
     dw_conn.execute("CREATE SCHEMA IF NOT EXISTS ods;")
     macro_sql = f"""
     CREATE OR REPLACE MACRO ods.{ods_table}_dt(partition_date) AS TABLE
@@ -125,7 +110,6 @@ def test_dwd_pipeline_standard_flow(
     """
     dw_conn.execute(macro_sql)
 
-    # DWD Paths
     dwd_run_id = f"test-run-dwd-{test_date}"
     dwd_base_prefix = f"{integration_prefix}/dwd/{dwd_table}"
     dwd_paths = build_partition_paths(
@@ -147,7 +131,6 @@ def test_dwd_pipeline_standard_flow(
         use_tmp_file=True,
     )
 
-    # Publish DWD
     dwd_row_count = int(dw_conn.execute(f"SELECT COUNT(*) FROM ({dwd_rendered_sql})").fetchone()[0])
     tmp_bucket, tmp_prefix_key = parse_s3_uri(dwd_paths.tmp_prefix)
     tmp_prefix_key = tmp_prefix_key.rstrip("/") + "/"
@@ -170,7 +153,6 @@ def test_dwd_pipeline_standard_flow(
     # ---------------------------------------------------------
     # 4. Final Verification
     # ---------------------------------------------------------
-    # Verify DWD output files
     objects = minio_client.list_objects_v2(
         Bucket=test_bucket_name,
         Prefix=f"{integration_prefix}/dwd/{dwd_table}/dt={test_date}/",
@@ -179,7 +161,6 @@ def test_dwd_pipeline_standard_flow(
     assert f"{integration_prefix}/dwd/{dwd_table}/dt={test_date}/_SUCCESS" in keys
     assert f"{integration_prefix}/dwd/{dwd_table}/dt={test_date}/manifest.json" in keys
 
-    # Verify data content
     check_conn = create_temporary_connection()
     configure_s3_access(check_conn, test_s3_config)
     dwd_path = (
@@ -190,4 +171,4 @@ def test_dwd_pipeline_standard_flow(
     ).fetchone()
 
     assert res[0] == dwd_row_count
-    assert res[1] > 0  # At least some symbols should be there
+    assert res[1] > 0
