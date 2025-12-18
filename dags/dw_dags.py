@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,8 +17,8 @@ from dags.utils.duckdb_utils import (
     configure_s3_access,
     copy_parquet,
     copy_partitioned_parquet,
-    create_temporary_connection,
     execute_sql,
+    temporary_connection,
 )
 from dags.utils.dw_config_utils import (
     DWConfig,
@@ -38,7 +39,7 @@ from dags.utils.sql_utils import load_and_render_sql
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent
-CATALOG_PATH = Path(".duckdb") / "catalog.duckdb"
+CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,58 @@ def load_table(
     task_group_id: str,
     **context: Any,
 ) -> dict[str, int]:
+    def empty_metrics(*, partitioned: bool) -> dict[str, int]:
+        metrics = {
+            "row_count": 0,
+            "file_count": 0,
+            "has_data": 0,
+            "partitioned": int(partitioned),
+        }
+        ti.xcom_push(key="load_metrics", value=metrics)
+        return metrics
+
+    def ensure_table_registered(connection) -> None:
+        check_sql = f"""
+            SELECT COUNT(*)
+            FROM information_schema.views
+            WHERE table_schema = '{table_spec.layer}'
+            AND table_name = '{table_spec.name}'
+        """
+        exists = connection.execute(check_sql).fetchone()[0]
+        if not exists:
+            raise ValueError(
+                f"Table '{table_spec.layer}.{table_spec.name}' is not registered in the catalog. "
+                f"Please add a migration script in 'catalog/migrations/' to define this table."
+            )
+
+    def compute_row_count(connection, rendered_sql: str) -> int:
+        relation = execute_sql(
+            connection,
+            f"SELECT COUNT(*) AS row_count FROM ({rendered_sql}) AS src",
+        )
+        return int(relation.fetchone()[0])
+
+    def write_outputs(connection, *, rendered_sql: str, destination_prefix: str) -> int:
+        if partitioned:
+            copy_partitioned_parquet(
+                connection,
+                query=rendered_sql,
+                destination=destination_prefix,
+                partition_column="dt",
+                filename_pattern="file_{uuid}",
+                use_tmp_file=True,
+            )
+            return len(list_parquet_keys(s3_hook, paths_dict["tmp_partition_prefix"]))
+
+        copy_parquet(
+            connection,
+            query=rendered_sql,
+            destination=destination_prefix,
+            filename_pattern="file_{uuid}",
+            use_tmp_file=True,
+        )
+        return len(list_parquet_keys(s3_hook, destination_prefix))
+
     ti = context["ti"]
     paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
     partitioned = bool(paths_dict.get("partitioned"))
@@ -111,88 +164,47 @@ def load_table(
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
     s3_config = build_s3_connection_config(s3_hook)
 
-    connection = create_temporary_connection()
-    configure_s3_access(connection, s3_config)
-    _attach_catalog_if_available(connection)
+    with temporary_connection() as connection:
+        configure_s3_access(connection, s3_config)
+        _attach_catalog_if_available(connection)
+        ensure_table_registered(connection)
 
-    # Validate that the target table exists in the catalog (Schema-on-Read DDL must be in migrations)
-    check_sql = f"""
-        SELECT COUNT(*)
-        FROM information_schema.views
-        WHERE table_schema = '{table_spec.layer}'
-        AND table_name = '{table_spec.name}'
-    """
-    exists = connection.execute(check_sql).fetchone()[0]
-    if not exists:
-        raise ValueError(
-            f"Table '{table_spec.layer}.{table_spec.name}' is not registered in the catalog. "
-            f"Please add a migration script in 'catalog/migrations/' to define this table."
+        if table_spec.layer == "ods":
+            config = load_dw_config(CONFIG_PATH)
+            has_source_data = _register_ods_raw_view(
+                connection=connection,
+                s3_hook=s3_hook,
+                config=config,
+                table_name=table_spec.name,
+                bucket_name=bucket_name,
+                partition_date=str(partition_date),
+            )
+            if not has_source_data:
+                return empty_metrics(partitioned=partitioned)
+
+        rendered_sql = load_and_render_sql(
+            table_spec.sql_path,
+            {"PARTITION_DATE": partition_date},
+        )
+        row_count = compute_row_count(connection, rendered_sql)
+        if row_count == 0:
+            return empty_metrics(partitioned=partitioned)
+
+        destination_prefix = paths_dict["tmp_prefix"]
+        file_count = write_outputs(
+            connection,
+            rendered_sql=rendered_sql,
+            destination_prefix=destination_prefix,
         )
 
-    if table_spec.layer == "ods":
-        config = load_dw_config(CONFIG_PATH)
-        has_source_data = _register_ods_raw_view(
-            connection=connection,
-            s3_hook=s3_hook,
-            config=config,
-            table_name=table_spec.name,
-            bucket_name=bucket_name,
-            partition_date=str(partition_date),
-        )
-        if not has_source_data:
-            metrics = {
-                "row_count": 0,
-                "file_count": 0,
-                "has_data": 0,
-                "partitioned": int(partitioned),
-            }
-            ti.xcom_push(key="load_metrics", value=metrics)
-            return metrics
-
-    rendered_sql = load_and_render_sql(
-        table_spec.sql_path,
-        {"PARTITION_DATE": partition_date},
-    )
-
-    row_count_relation = execute_sql(
-        connection, f"SELECT COUNT(*) AS row_count FROM ({rendered_sql})"
-    )
-    row_count = int(row_count_relation.fetchone()[0])
-
-    if row_count == 0:
-        metrics = {"row_count": 0, "file_count": 0, "has_data": 0, "partitioned": int(partitioned)}
+        metrics = {
+            "row_count": row_count,
+            "file_count": file_count,
+            "has_data": 1,
+            "partitioned": int(partitioned),
+        }
         ti.xcom_push(key="load_metrics", value=metrics)
         return metrics
-
-    destination_prefix = paths_dict["tmp_prefix"]
-    if partitioned:
-        copy_partitioned_parquet(
-            connection,
-            query=rendered_sql,
-            destination=destination_prefix,
-            partition_column="dt",
-            filename_pattern="file_{uuid}",
-            use_tmp_file=True,
-        )
-        file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_partition_prefix"]))
-    else:
-        copy_parquet(
-            connection,
-            query=rendered_sql,
-            destination=destination_prefix,
-            filename_pattern="file_{uuid}",
-            use_tmp_file=True,
-        )
-        file_count = len(list_parquet_keys(s3_hook, destination_prefix))
-
-    metrics = {
-        "row_count": row_count,
-        "file_count": file_count,
-        "has_data": 1,
-        "partitioned": int(partitioned),
-    }
-    ti.xcom_push(key="load_metrics", value=metrics)
-    return metrics
 
 
 def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:

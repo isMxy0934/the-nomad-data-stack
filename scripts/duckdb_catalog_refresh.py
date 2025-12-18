@@ -25,7 +25,7 @@ from dags.utils.catalog_utils import (
 from dags.utils.duckdb_utils import (
     S3ConnectionConfig,
     configure_s3_access,
-    create_temporary_connection,
+    temporary_connection,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,20 +66,20 @@ def apply_catalog(
 ) -> None:
     catalog_path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = create_temporary_connection(database=catalog_path)
-    configure_s3_access(conn, s3_config)
+    with temporary_connection(database=catalog_path) as conn:
+        configure_s3_access(conn, s3_config)
 
-    ddl: list[str] = [build_schema_sql(layer.schema)]
-    for table in tables:
-        ddl.append(build_layer_view_sql(bucket=bucket, layer=layer, table=table))
-        ddl.append(build_layer_dt_macro_sql(bucket=bucket, layer=layer, table=table))
+        ddl: list[str] = [build_schema_sql(layer.schema)]
+        for table in tables:
+            ddl.append(build_layer_view_sql(bucket=bucket, layer=layer, table=table))
+            ddl.append(build_layer_dt_macro_sql(bucket=bucket, layer=layer, table=table))
 
-    if dry_run:
-        print("\n\n".join(ddl))
-        return
+        if dry_run:
+            print("\n\n".join(ddl))
+            return
 
-    for statement in ddl:
-        conn.execute(statement)
+        for statement in ddl:
+            conn.execute(statement)
 
 
 def main() -> int:

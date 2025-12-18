@@ -11,6 +11,7 @@ from dags.utils.duckdb_utils import (  # pylint: disable=wrong-import-position
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
+    temporary_connection,
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -34,6 +35,14 @@ def test_create_temporary_connection_supports_basic_queries():
 
     assert isinstance(conn, duckdb.DuckDBPyConnection)
     assert result[0] == 1
+
+
+def test_temporary_connection_context_manager_closes_connection():
+    with temporary_connection() as conn:
+        assert conn.execute("SELECT 1").fetchone()[0] == 1
+
+    with pytest.raises(duckdb.ConnectionException):
+        conn.execute("SELECT 1")
 
 
 def test_execute_sql_raises_for_empty_input():

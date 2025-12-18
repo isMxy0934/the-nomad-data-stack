@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from airflow import DAG
@@ -33,6 +33,30 @@ DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
 
 logger = logging.getLogger(__name__)
+
+
+def partition_paths_from_xcom(paths_dict: Mapping[str, Any]) -> PartitionPaths:
+    """Reconstruct ``PartitionPaths`` from XCom payloads produced by ``prepare_dataset``."""
+
+    return PartitionPaths(
+        partition_date=str(paths_dict["partition_date"]),
+        canonical_prefix=str(paths_dict["canonical_prefix"]),
+        tmp_prefix=str(paths_dict["tmp_prefix"]),
+        tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
+        manifest_path=str(paths_dict["manifest_path"]),
+        success_flag_path=str(paths_dict["success_flag_path"]),
+    )
+
+
+def non_partition_paths_from_xcom(paths_dict: Mapping[str, Any]) -> NonPartitionPaths:
+    """Reconstruct ``NonPartitionPaths`` from XCom payloads produced by ``prepare_dataset``."""
+
+    return NonPartitionPaths(
+        canonical_prefix=str(paths_dict["canonical_prefix"]),
+        tmp_prefix=str(paths_dict["tmp_prefix"]),
+        manifest_path=str(paths_dict["manifest_path"]),
+        success_flag_path=str(paths_dict["success_flag_path"]),
+    )
 
 
 def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
@@ -183,15 +207,7 @@ def commit_dataset(
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
 
     if partitioned:
-        # Reconstruct PartitionPaths explicitly to avoid unexpected keyword arguments (e.g. 'partitioned')
-        paths = PartitionPaths(
-            partition_date=paths_dict["partition_date"],
-            canonical_prefix=paths_dict["canonical_prefix"],
-            tmp_prefix=paths_dict["tmp_prefix"],
-            tmp_partition_prefix=paths_dict["tmp_partition_prefix"],
-            manifest_path=paths_dict["manifest_path"],
-            success_flag_path=paths_dict["success_flag_path"],
-        )
+        paths = partition_paths_from_xcom(paths_dict)
         manifest = build_manifest(
             dest=dest_name,
             partition_date=partition_date,
@@ -208,13 +224,7 @@ def commit_dataset(
             write_success_flag=True,
         )
     else:
-        # Reconstruct NonPartitionPaths from dict
-        paths = NonPartitionPaths(
-            canonical_prefix=paths_dict["canonical_prefix"],
-            tmp_prefix=paths_dict["tmp_prefix"],
-            manifest_path=paths_dict["manifest_path"],
-            success_flag_path=paths_dict["success_flag_path"],
-        )
+        paths = non_partition_paths_from_xcom(paths_dict)
         manifest = build_manifest(
             dest=dest_name,
             partition_date=partition_date,
