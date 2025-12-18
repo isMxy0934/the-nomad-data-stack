@@ -2,14 +2,8 @@ import sys
 from pathlib import Path
 
 import pytest
-
-airflow = pytest.importorskip("airflow")
 from airflow.models import Connection  # noqa: E402
 from airflow.utils.task_group import TaskGroup  # noqa: E402
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
 
 from dags.ods_loader_dag import (
     create_ods_loader_dag,
@@ -18,6 +12,12 @@ from dags.ods_loader_dag import (
 )
 from dags.utils.duckdb_utils import S3ConnectionConfig
 from dags.utils.etl_utils import build_s3_connection_config
+
+airflow = pytest.importorskip("airflow")
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 
 def test_load_ods_config_parses_entries(tmp_path: Path):

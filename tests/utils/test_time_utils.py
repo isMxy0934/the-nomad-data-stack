@@ -16,7 +16,9 @@ try:
         get_previous_partition_date_str,
     )
 except ImportError as exc:
-    pytest.skip(f"time utils imports unavailable in this environment: {exc}", allow_module_level=True)
+    pytest.skip(
+        f"time utils imports unavailable in this environment: {exc}", allow_module_level=True
+    )
 
 
 class TestGetCurrentPartitionDateStr:

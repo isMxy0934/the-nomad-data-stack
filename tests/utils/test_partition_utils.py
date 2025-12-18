@@ -21,7 +21,9 @@ try:
         publish_partition,
     )
 except ImportError as exc:
-    pytest.skip(f"partition_utils import unavailable in this environment: {exc}", allow_module_level=True)
+    pytest.skip(
+        f"partition_utils import unavailable in this environment: {exc}", allow_module_level=True
+    )
 
 
 def test_build_partition_paths_generates_expected_prefixes():

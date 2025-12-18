@@ -20,7 +20,9 @@ from dags.utils.sql_utils import load_and_render_sql
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
-def _create_tmp_raw_view(*, conn: duckdb.DuckDBPyConnection, table_name: str, csv_path: str) -> None:
+def _create_tmp_raw_view(
+    *, conn: duckdb.DuckDBPyConnection, table_name: str, csv_path: str
+) -> None:
     if table_name == "ods_daily_fund_price_akshare":
         execute_sql(
             conn,
