@@ -81,3 +81,18 @@ SELECT * FROM read_parquet(
         'dt': 'VARCHAR'
     }
 );
+
+-- Partitioned Macros for ODS
+-- These macros allow efficient access to a single partition by constructing the exact S3 path.
+CREATE OR REPLACE MACRO ods.ods_daily_stock_price_akshare_dt(p_date) AS TABLE 
+SELECT * FROM read_parquet('s3://stock-data/lake/ods/ods_daily_stock_price_akshare/dt=' || p_date || '/**/*.parquet', hive_partitioning=true);
+
+CREATE OR REPLACE MACRO ods.ods_daily_stock_price_tushare_dt(p_date) AS TABLE 
+SELECT * FROM read_parquet('s3://stock-data/lake/ods/ods_daily_stock_price_tushare/dt=' || p_date || '/**/*.parquet', hive_partitioning=true);
+
+CREATE OR REPLACE MACRO ods.ods_daily_fund_price_akshare_dt(p_date) AS TABLE 
+SELECT * FROM read_parquet('s3://stock-data/lake/ods/ods_daily_fund_price_akshare/dt=' || p_date || '/**/*.parquet', hive_partitioning=true);
+
+CREATE OR REPLACE MACRO ods.ods_daily_fund_price_tushare_dt(p_date) AS TABLE 
+SELECT * FROM read_parquet('s3://stock-data/lake/ods/ods_daily_fund_price_tushare/dt=' || p_date || '/**/*.parquet', hive_partitioning=true);
+
