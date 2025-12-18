@@ -2,7 +2,7 @@ backfill_extractors:
   - target: fund_price_akshare
     tags: ["extractor", "backfill", "fund", "akshare"]
     universe:
-      from_target: fetch_fund_universe_akshare
+      from_target: fund_universe_akshare
       symbol_column: symbol
     history_fetcher: "dags.extractor.backfill.fetch_fund_price_akshare:fetch_hist_one"
     # monthly/none, monthly is default
