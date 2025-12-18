@@ -113,3 +113,26 @@ def copy_partitioned_parquet(
             "COPY (" + query + f") TO '{destination}' (" + ", ".join(fallback_options) + ");"
         )
         connection.execute(fallback_sql)
+
+
+def copy_parquet(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    query: str,
+    destination: str,
+    filename_pattern: str = "file_{uuid}",
+    use_tmp_file: bool = False,
+) -> None:
+    """Run a query and copy results to Parquet files without partitioning."""
+
+    if not query.strip():
+        raise ValueError("query must not be empty")
+    if not destination:
+        raise ValueError("destination is required")
+
+    options: list[str] = ["FORMAT parquet", f"FILENAME_PATTERN '{filename_pattern}'"]
+    if use_tmp_file:
+        options.append("USE_TMP_FILE true")
+
+    copy_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(options) + ");"
+    connection.execute(copy_sql)

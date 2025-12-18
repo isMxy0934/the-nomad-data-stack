@@ -22,6 +22,16 @@ class PartitionPaths:
     success_flag_path: str
 
 
+@dataclass(frozen=True)
+class NonPartitionPaths:
+    """Resolved locations for non-partitioned tables."""
+
+    canonical_prefix: str
+    tmp_prefix: str
+    manifest_path: str
+    success_flag_path: str
+
+
 def _strip_slashes(path: str) -> str:
     return path.strip("/")
 
@@ -77,6 +87,30 @@ def build_partition_paths(
         canonical_prefix=canonical_prefix,
         tmp_prefix=tmp_prefix,
         tmp_partition_prefix=tmp_partition_prefix,
+        manifest_path=manifest_path,
+        success_flag_path=success_flag_path,
+    )
+
+
+def build_non_partition_paths(
+    *, base_prefix: str, run_id: str, bucket_name: str
+) -> NonPartitionPaths:
+    """Construct canonical and temporary prefixes for non-partitioned tables."""
+
+    if not run_id:
+        raise ValueError("run_id is required")
+    if not bucket_name:
+        raise ValueError("bucket_name is required")
+
+    normalized_base = _strip_slashes(base_prefix)
+    canonical_prefix = f"s3://{bucket_name}/{normalized_base}"
+    tmp_prefix = f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}"
+    manifest_path = f"{canonical_prefix}/manifest.json"
+    success_flag_path = f"{canonical_prefix}/_SUCCESS"
+
+    return NonPartitionPaths(
+        canonical_prefix=canonical_prefix,
+        tmp_prefix=tmp_prefix,
         manifest_path=manifest_path,
         success_flag_path=success_flag_path,
     )
@@ -169,6 +203,29 @@ def publish_partition(
 
     _delete_prefix(s3_hook, paths.canonical_prefix)
     _copy_prefix(s3_hook, paths.tmp_partition_prefix, paths.canonical_prefix)
+
+    manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
+    success_path = None
+    if write_success_flag:
+        success_path = _write_success_flag(s3_hook, paths.success_flag_path)
+
+    result = {"manifest_path": manifest_path}
+    if success_path:
+        result["success_flag_path"] = success_path
+    return result
+
+
+def publish_non_partition(
+    *,
+    s3_hook: S3Hook,
+    paths: NonPartitionPaths,
+    manifest: Mapping[str, object],
+    write_success_flag: bool = True,
+) -> Mapping[str, str]:
+    """Publish non-partitioned outputs by promoting tmp contents."""
+
+    _delete_prefix(s3_hook, paths.canonical_prefix)
+    _copy_prefix(s3_hook, paths.tmp_prefix, paths.canonical_prefix)
 
     manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
     success_path = None

@@ -163,10 +163,13 @@ DW 层（DWD/DIM/DWM/DWS/ADS）由 `dags/dw_dags.py` 根据 `dags/dw_config.yaml
 - 表发现：扫描 `dags/{layer}/*.sql`；目录不存在或无 SQL 文件则跳过该层（不生成占位 DAG）
 - 命名约定：文件名必须带 layer 前缀，例如 `dags/dwd/dwd_daily_stock_price.sql` 对应逻辑表 `dwd.dwd_daily_stock_price`
 - 分区与落盘：默认按 `dt=YYYY-MM-DD` 分区写入 `lake/{layer}/{table}/dt=.../*.parquet`，遵循 tmp → validate → publish → `_SUCCESS` → cleanup 的提交协议
+- 非分区表：如果 SQL 未包含 `${PARTITION_DATE}` 则视为非分区表，按 `lake/{layer}/{table}/*.parquet` 路径提交，同样走 tmp → validate → publish → `_SUCCESS` → cleanup
 - Catalog 接入：任务运行时只读 attach `./.duckdb/catalog.duckdb`（metadata-only），SQL 里可以直接写 `FROM ods.xxx ...`（不硬编码 S3 路径）
 - `_SUCCESS` 语义：
   - 由“写该分区的任务”决定是否产出；无数据视为成功但不写 `_SUCCESS`，仅记录日志
   - 下游不额外检查 `_SUCCESS`；读不到当日分区即空输入处理并成功退出（上游失败由 Airflow 依赖自然阻塞）
+- Pool：每张 DW 表默认创建 pool（`dw_pool_{table}`，slots=1）确保单写者
+- 依赖：`dw_config.yaml` 中的 `layer_dependencies` 决定 DAG 构建顺序；`table_dependencies` 用于同层拓扑排序并自动添加依赖关系
 
 ### DuckDB 分析 Catalog（推荐）
 
