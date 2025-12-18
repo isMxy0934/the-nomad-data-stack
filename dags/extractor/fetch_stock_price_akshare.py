@@ -6,7 +6,7 @@ def fetch_stock_price_akshare() -> CsvPayload | None:
     import akshare as ak
 
     target_date_str = get_date_str()
-    df = ak.stock_zh_a_spot_em(trade_date=target_date_str)
+    df = ak.stock_zh_a_spot_em()
     if df is None or df.empty:
         return None
 
