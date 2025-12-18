@@ -1,14 +1,14 @@
 backfill_extractors:
-  - target: etf_price_akshare
-    tags: ["extractor", "backfill", "etf", "akshare"]
+  - target: fund_price_akshare
+    tags: ["extractor", "backfill", "fund", "akshare"]
     universe:
-      from_target: etf_universe_akshare
+      from_target: fetch_fund_universe_akshare
       symbol_column: symbol
-    history_fetcher: "dags.extractor.backfill.etf_price_akshare:fetch_hist_one"
+    history_fetcher: "dags.extractor.backfill.fetch_fund_price_akshare:fetch_hist_one"
     # monthly/none, monthly is default
     shard_type: monthly
     trade_date_column: trade_date
-    pieces_base_prefix: "lake/raw/backfill/etf_price/akshare"
-    daily_key_template: "lake/raw/daily/etf_price/akshare/dt={TRADE_DATE}/data.csv"
+    pieces_base_prefix: "lake/raw/backfill/fund_price/akshare"
+    daily_key_template: "lake/raw/daily/fund_price/akshare/dt={TRADE_DATE}/data.csv"
     pool: "akshare_pool"
     compact_transformer: "dags.extractor.expect.expects:dedupe_trade_date_symbol"

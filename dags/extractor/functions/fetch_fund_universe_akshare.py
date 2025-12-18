@@ -4,7 +4,7 @@ from dags.utils.extractor_utils import CsvPayload
 from dags.utils.time_utils import get_date_str
 
 
-def fetch_etf_universe_akshare() -> CsvPayload | None:
+def fetch_fund_universe_akshare() -> CsvPayload | None:
     import akshare as ak
 
     df = ak.fund_etf_category_sina(symbol="ETF基金")
