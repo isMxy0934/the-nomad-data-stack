@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import pytest
-
-airflow = pytest.importorskip("airflow")
-
 from airflow.models import DAG  # noqa: E402
 
 from dags.dw_catalog_dag import create_catalog_dag
+
+airflow = pytest.importorskip("airflow")
 
 
 def test_create_catalog_dag_builds_tasks():

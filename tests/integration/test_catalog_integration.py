@@ -23,27 +23,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 def _create_tmp_raw_view(
     *, conn: duckdb.DuckDBPyConnection, table_name: str, csv_path: str
 ) -> None:
-    if table_name == "ods_daily_fund_price_akshare":
-        execute_sql(
-            conn,
-            f"""
-            CREATE OR REPLACE VIEW tmp_{table_name} AS
-            SELECT
-              fund_code AS symbol,
-              CAST(NULL AS VARCHAR) AS name,
-              nav AS close,
-              nav AS high,
-              nav AS low,
-              CAST(0 AS DOUBLE) AS vol,
-              CAST(0 AS DOUBLE) AS amount,
-              nav AS pre_close,
-              CAST(0 AS DOUBLE) AS pct_chg,
-              REPLACE(CAST(date AS VARCHAR), '-', '') AS trade_date
-            FROM read_csv_auto('{csv_path}', hive_partitioning=false);
-            """,
-        )
-        return
-
     execute_sql(
         conn,
         f"CREATE OR REPLACE VIEW tmp_{table_name} AS SELECT * FROM read_csv_auto('{csv_path}', hive_partitioning=false);",
@@ -148,19 +127,16 @@ def test_duckdb_catalog_can_query_views_and_macros(
     catalog_db = tmp_path / "catalog.duckdb"
     migrations_dir = ROOT_DIR / "catalog" / "migrations"
 
-    # 1) Apply migrations into the catalog DB (metadata-only).
     conn = duckdb.connect(str(catalog_db))
     configure_s3_access(conn, test_s3_config)
     apply_migrations(conn, migrations_dir=migrations_dir)
 
-    # 2) Register view + macro for this table, pointing at integration prefix.
     configure_s3_access(conn, test_s3_config)
     layer = LayerSpec(schema="ods", base_prefix=f"{integration_prefix}/ods", partitioned_by_dt=True)
     conn.execute(build_layer_view_sql(bucket=test_bucket_name, layer=layer, table=table_name))
     conn.execute(build_layer_dt_macro_sql(bucket=test_bucket_name, layer=layer, table=table_name))
     conn.close()
 
-    # 3) Query through the catalog with S3 settings on the query connection.
     query_conn = create_temporary_connection(database=catalog_db)
     configure_s3_access(query_conn, test_s3_config)
 

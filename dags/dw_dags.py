@@ -154,7 +154,9 @@ def load_table(
         {"PARTITION_DATE": partition_date},
     )
 
-    row_count_relation = execute_sql(connection, f"SELECT COUNT(*) AS row_count FROM ({rendered_sql})")
+    row_count_relation = execute_sql(
+        connection, f"SELECT COUNT(*) AS row_count FROM ({rendered_sql})"
+    )
     row_count = int(row_count_relation.fetchone()[0])
 
     if row_count == 0:

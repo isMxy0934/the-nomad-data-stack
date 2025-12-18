@@ -73,7 +73,9 @@ def test_dwd_pipeline_standard_flow(
         use_tmp_file=True,
     )
 
-    ods_row_count = int(ods_conn.execute(f"SELECT COUNT(*) FROM ({ods_rendered_sql})").fetchone()[0])
+    ods_row_count = int(
+        ods_conn.execute(f"SELECT COUNT(*) FROM ({ods_rendered_sql})").fetchone()[0]
+    )
     tmp_bucket, tmp_prefix_key = parse_s3_uri(ods_paths.tmp_prefix)
     tmp_prefix_key = tmp_prefix_key.rstrip("/") + "/"
     tmp_objects = minio_client.list_objects_v2(Bucket=tmp_bucket, Prefix=tmp_prefix_key)
@@ -161,7 +163,9 @@ def test_dwd_pipeline_standard_flow(
 
     check_conn = create_temporary_connection()
     configure_s3_access(check_conn, test_s3_config)
-    dwd_path = f"s3://{test_bucket_name}/{integration_prefix}/dwd/{dwd_table}/dt={test_date}/*.parquet"
+    dwd_path = (
+        f"s3://{test_bucket_name}/{integration_prefix}/dwd/{dwd_table}/dt={test_date}/*.parquet"
+    )
     res = check_conn.execute(
         f"SELECT COUNT(*), COUNT(DISTINCT symbol) FROM read_parquet('{dwd_path}')"
     ).fetchone()

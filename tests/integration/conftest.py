@@ -181,7 +181,11 @@ def load_test_csv(test_data_dir: Path) -> Callable[[str, str], str]:
                 trade_date_idx = idx
 
         if date_idx is not None:
-            filtered = [row for row in rows[1:] if row and len(row) > date_idx and row[date_idx] == partition_date]
+            filtered = [
+                row
+                for row in rows[1:]
+                if row and len(row) > date_idx and row[date_idx] == partition_date
+            ]
         elif trade_date_idx is not None:
             yyyymmdd = partition_date.replace("-", "")
             filtered = [
