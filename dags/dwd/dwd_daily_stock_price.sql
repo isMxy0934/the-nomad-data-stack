@@ -1,7 +1,7 @@
 WITH source AS (
     SELECT
         symbol,
-        data as trade_date,
+        date as trade_date,
         high,
         low,
         close,
