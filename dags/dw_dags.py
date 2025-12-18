@@ -148,7 +148,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 is_partitioned=table.is_partitioned,
             )
             task_groups[table.name] = tg
-            
+
         for table, deps in dependencies.items():
             if table not in task_groups:
                 continue
@@ -158,7 +158,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
 
         # Trigger Downstream Layers
         potential_downstream = [
-            l for l, deps in config.layer_dependencies.items()
+            ds_layer for ds_layer, deps in config.layer_dependencies.items()
             if layer in deps
         ]
 

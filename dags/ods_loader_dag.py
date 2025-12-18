@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -169,7 +169,7 @@ def create_ods_loader_dag() -> DAG:
                 is_partitioned=True,
             )
             etl_tasks.append(tg)
-        
+
         # Trigger Downstream DW DAGs
         try:
             dw_config = load_dw_config(DW_CONFIG_PATH)
