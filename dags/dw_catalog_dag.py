@@ -25,7 +25,7 @@ from dags.utils.etl_utils import build_s3_connection_config
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 
-DEFAULT_CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", "/opt/airflow/.duckdb/catalog.duckdb"))
+DEFAULT_CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
 DEFAULT_MIGRATIONS_DIR = Path(
     os.getenv("DUCKDB_CATALOG_MIGRATIONS_DIR", "/opt/airflow/catalog/migrations")
 )

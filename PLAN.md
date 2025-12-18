@@ -6,7 +6,7 @@
 
 ## 当前状态（基于仓库已有内容）
 
-- [x] 文档：`README.md` 已补齐整体架构与约定
+- [x] 文档：`README.md` 已瘦身（用户向），细节下沉到 `docs/`
 - [x] 计划：`PLAN.md` 已建立并可勾选追踪
 - [x] 基础设施：`docker-compose.yml` 已包含 Airflow + Postgres + MinIO
 - [x] Extractor DAG：`dags/extractor/*` 已存在（AkShare/TuShare → MinIO CSV）

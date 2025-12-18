@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -34,6 +36,19 @@ def create_temporary_connection(database: str | Path | None = None) -> duckdb.Du
 
     db_path = ":memory:" if database is None else str(database)
     return duckdb.connect(database=db_path, read_only=False)
+
+
+@contextmanager
+def temporary_connection(
+    database: str | Path | None = None,
+) -> Iterator[duckdb.DuckDBPyConnection]:
+    """Context manager for an isolated DuckDB connection that always closes."""
+
+    connection = create_temporary_connection(database=database)
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def configure_s3_access(connection: duckdb.DuckDBPyConnection, config: S3ConnectionConfig) -> None:
