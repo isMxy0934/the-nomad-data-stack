@@ -32,9 +32,5 @@ SELECT * FROM read_parquet(
 ) WHERE dt <> '1900-01-01';
 
 CREATE OR REPLACE MACRO dwd.dwd_daily_stock_price_dt(p_date) AS TABLE 
-SELECT * FROM read_parquet(
-    's3://stock-data/lake/dwd/dwd_daily_stock_price/dt=' || p_date || '/**/*.parquet', 
-    hive_partitioning=true,
-    hive_types = {'dt': 'VARCHAR'},
-    union_by_name = true
-);
+SELECT * FROM dwd.dwd_daily_stock_price
+WHERE dt = p_date;

@@ -73,10 +73,10 @@ def load_table(
     # Validate that the target table exists in the catalog (Schema-on-Read DDL must be in migrations)
     # We check if a view or table exists with the target name in the correct schema
     check_sql = f"""
-        SELECT COUNT(*) 
-        FROM information_schema.views 
-        WHERE table_schema = '{table_spec.layer}' 
-          AND table_name = '{table_spec.name}'
+        SELECT COUNT(*)
+        FROM information_schema.views
+        WHERE table_schema = '{table_spec.layer}'
+        AND table_name = '{table_spec.name}'
     """
     exists = connection.execute(check_sql).fetchone()[0]
     if not exists:
