@@ -70,6 +70,21 @@ def load_table(
     configure_s3_access(connection, s3_config)
     _attach_catalog_if_available(connection)
 
+    # Validate that the target table exists in the catalog (Schema-on-Read DDL must be in migrations)
+    # We check if a view or table exists with the target name in the correct schema
+    check_sql = f"""
+        SELECT COUNT(*) 
+        FROM information_schema.views 
+        WHERE table_schema = '{table_spec.layer}' 
+          AND table_name = '{table_spec.name}'
+    """
+    exists = connection.execute(check_sql).fetchone()[0]
+    if not exists:
+        raise ValueError(
+            f"Table '{table_spec.layer}.{table_spec.name}' is not registered in the catalog. "
+            f"Please add a migration script in 'catalog/migrations/' to define this table."
+        )
+
     rendered_sql = load_and_render_sql(
         table_spec.sql_path,
         {"PARTITION_DATE": partition_date},
