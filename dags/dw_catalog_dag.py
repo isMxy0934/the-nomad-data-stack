@@ -17,8 +17,10 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.utils.catalog_migrations import apply_migrations
 from dags.utils.duckdb_utils import (
+    configure_s3_access,
     create_temporary_connection,
 )
+from dags.utils.etl_utils import build_s3_connection_config
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
@@ -33,7 +35,12 @@ def migrate_catalog(*, catalog_path: str, migrations_dir: str, **_: Any) -> list
     catalog = Path(catalog_path)
     catalog.parent.mkdir(parents=True, exist_ok=True)
 
+    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+    s3_config = build_s3_connection_config(s3_hook)
+
     conn = create_temporary_connection(database=catalog)
+    configure_s3_access(conn, s3_config)
+
     applied = apply_migrations(conn, migrations_dir=Path(migrations_dir))
     return applied
 
