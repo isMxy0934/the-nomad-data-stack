@@ -234,7 +234,7 @@ def commit_dataset(
             manifest=manifest,
             write_success_flag=True,
         )
-    
+
     return publish_result, manifest
 
 
