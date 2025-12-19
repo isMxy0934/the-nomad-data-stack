@@ -72,7 +72,11 @@ def _attach_catalog_if_available(connection) -> None:
         logger.info("Catalog file %s not found; skipping attach.", CATALOG_PATH)
         return
     connection.execute(f"ATTACH '{CATALOG_PATH}' AS catalog (READ_ONLY);")
-    connection.execute("USE catalog;")
+    # Prefer search_path to keep temp views resolvable while making catalog schemas visible.
+    try:
+        connection.execute("SET search_path='temp, catalog, main';")
+    except Exception:  # noqa: BLE001
+        connection.execute("USE catalog;")
 
 
 def _register_ods_raw_view(
@@ -158,13 +162,6 @@ def load_table(
             table_spec.sql_path,
             {"PARTITION_DATE": partition_date},
         )
-        relation = execute_sql(
-            connection, f"SELECT COUNT(*) AS row_count FROM ({rendered_sql}) AS src"
-        )
-        row_count = int(relation.fetchone()[0])
-        if row_count == 0:
-            return {"row_count": 0, "file_count": 0, "has_data": 0}
-
         destination_prefix = paths_dict["tmp_prefix"]
         if partitioned:
             copy_partitioned_parquet(
@@ -185,6 +182,19 @@ def load_table(
                 use_tmp_file=True,
             )
             file_count = len(list_parquet_keys(s3_hook, destination_prefix))
+
+        if file_count == 0:
+            return {"row_count": 0, "file_count": 0, "has_data": 0}
+
+        parquet_glob = (
+            f"{paths_dict['tmp_partition_prefix']}/*.parquet"
+            if partitioned
+            else f"{destination_prefix}/*.parquet"
+        )
+        relation = execute_sql(
+            connection, f"SELECT COUNT(*) AS row_count FROM read_parquet('{parquet_glob}')"
+        )
+        row_count = int(relation.fetchone()[0])
 
         return {
             "row_count": row_count,
