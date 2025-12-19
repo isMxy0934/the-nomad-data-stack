@@ -4,6 +4,7 @@ backfill_extractors:
     # Required backfill window; end_date optional (defaults to partition date)
     start_date: "2025-01-01"
     end_date: "2025-12-18"
+    trigger_compact: true
     universe:
       from_target: fund_universe_akshare
       symbol_column: symbol

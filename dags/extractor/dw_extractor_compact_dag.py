@@ -6,11 +6,6 @@ Compacts backfill pieces into final daily outputs:
 This DAG does not use `run_id`. It scans the backfill area and overwrites the
 final daily output for each day (full overwrite).
 
-dag_run.conf (optional):
-  {
-    "targets": ["etf_price_akshare"],
-    "start_date": "2020-01-01"
-  }
 """
 
 from __future__ import annotations
@@ -19,7 +14,7 @@ import importlib
 import logging
 import os
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from io import BytesIO
 
@@ -27,7 +22,6 @@ import pandas as pd
 from airflow import DAG
 from airflow.decorators import task
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import get_current_context
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.extractor.backfill_specs import (
@@ -69,15 +63,6 @@ def _parse_dt_from_key(key: str) -> str | None:
     return dt
 
 
-def _conf_targets(conf: Mapping[str, object]) -> set[str] | None:
-    raw = conf.get("targets")
-    if not raw:
-        return None
-    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
-        raise ValueError("dag_run.conf.targets must be a list of strings")
-    return {str(t) for t in raw}
-
-
 def _normalize_prefix(prefix: str) -> str:
     return prefix.strip("/") + "/"
 
@@ -105,14 +90,9 @@ def create_dw_extractor_compact_dag() -> DAG:
             @task(task_id=f"{spec.target}.list_days")
             def list_days(spec_payload: Mapping[str, object]) -> list[str]:
                 spec_obj = backfill_spec_from_mapping(spec_payload)
-                ctx = get_current_context()
-                conf = (ctx.get("dag_run").conf or {}) if ctx.get("dag_run") else {}
-                targets = _conf_targets(conf)
-                if targets is not None and spec_obj.target not in targets:
+                if not spec_obj.trigger_compact:
                     return []
-
-                start = str(conf.get("start_date") or "").strip()
-                start_dt = date.fromisoformat(start) if start else None
+                start_dt = date.fromisoformat(spec_obj.start_date) if spec_obj.start_date else None
 
                 s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
                 prefix = f"{spec_obj.pieces_base_prefix.strip('/')}/dt="

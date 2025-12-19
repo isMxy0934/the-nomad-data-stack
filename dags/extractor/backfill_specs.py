@@ -9,7 +9,6 @@ import yaml
 
 BACKFILL_CONFIG_PATH = Path(__file__).parent / "backfill_config.yaml"
 
-
 @dataclass(frozen=True)
 class UniverseSpec:
     from_target: str
@@ -22,6 +21,7 @@ class BackfillExtractorSpec:
     tags: list[str]
     start_date: str
     end_date: str | None
+    trigger_compact: bool = False
     universe: UniverseSpec
     history_fetcher: str  # module:function
     shard_type: str = "monthly"  # monthly/none
@@ -36,6 +36,7 @@ class BackfillExtractorSpec:
 def backfill_spec_from_mapping(payload: Mapping[str, object]) -> BackfillExtractorSpec:
     start_date = str(payload.get("start_date", "")).strip()
     end_date = str(payload.get("end_date", "")).strip() if payload.get("end_date") else None
+    trigger_compact = bool(payload.get("trigger_compact") or False)
 
     universe_raw = payload.get("universe")
     if isinstance(universe_raw, UniverseSpec):
@@ -53,6 +54,7 @@ def backfill_spec_from_mapping(payload: Mapping[str, object]) -> BackfillExtract
         tags=[str(t) for t in (payload.get("tags") or [])],
         start_date=start_date,
         end_date=end_date,
+        trigger_compact=trigger_compact,
         universe=universe,
         history_fetcher=str(payload.get("history_fetcher", "")).strip(),
         shard_type=str(payload.get("shard_type", "monthly")).strip() or "monthly",
@@ -117,6 +119,12 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
             except ValueError as exc:
                 raise ValueError(f"Invalid end_date={end_date} for target={target}") from exc
 
+        trigger_compact = entry.get("trigger_compact")
+        if trigger_compact is None:
+            trigger_compact = False
+        if not isinstance(trigger_compact, bool):
+            raise ValueError(f"trigger_compact must be a boolean for target={target}")
+
         universe_raw = entry.get("universe") or {}
         if not isinstance(universe_raw, Mapping):
             raise ValueError(f"universe must be a mapping for target={target}")
@@ -170,6 +178,7 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
                 tags=[str(t) for t in tags_raw],
                 start_date=start_date,
                 end_date=end_date,
+                trigger_compact=trigger_compact,
                 universe=UniverseSpec(from_target=from_target, symbol_column=symbol_column),
                 history_fetcher=history_fetcher,
                 shard_type=shard_type,

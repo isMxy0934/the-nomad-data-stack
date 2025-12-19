@@ -15,6 +15,7 @@ To support idempotent reruns without `run_id`, a shard-level marker is stored un
 backfill_config.yaml (per extractor):
   start_date: "2020-01-01" (required)
   end_date: "2025-12-18" (optional; defaults to partition date)
+  trigger_compact: true (optional; if true, trigger compact DAG after backfill)
 
 dag_run.conf (optional overrides):
   {
@@ -540,24 +541,15 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 mapped = mapped.override(pool=spec.pool)
             mapped.expand(job=jobs) >> all_done
 
-        @task.short_circuit(task_id="should_trigger_compact")
-        def should_trigger_compact() -> bool:
-            ctx = get_current_context()
-            conf = (ctx.get("dag_run").conf or {}) if ctx.get("dag_run") else {}
-            return bool(conf.get("trigger_compact") or False)
+        if any(spec.trigger_compact for spec in specs):
+            trigger_compact = TriggerDagRunOperator(
+                task_id="trigger_dw_extractor_compact_dag",
+                trigger_dag_id="dw_extractor_compact_dag",
+                wait_for_completion=False,
+                reset_dag_run=True,
+            )
 
-        trigger_compact = TriggerDagRunOperator(
-            task_id="trigger_dw_extractor_compact_dag",
-            trigger_dag_id="dw_extractor_compact_dag",
-            wait_for_completion=False,
-            reset_dag_run=True,
-            conf={
-                "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
-                "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
-            },
-        )
-
-        all_done >> should_trigger_compact() >> trigger_compact
+            all_done >> trigger_compact
 
     return dag
 
