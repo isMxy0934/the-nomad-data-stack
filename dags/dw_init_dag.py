@@ -48,7 +48,7 @@ with DAG(
         "targets": Param(
             default=[],
             type="array",
-            description="List of targets to init (e.g. ['fund_price_akshare'])",
+            description="List of targets (e.g. ['ods.fund_price_akshare']). Leave empty for ALL targets.",
         ),
     },
 ) as dag:
@@ -62,13 +62,9 @@ with DAG(
         start_date = str(params.get("start_date") or "").strip()
         end_date = str(params.get("end_date") or "").strip()
         
-        # parse_targets expects a dict like {'targets': ...}
+        # parse_targets returns None if empty, which means "all targets" in downstream DAGs
         targets = parse_targets(params)
 
-        if not targets:
-            raise ValueError(
-                "Init run requires 'targets' (e.g., ['fund_price_akshare'])"
-            )
         if not start_date:
             raise ValueError(
                 "Init run requires 'start_date' (YYYY-MM-DD)"
@@ -86,7 +82,7 @@ with DAG(
                 "start_date": start_date,
                 "end_date": end_date,
                 "init": True,
-                "targets": targets,
+                "targets": targets or [], # Pass empty list if None to avoid downstream schema errors
             })
         
         return run_confs
