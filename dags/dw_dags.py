@@ -157,7 +157,9 @@ def load_table(
             table_spec.sql_path,
             {"PARTITION_DATE": partition_date},
         )
-        relation = execute_sql(connection, f"SELECT COUNT(*) AS row_count FROM ({rendered_sql}) AS src")
+        relation = execute_sql(
+            connection, f"SELECT COUNT(*) AS row_count FROM ({rendered_sql}) AS src"
+        )
         row_count = int(relation.fetchone()[0])
         if row_count == 0:
             return {"row_count": 0, "file_count": 0, "has_data": 0}
@@ -170,7 +172,7 @@ def load_table(
                 destination=destination_prefix,
                 partition_column="dt",
                 filename_pattern="file_{uuid}",
-                use_tmp_file=True
+                use_tmp_file=True,
             )
             file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_partition_prefix"]))
         else:
@@ -179,11 +181,16 @@ def load_table(
                 query=rendered_sql,
                 destination=destination_prefix,
                 filename_pattern="file_{uuid}",
-                use_tmp_file=True
+                use_tmp_file=True,
             )
             file_count = len(list_parquet_keys(s3_hook, destination_prefix))
 
-        return {"row_count": row_count, "file_count": file_count, "has_data": 1, "partitioned": int(partitioned)}
+        return {
+            "row_count": row_count,
+            "file_count": file_count,
+            "has_data": 1,
+            "partitioned": int(partitioned),
+        }
 
 
 def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
@@ -207,6 +214,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
     )
 
     with dag:
+
         @task
         def get_date_list(**context: Any) -> list[str]:
             conf = context.get("dag_run").conf or {}
@@ -232,18 +240,21 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
 
         for table in ordered_tables:
             from airflow.utils.task_group import TaskGroup
+
             with TaskGroup(group_id=table.name) as tg:
                 # 1. Prepare
                 prepare = PythonOperator.partial(
                     task_id="prepare",
                     python_callable=prepare_dataset,
                 ).expand(
-                    op_kwargs=date_list.map(lambda d, table=table: {
-                        "base_prefix": f"lake/{table.layer}/{table.name}",
-                        "run_id": "{{ run_id }}",
-                        "is_partitioned": table.is_partitioned,
-                        "partition_date": d
-                    })
+                    op_kwargs=date_list.map(
+                        lambda d, table=table: {
+                            "base_prefix": f"lake/{table.layer}/{table.name}",
+                            "run_id": "{{ run_id }}",
+                            "is_partitioned": table.is_partitioned,
+                            "partition_date": d,
+                        }
+                    )
                 )
 
                 # 2. Load
@@ -251,13 +262,15 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="load",
                     python_callable=load_table,
                 ).expand(
-                    op_kwargs=prepare.output.map(lambda p, table=table: {
-                        "table_spec": table,
-                        "bucket_name": DEFAULT_BUCKET_NAME,
-                        "run_id": "{{ run_id }}",
-                        "task_group_id": table.name,
-                        "paths_dict": p
-                    })
+                    op_kwargs=prepare.output.map(
+                        lambda p, table=table: {
+                            "table_spec": table,
+                            "bucket_name": DEFAULT_BUCKET_NAME,
+                            "run_id": "{{ run_id }}",
+                            "task_group_id": table.name,
+                            "paths_dict": p,
+                        }
+                    )
                 )
 
                 # 3. Validate
@@ -269,10 +282,9 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="validate",
                     python_callable=_validate_adapter,
                 ).expand(
-                    op_kwargs=prepare.output.zip(load.output).map(lambda x: {
-                        "paths_dict": x[0],
-                        "metrics": x[1]
-                    })
+                    op_kwargs=prepare.output.zip(load.output).map(
+                        lambda x: {"paths_dict": x[0], "metrics": x[1]}
+                    )
                 )
 
                 # 4. Commit
@@ -285,12 +297,14 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="commit",
                     python_callable=_commit_adapter,
                 ).expand(
-                    op_kwargs=prepare.output.zip(validate.output).map(lambda x, table=table: {
-                        "paths_dict": x[0],
-                        "metrics": x[1],
-                        "dest_name": table.name,
-                        "run_id": "{{ run_id }}"
-                    })
+                    op_kwargs=prepare.output.zip(validate.output).map(
+                        lambda x, table=table: {
+                            "paths_dict": x[0],
+                            "metrics": x[1],
+                            "dest_name": table.name,
+                            "run_id": "{{ run_id }}",
+                        }
+                    )
                 )
 
                 # 5. Cleanup
@@ -302,9 +316,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="cleanup",
                     python_callable=_cleanup_adapter,
                     trigger_rule=TriggerRule.ALL_DONE,
-                ).expand(
-                    op_kwargs=prepare.output.map(lambda p: {"paths_dict": p})
-                )
+                ).expand(op_kwargs=prepare.output.map(lambda p: {"paths_dict": p}))
 
                 prepare >> load >> validate >> commit >> cleanup
 
@@ -317,7 +329,9 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                         table_last_tasks[dep] >> table_last_tasks[table_name]
 
         potential_downstream = [ds for ds, dps in config.layer_dependencies.items() if layer in dps]
-        valid_ds = [ds for ds in potential_downstream if discover_tables_for_layer(ds, SQL_BASE_DIR)]
+        valid_ds = [
+            ds for ds in potential_downstream if discover_tables_for_layer(ds, SQL_BASE_DIR)
+        ]
 
         if valid_ds:
             for ds in valid_ds:

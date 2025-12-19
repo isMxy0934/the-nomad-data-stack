@@ -55,7 +55,7 @@ with DAG(
             "start_date": start_date,
             "end_date": end_date,
             "targets": targets or [],
-            "init": True
+            "init": True,
         }
 
     init_conf = prepare_init_conf()
