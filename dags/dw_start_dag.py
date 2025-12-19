@@ -4,14 +4,13 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from airflow import DAG
+from airflow.api.common.trigger_dag import trigger_dag
 from airflow.decorators import task
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.operators.python import get_current_context
 
 from dags.utils.time_utils import get_partition_date_str
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-TRIGGER_DAG_ID = "dw_ods"
 
 
 def _parse_targets(conf: dict[str, Any]) -> list[str] | None:
@@ -80,17 +79,23 @@ with DAG(
         partition_dates = _build_date_list(start_date, end_date)
         return [{"partition_date": dt, "targets": targets} for dt in partition_dates]
 
-    trigger_catalog = TriggerDagRunOperator(
-        task_id="trigger_dw_catalog_dag",
-        trigger_dag_id="dw_catalog_dag",
-        reset_dag_run=True,
-    )
-
-    trigger_dw = TriggerDagRunOperator(
-        task_id=f"trigger_{TRIGGER_DAG_ID}",
-        trigger_dag_id=TRIGGER_DAG_ID,
-        reset_dag_run=True,
-    )
+    @task
+    def trigger_extractor_runs(run_confs: list[dict[str, object]]) -> int:
+        triggered = 0
+        for conf in run_confs:
+            partition_date = str(conf.get("partition_date") or "unknown")
+            run_id = (
+                "dw_start__extractor__"
+                f"{partition_date}__{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}"
+            )
+            trigger_dag(
+                dag_id="dw_extractor_dag",
+                run_id=run_id,
+                conf=conf,
+                replace_microseconds=False,
+            )
+            triggered += 1
+        return triggered
 
     run_confs = build_run_confs()
-    trigger_catalog >> run_confs >> trigger_dw.expand(conf=run_confs)
+    trigger_extractor_runs(run_confs)

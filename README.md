@@ -18,8 +18,9 @@ docker compose up -d
 
 4) 跑一条完整链路（推荐触发“总开关” DAG）：
 - 在 Airflow UI 手动触发 `dw_start_dag`
-  - 它会触发 `dw_catalog_dag`（应用 DuckDB catalog migrations）
-  - 然后触发 `dw_ods`，再按 `dags/dw_config.yaml` 的层依赖顺序触发 `dw_{layer}`
+  - 它会触发 `dw_extractor_dag`
+  - extractor 完成后触发 `dw_catalog_dag`（应用 DuckDB catalog migrations）
+  - catalog 完成后触发 `dw_ods`，再按 `dags/dw_config.yaml` 的层依赖顺序触发 `dw_{layer}`
 
 5) 验证产物：
 - 在 MinIO bucket（默认 `stock-data`）里查看 `lake/ods/.../dt=YYYY-MM-DD/` 下是否有 `*.parquet`、`manifest.json`、`_SUCCESS`

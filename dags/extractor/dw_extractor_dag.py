@@ -28,6 +28,7 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.extractor_utils import CsvPayload, ExtractorSpec
 from dags.utils.s3_utils import S3Uploader
 from dags.utils.time_utils import get_partition_date_str
+from dags.utils.dag_run_utils import parse_targets
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +60,11 @@ def _resolve_fetcher(fetcher_ref: str) -> Callable[[], CsvPayload | None]:
 def _should_run_target(*, target: str, **context) -> bool:  # noqa: ANN001
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
-    targets = conf.get("targets")
-    if not targets:
+    targets = parse_targets(conf)
+    if targets is None:
         return True
-    if not isinstance(targets, Sequence) or isinstance(targets, (str, bytes)):
-        raise ValueError("dag_run.conf.targets must be a list of strings")
-    return target in {str(t) for t in targets}
+    # targets are layer.table; extractor targets are not supported here
+    return False
 
 
 def _fetch_to_tmp(*, target: str, fetcher: str, **context) -> dict[str, object]:  # noqa: ANN001
@@ -98,7 +98,9 @@ def _write_raw(
     if not tmp_file:
         raise ValueError("Missing tmp_file from fetch step")
 
-    partition_date = get_partition_date_str()
+    dag_run = context.get("dag_run")
+    conf = getattr(dag_run, "conf", None) or {}
+    partition_date = str(conf.get("partition_date") or "").strip() or get_partition_date_str()
     destination_key = destination_key_template.format(PARTITION_DATE=partition_date)
 
     uploader = S3Uploader()
@@ -224,6 +226,10 @@ def create_dw_extractor_dag() -> DAG:
             wait_for_completion=False,
             reset_dag_run=True,
             trigger_rule=TriggerRule.ALL_DONE,
+            conf={
+                "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+            },
         )
         for group in groups:
             group >> all_done

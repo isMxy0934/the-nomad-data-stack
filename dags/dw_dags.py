@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 from airflow import DAG
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
@@ -37,6 +36,7 @@ from dags.utils.etl_utils import (
     build_s3_connection_config,
     list_parquet_keys,
 )
+from dags.utils.dag_run_utils import parse_targets
 from dags.utils.sql_utils import load_and_render_sql
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
@@ -49,25 +49,7 @@ logger = logging.getLogger(__name__)
 def _conf_targets(context: Mapping[str, Any]) -> list[str] | None:
     dag_run = context.get("dag_run")
     conf = dag_run.conf if dag_run else {}
-    raw = conf.get("targets") if conf else None
-    if raw is None or raw == "" or raw == "None" or raw == "null":
-        return None
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise ValueError("dag_run.conf.targets must be a JSON list of strings") from exc
-    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
-        raise ValueError("dag_run.conf.targets must be a list of strings")
-    targets = [str(t).strip() for t in raw if str(t).strip()]
-    if not targets:
-        return None
-    for target in targets:
-        if "*" in target:
-            raise ValueError("dag_run.conf.targets does not support wildcard targets")
-        if "." not in target:
-            raise ValueError("dag_run.conf.targets must use layer.table format")
-    return targets
+    return parse_targets(conf)
 
 
 def _target_matches(table_spec: TableSpec, target: str) -> bool:
@@ -319,7 +301,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     reset_dag_run=True,
                     conf={
                         "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
-                        "targets": "{{ dag_run.conf.get('targets') | tojson if dag_run and dag_run.conf else None }}",
+                        "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
                     },
                 )
                 for tg in task_groups.values():
@@ -332,7 +314,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 reset_dag_run=True,
                 conf={
                     "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
-                    "targets": "{{ dag_run.conf.get('targets') | tojson if dag_run and dag_run.conf else None }}",
+                    "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
                 },
             )
             for tg in task_groups.values():
