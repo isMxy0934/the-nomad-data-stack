@@ -85,7 +85,7 @@ def test_build_s3_connection_config_missing_endpoint():
 def test_list_parquet_keys():
     mock_s3_hook = MagicMock()
     mock_s3_hook.list_keys.return_value = ["table/file1.parquet", "table/file2.txt", "table/sub/file3.parquet"]
-    
+
     keys = list_parquet_keys(mock_s3_hook, "s3://bucket/table/")
     assert keys == ["table/file1.parquet", "table/sub/file3.parquet"]
     mock_s3_hook.list_keys.assert_called_once_with(bucket_name="bucket", prefix="table/")
@@ -94,7 +94,7 @@ def test_list_parquet_keys():
 def test_delete_tmp_prefix():
     mock_s3_hook = MagicMock()
     mock_s3_hook.list_keys.return_value = ["tmp/f1.pq", "tmp/f2.pq"]
-    
+
     delete_tmp_prefix(mock_s3_hook, "s3://bucket/tmp/")
     mock_s3_hook.delete_objects.assert_called_once_with(bucket="bucket", keys=["tmp/f1.pq", "tmp/f2.pq"])
 
@@ -130,7 +130,7 @@ def test_validate_dataset_success():
     with patch("dags.utils.etl_utils.list_parquet_keys", return_value=["f1.pq", "f2.pq"]):
         paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
         metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
-        
+
         result = validate_dataset(paths_dict, metrics, mock_s3_hook)
         assert result == metrics
 
@@ -140,7 +140,7 @@ def test_validate_dataset_no_data_expected():
     with patch("dags.utils.etl_utils.list_parquet_keys", return_value=[]):
         paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
         metrics = {"has_data": 0, "file_count": 0, "row_count": 0}
-        
+
         result = validate_dataset(paths_dict, metrics, mock_s3_hook)
         assert result == metrics
 
@@ -150,7 +150,7 @@ def test_validate_dataset_file_count_mismatch():
     with patch("dags.utils.etl_utils.list_parquet_keys", return_value=["f1.pq"]):
         paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
         metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
-        
+
         with pytest.raises(ValueError, match="File count mismatch"):
             validate_dataset(paths_dict, metrics, mock_s3_hook)
 
@@ -173,7 +173,7 @@ def test_commit_dataset_partitioned(mock_build_manifest, mock_publish):
     mock_build_manifest.return_value = {"manifest": "data"}
 
     res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
-    
+
     assert res == {"published": "1"}
     assert manifest == {"manifest": "data"}
     mock_publish.assert_called_once()
@@ -190,7 +190,7 @@ def test_commit_dataset_no_data():
         "success_flag_path": "s3://b/t/_S",
     }
     metrics = {"has_data": 0}
-    
+
     with patch("dags.utils.etl_utils.delete_prefix") as mock_delete:
         res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
         assert res["action"] == "cleared"

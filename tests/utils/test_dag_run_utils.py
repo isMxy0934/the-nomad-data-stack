@@ -8,7 +8,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
-    from dags.utils.dag_run_utils import parse_targets, build_downstream_conf
+    from dags.utils.dag_run_utils import build_downstream_conf, parse_targets
 except ImportError as exc:
     pytest.skip(
         f"dag run utils imports unavailable in this environment: {exc}", allow_module_level=True

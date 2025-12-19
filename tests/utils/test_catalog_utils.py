@@ -52,7 +52,7 @@ def test_build_layer_dt_macro_sql_errors():
     layer = LayerSpec(schema="ods", base_prefix="lake/ods", partitioned_by_dt=False)
     with pytest.raises(ValueError, match="macro only applies to dt-partitioned layers"):
         build_layer_dt_macro_sql(bucket="b", layer=layer, table="t")
-        
+
     layer_csv = LayerSpec(schema="ods", base_prefix="lake/ods", partitioned_by_dt=True, file_extension="csv")
     with pytest.raises(ValueError, match="macro currently supports parquet only"):
         build_layer_dt_macro_sql(bucket="b", layer=layer_csv, table="t")

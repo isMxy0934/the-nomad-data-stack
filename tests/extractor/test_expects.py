@@ -1,15 +1,15 @@
 import sys
 from pathlib import Path
 
-import pytest
 import pandas as pd
+import pytest
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
-    from dags.extractor.expect.expects import identity, dedupe_trade_date_symbol
+    from dags.extractor.expect.expects import dedupe_trade_date_symbol, identity
 except ImportError as exc:
     pytest.skip(
         f"expect functions imports unavailable in this environment: {exc}", allow_module_level=True
@@ -29,7 +29,7 @@ def test_dedupe_trade_date_symbol():
         "value": [1, 2, 3]
     })
     result = dedupe_trade_date_symbol(df, trade_date="2024-01-01", spec=None)
-    
+
     assert len(result) == 2
     # Should keep last (value 2 for A)
     assert result[(result["symbol"] == "A")]["value"].values[0] == 2

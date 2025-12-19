@@ -2,8 +2,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 import pandas as pd
+import pytest
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
@@ -32,15 +32,15 @@ def test_fetch_fund_price_akshare_success():
 
     mock_ak = MagicMock()
     mock_ak.fund_etf_category_sina.return_value = mock_df
-    
+
     with patch.dict("sys.modules", {"akshare": mock_ak}), \
          patch("dags.extractor.functions.fetch_fund_price_akshare.get_date_str", return_value="20241219"):
-        
+
         result = fetch_fund_price_akshare()
-        
+
         assert result is not None
         assert result.record_count == 1
-        
+
         # Verify CSV content
         import io
         df_result = pd.read_csv(io.BytesIO(result.csv_bytes))

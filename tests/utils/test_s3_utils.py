@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -35,12 +35,12 @@ class TestS3Uploader:
     def test_upload_file_success(self, mock_s3_hook):
         mock_hook_instance = mock_s3_hook.return_value
         uploader = S3Uploader()
-        
+
         local_path = "/tmp/test.csv"
         key = "raw/test.csv"
-        
+
         result = uploader.upload_file(local_path, key=key)
-        
+
         mock_hook_instance.load_file.assert_called_once_with(
             filename=local_path,
             bucket_name="stock-data",
@@ -59,12 +59,12 @@ class TestS3Uploader:
     def test_upload_bytes_success(self, mock_s3_hook):
         mock_hook_instance = mock_s3_hook.return_value
         uploader = S3Uploader()
-        
+
         data = b"test data"
         key = "raw/test_bytes.csv"
-        
+
         result = uploader.upload_bytes(data, key=key)
-        
+
         mock_hook_instance.load_bytes.assert_called_once_with(
             bytes_data=data,
             bucket_name="stock-data",
