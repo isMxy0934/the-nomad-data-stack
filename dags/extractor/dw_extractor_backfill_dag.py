@@ -376,13 +376,25 @@ def create_dw_extractor_backfill_dag() -> DAG:
                     if day_df.empty:
                         continue
 
+                    # Atomic Write: tmp -> copy -> delete
+                    tmp_key = f"{day_prefix}/_tmp/data.csv"
+                    
                     csv_bytes = day_df.to_csv(index=False).encode("utf-8")
                     s3_hook.load_bytes(
                         bytes_data=csv_bytes,
-                        key=data_key,
+                        key=tmp_key,
                         bucket_name=DEFAULT_BUCKET_NAME,
                         replace=True,
                     )
+                    
+                    # For backfill pieces, we assume we can overwrite (no need to clear directory as it's a single file)
+                    s3_hook.copy_object(
+                        source_bucket_key=tmp_key,
+                        dest_bucket_key=data_key,
+                        source_bucket_name=DEFAULT_BUCKET_NAME,
+                        dest_bucket_name=DEFAULT_BUCKET_NAME,
+                    )
+                    s3_hook.delete_objects(bucket=DEFAULT_BUCKET_NAME, keys=[tmp_key])
 
                     manifest = {
                         "target": spec_obj.target,
@@ -412,6 +424,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
                     wrote_days += 1
                     wrote_rows += int(len(day_df))
 
+                # Write shard metadata
                 s3_hook.load_string(
                     string_data=json.dumps(
                         {
@@ -429,12 +442,42 @@ def create_dw_extractor_backfill_dag() -> DAG:
                     bucket_name=DEFAULT_BUCKET_NAME,
                     replace=True,
                 )
-                s3_hook.load_string(
-                    string_data="",
-                    key=shard_success_key,
-                    bucket_name=DEFAULT_BUCKET_NAME,
-                    replace=True,
-                )
+
+                # Only mark the Shard (Month) as fully success if we covered the entire month range
+                # Calculate shard boundaries based on part_id (YYYYMM)
+                try:
+                    shard_y = int(part_id[:4])
+                    shard_m = int(part_id[4:])
+                    shard_start_dt = date(shard_y, shard_m, 1)
+                    if shard_m == 12:
+                        shard_end_dt = date(shard_y + 1, 1, 1) - timedelta(days=1)
+                    else:
+                        shard_end_dt = date(shard_y, shard_m + 1, 1) - timedelta(days=1)
+                    
+                    job_start_dt = date.fromisoformat(start_date)
+                    job_end_dt = date.fromisoformat(end_date)
+
+                    # Check if job covers the full shard
+                    if job_start_dt <= shard_start_dt and job_end_dt >= shard_end_dt:
+                        s3_hook.load_string(
+                            string_data="",
+                            key=shard_success_key,
+                            bucket_name=DEFAULT_BUCKET_NAME,
+                            replace=True,
+                        )
+                    else:
+                        logger.info(
+                            "Skipping shard success mark for %s: job range %s~%s partial vs shard %s~%s",
+                            part_id, start_date, end_date, shard_start_dt, shard_end_dt
+                        )
+                except ValueError:
+                    # Fallback for non-monthly shards (e.g. 'full'), always write success
+                    s3_hook.load_string(
+                        string_data="",
+                        key=shard_success_key,
+                        bucket_name=DEFAULT_BUCKET_NAME,
+                        replace=True,
+                    )
 
                 return {
                     "skipped": 0,

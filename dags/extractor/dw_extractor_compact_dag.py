@@ -168,10 +168,12 @@ def create_dw_extractor_compact_dag() -> DAG:
                     TRADE_DATE=trade_date, PARTITION_DATE=trade_date
                 ).lstrip("/")
                 daily_dir = daily_key.rsplit("/", 1)[0]
-                tmp_key = f"{daily_dir}/data.csv.tmp"
-                manifest_key = f"{daily_dir}/_MANIFEST.json"
-                success_key = f"{daily_dir}/_SUCCESS"
-
+                
+                # Safe Commit Protocol:
+                # 1. Write to isolated tmp location
+                tmp_dir = f"{daily_dir}/_tmp/compact_{trade_date}"
+                tmp_key = f"{tmp_dir}/data.csv"
+                
                 csv_bytes = df.to_csv(index=False).encode("utf-8")
                 s3_hook.load_bytes(
                     bytes_data=csv_bytes,
@@ -179,14 +181,25 @@ def create_dw_extractor_compact_dag() -> DAG:
                     bucket_name=DEFAULT_BUCKET_NAME,
                     replace=True,
                 )
+
+                # 2. Clear canonical prefix (remove old files)
+                # Note: list_keys might return None if empty
+                existing_keys = s3_hook.list_keys(bucket_name=DEFAULT_BUCKET_NAME, prefix=daily_dir + "/") or []
+                if existing_keys:
+                    s3_hook.delete_objects(bucket=DEFAULT_BUCKET_NAME, keys=existing_keys)
+
+                # 3. Promote tmp to canonical
                 s3_hook.copy_object(
                     source_bucket_key=tmp_key,
                     dest_bucket_key=daily_key,
                     source_bucket_name=DEFAULT_BUCKET_NAME,
                     dest_bucket_name=DEFAULT_BUCKET_NAME,
                 )
-                s3_hook.delete_objects(bucket=DEFAULT_BUCKET_NAME, keys=[tmp_key])
 
+                # 4. Write completion markers
+                manifest_key = f"{daily_dir}/manifest.json"
+                success_key = f"{daily_dir}/_SUCCESS"
+                
                 manifest = {
                     "target": spec_obj.target,
                     "trade_date": trade_date,
@@ -208,6 +221,9 @@ def create_dw_extractor_compact_dag() -> DAG:
                     bucket_name=DEFAULT_BUCKET_NAME,
                     replace=True,
                 )
+
+                # 5. Cleanup tmp
+                s3_hook.delete_objects(bucket=DEFAULT_BUCKET_NAME, keys=[tmp_key])
 
                 return {
                     "trade_date": trade_date,
