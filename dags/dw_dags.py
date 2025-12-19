@@ -19,10 +19,10 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.dag_run_utils import parse_targets
 from dags.utils.duckdb_utils import (
     configure_s3_access,
-    execute_sql,
-    temporary_connection,
     copy_parquet,
     copy_partitioned_parquet,
+    execute_sql,
+    temporary_connection,
 )
 from dags.utils.dw_config_utils import (
     DWConfig,
@@ -37,11 +37,11 @@ from dags.utils.etl_utils import (
     DEFAULT_AWS_CONN_ID,
     DEFAULT_BUCKET_NAME,
     build_s3_connection_config,
+    cleanup_dataset,
+    commit_dataset,
     list_parquet_keys,
     prepare_dataset,
     validate_dataset,
-    commit_dataset,
-    cleanup_dataset,
 )
 from dags.utils.sql_utils import load_and_render_sql
 
@@ -125,7 +125,6 @@ def load_table(
     bucket_name: str = DEFAULT_BUCKET_NAME,
     **context: Any,
 ) -> dict[str, Any]:
-    ti = context["ti"]
     targets = _conf_targets(context)
     if targets is not None and not any(_target_matches(table_spec, t) for t in targets):
         logger.info("Skipping table %s (not in targets).", table_spec.name)
@@ -166,9 +165,9 @@ def load_table(
         destination_prefix = paths_dict["tmp_prefix"]
         if partitioned:
             copy_partitioned_parquet(
-                connection, 
-                query=rendered_sql, 
-                destination=destination_prefix, 
+                connection,
+                query=rendered_sql,
+                destination=destination_prefix,
                 partition_column="dt",
                 filename_pattern="file_{uuid}",
                 use_tmp_file=True
@@ -176,8 +175,8 @@ def load_table(
             file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_partition_prefix"]))
         else:
             copy_parquet(
-                connection, 
-                query=rendered_sql, 
+                connection,
+                query=rendered_sql,
                 destination=destination_prefix,
                 filename_pattern="file_{uuid}",
                 use_tmp_file=True
@@ -225,8 +224,8 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     curr += timedelta(days=1)
             else:
                 dates = [partition_date] if partition_date else [date.today().isoformat()]
-            
-            return sorted(list(set(dates)))
+
+            return sorted(set(dates))
 
         date_list = get_date_list()
         table_last_tasks = {}
@@ -239,7 +238,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="prepare",
                     python_callable=prepare_dataset,
                 ).expand(
-                    op_kwargs=date_list.map(lambda d: {
+                    op_kwargs=date_list.map(lambda d, table=table: {
                         "base_prefix": f"lake/{table.layer}/{table.name}",
                         "run_id": "{{ run_id }}",
                         "is_partitioned": table.is_partitioned,
@@ -252,10 +251,10 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="load",
                     python_callable=load_table,
                 ).expand(
-                    op_kwargs=prepare.output.map(lambda p: {
-                        "table_spec": table, 
-                        "bucket_name": DEFAULT_BUCKET_NAME, 
-                        "run_id": "{{ run_id }}", 
+                    op_kwargs=prepare.output.map(lambda p, table=table: {
+                        "table_spec": table,
+                        "bucket_name": DEFAULT_BUCKET_NAME,
+                        "run_id": "{{ run_id }}",
                         "task_group_id": table.name,
                         "paths_dict": p
                     })
@@ -271,7 +270,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     python_callable=_validate_adapter,
                 ).expand(
                     op_kwargs=prepare.output.zip(load.output).map(lambda x: {
-                        "paths_dict": x[0], 
+                        "paths_dict": x[0],
                         "metrics": x[1]
                     })
                 )
@@ -286,8 +285,8 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="commit",
                     python_callable=_commit_adapter,
                 ).expand(
-                    op_kwargs=prepare.output.zip(validate.output).map(lambda x: {
-                        "paths_dict": x[0], 
+                    op_kwargs=prepare.output.zip(validate.output).map(lambda x, table=table: {
+                        "paths_dict": x[0],
                         "metrics": x[1],
                         "dest_name": table.name,
                         "run_id": "{{ run_id }}"
@@ -308,7 +307,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 )
 
                 prepare >> load >> validate >> commit >> cleanup
-            
+
             table_last_tasks[table.name] = tg
 
         for table_name, deps in dependencies.items():
