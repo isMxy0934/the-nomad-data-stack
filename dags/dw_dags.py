@@ -44,6 +44,7 @@ from dags.utils.etl_utils import (
     validate_dataset,
 )
 from dags.utils.sql_utils import load_and_render_sql
+from dags.utils.time_utils import get_partition_date_str
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent
@@ -231,7 +232,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     dates.append(curr.isoformat())
                     curr += timedelta(days=1)
             else:
-                dates = [partition_date] if partition_date else [date.today().isoformat()]
+                dates = [partition_date] if partition_date else [get_partition_date_str()]
 
             return sorted(set(dates))
 
