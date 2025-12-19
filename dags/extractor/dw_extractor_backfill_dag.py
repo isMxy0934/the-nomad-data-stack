@@ -12,11 +12,13 @@ and writes completion markers next to each piece:
 To support idempotent reruns without `run_id`, a shard-level marker is stored under:
   lake/raw/backfill/<dataset>/<source>/_meta/symbol=<symbol>/shard=<PART_ID>/_SUCCESS
 
-dag_run.conf (suggested):
+backfill_config.yaml (per extractor):
+  start_date: "2020-01-01" (required)
+  end_date: "2025-12-18" (optional; defaults to partition date)
+
+dag_run.conf (optional overrides):
   {
     "targets": ["etf_price_akshare"],
-    "start_date": "2020-01-01",
-    "end_date": "2025-12-18",
     "universe_dt": "latest",
     "max_symbols": 0,
     "force": false
@@ -257,16 +259,18 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 if targets is not None and spec_obj.target not in targets:
                     return []
 
-                start_date = str(conf.get("start_date") or "").strip()
-                end_date = str(conf.get("end_date") or "").strip()
+                start_date = str(spec_obj.start_date or "").strip()
+                end_date = str(spec_obj.end_date or "").strip()
 
                 if not start_date:
-                    raise ValueError("dag_run.conf must provide start_date for backfill")
+                    raise ValueError(
+                        "backfill_config.yaml must provide start_date for backfill extractors"
+                    )
 
                 if not end_date:
                     # Default to yesterday (partition date) if not specified
                     end_date = get_partition_date_str()
-                    logger.info("No end_date provided, defaulting to %s", end_date)
+                    logger.info("No end_date configured, defaulting to %s", end_date)
 
                 if spec_obj.shard_type == "none":
                     return [{"start_date": start_date, "end_date": end_date, "part_id": "full"}]

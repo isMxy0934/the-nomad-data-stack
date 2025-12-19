@@ -1,6 +1,9 @@
 backfill_extractors:
   - target: fund_price_akshare
     tags: ["extractor", "backfill", "fund", "akshare"]
+    # Required backfill window; end_date optional (defaults to partition date)
+    start_date: "2025-01-01"
+    end_date: "2025-12-18"
     universe:
       from_target: fund_universe_akshare
       symbol_column: symbol

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -19,6 +20,8 @@ class UniverseSpec:
 class BackfillExtractorSpec:
     target: str
     tags: list[str]
+    start_date: str
+    end_date: str | None
     universe: UniverseSpec
     history_fetcher: str  # module:function
     shard_type: str = "monthly"  # monthly/none
@@ -31,6 +34,9 @@ class BackfillExtractorSpec:
 
 
 def backfill_spec_from_mapping(payload: Mapping[str, object]) -> BackfillExtractorSpec:
+    start_date = str(payload.get("start_date", "")).strip()
+    end_date = str(payload.get("end_date", "")).strip() if payload.get("end_date") else None
+
     universe_raw = payload.get("universe")
     if isinstance(universe_raw, UniverseSpec):
         universe = universe_raw
@@ -45,6 +51,8 @@ def backfill_spec_from_mapping(payload: Mapping[str, object]) -> BackfillExtract
     return BackfillExtractorSpec(
         target=str(payload.get("target", "")).strip(),
         tags=[str(t) for t in (payload.get("tags") or [])],
+        start_date=start_date,
+        end_date=end_date,
         universe=universe,
         history_fetcher=str(payload.get("history_fetcher", "")).strip(),
         shard_type=str(payload.get("shard_type", "monthly")).strip() or "monthly",
@@ -93,6 +101,21 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
         tags_raw = entry.get("tags") or []
         if not isinstance(tags_raw, Sequence) or isinstance(tags_raw, (str, bytes)):
             raise ValueError(f"tags must be a list for target={target}")
+
+        start_date = str(entry.get("start_date", "")).strip()
+        if not start_date:
+            raise ValueError(f"start_date is required for target={target}")
+        try:
+            date.fromisoformat(start_date)
+        except ValueError as exc:
+            raise ValueError(f"Invalid start_date={start_date} for target={target}") from exc
+
+        end_date = str(entry.get("end_date", "")).strip() if entry.get("end_date") else None
+        if end_date:
+            try:
+                date.fromisoformat(end_date)
+            except ValueError as exc:
+                raise ValueError(f"Invalid end_date={end_date} for target={target}") from exc
 
         universe_raw = entry.get("universe") or {}
         if not isinstance(universe_raw, Mapping):
@@ -145,6 +168,8 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
             BackfillExtractorSpec(
                 target=target,
                 tags=[str(t) for t in tags_raw],
+                start_date=start_date,
+                end_date=end_date,
                 universe=UniverseSpec(from_target=from_target, symbol_column=symbol_column),
                 history_fetcher=history_fetcher,
                 shard_type=shard_type,
