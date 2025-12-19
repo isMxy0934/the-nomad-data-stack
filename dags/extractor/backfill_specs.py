@@ -21,7 +21,6 @@ class BackfillExtractorSpec:
     tags: list[str]
     start_date: str
     end_date: str | None
-    trigger_compact: bool = False
     universe: UniverseSpec
     history_fetcher: str  # module:function
     shard_type: str = "monthly"  # monthly/none
@@ -31,6 +30,7 @@ class BackfillExtractorSpec:
     pool: str | None = None
     symbol_allowlist: list[str] | None = None
     compact_transformer: str | None = None  # module:function
+    trigger_compact: bool = False
 
 
 def backfill_spec_from_mapping(payload: Mapping[str, object]) -> BackfillExtractorSpec:
