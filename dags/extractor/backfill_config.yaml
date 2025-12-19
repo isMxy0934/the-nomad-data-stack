@@ -6,7 +6,7 @@ backfill_extractors:
       symbol_column: symbol
     history_fetcher: "dags.extractor.backfill.fetch_fund_price_akshare:fetch_hist_one"
     # monthly/none, monthly is default
-    shard_type: monthly
+    shard_type: none
     trade_date_column: trade_date
     pieces_base_prefix: "lake/raw/backfill/fund_price/akshare"
     daily_key_template: "lake/raw/daily/fund_price/akshare/dt={TRADE_DATE}/data.csv"

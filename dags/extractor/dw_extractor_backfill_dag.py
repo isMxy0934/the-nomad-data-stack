@@ -43,6 +43,7 @@ from airflow.operators.python import get_current_context
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+from dags.utils.time_utils import get_partition_date_str
 from dags.extractor.backfill_specs import (
     backfill_spec_from_mapping,
     load_backfill_specs,
@@ -243,10 +244,14 @@ def create_dw_extractor_backfill_dag() -> DAG:
 
                 start_date = str(conf.get("start_date") or "").strip()
                 end_date = str(conf.get("end_date") or "").strip()
-                if not start_date or not end_date:
-                    raise ValueError(
-                        "dag_run.conf must provide start_date and end_date for backfill"
-                    )
+
+                if not start_date:
+                    raise ValueError("dag_run.conf must provide start_date for backfill")
+                
+                if not end_date:
+                    # Default to yesterday (partition date) if not specified
+                    end_date = get_partition_date_str()
+                    logger.info("No end_date provided, defaulting to %s", end_date)
 
                 if spec_obj.shard_type == "none":
                     return [{"start_date": start_date, "end_date": end_date, "part_id": "full"}]

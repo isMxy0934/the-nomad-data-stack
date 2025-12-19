@@ -34,10 +34,41 @@ def fetch_hist_one(*, symbol: str, start_date: str, end_date: str, **_: object) 
     rename_map = {
         "日期": "trade_date",
         "date": "trade_date",
+        "代码": "symbol",
+        "名称": "name",
+        "最新价": "close",
+        "开盘价": "open",
+        "开盘": "open",
+        "最高价": "high",
+        "最高": "high",
+        "最低价": "low",
+        "最低": "low",
+        "成交量": "vol",
+        "成交额": "amount",
+        "昨收": "pre_close",
+        "换手率": "turnover_rate",
+        "涨跌幅": "pct_chg",
     }
     df = df.rename(columns=rename_map)
     if "trade_date" not in df.columns:
         raise ValueError("akshare returned data without a trade date column")
+
+    # Align columns with daily extractor (dags/extractor/functions/fetch_fund_price_akshare.py)
+    target_columns = [
+        "trade_date",
+        "symbol",
+        "name",
+        "close",
+        "open",
+        "high",
+        "low",
+        "vol",
+        "amount",
+        "pre_close",
+        "pct_chg",
+    ]
+    # Filter columns that exist in the dataframe
+    df = df[[col for col in target_columns if col in df.columns]]
 
     df["trade_date"] = _coerce_trade_date(df["trade_date"])
     df = df.dropna(subset=["trade_date"])
