@@ -1,42 +1,15 @@
-import json
 import os
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from airflow import DAG
-from airflow.decorators import task
-from airflow.operators.python import get_current_context
+from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from dags.utils.time_utils import get_partition_date_str
+from dags.utils.dag_run_utils import parse_targets
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-
-
-def _parse_targets(conf: dict[str, Any]) -> list[str]:
-    raw = conf.get("targets")
-    if raw is None or raw == "" or raw == "None" or raw == "null":
-        raise ValueError("init run requires targets")
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise ValueError("dag_run.conf.targets must be a JSON list of strings") from exc
-    if not isinstance(raw, list):
-        raise ValueError("dag_run.conf.targets must be a list of strings")
-    targets: list[str] = []
-    for target in raw:
-        value = str(target).strip()
-        if not value:
-            continue
-        if "*" in value:
-            raise ValueError("dag_run.conf.targets does not support wildcard targets")
-        if "." not in value:
-            raise ValueError("dag_run.conf.targets must use layer.table format")
-        targets.append(value)
-    if not targets:
-        raise ValueError("init run requires targets")
-    return targets
 
 
 def _build_date_list(start: str, end: str) -> list[str]:
@@ -60,14 +33,15 @@ with DAG(
     tags=["orchestration"],
 ) as dag:
 
-    @task
-    def trigger_init_runs() -> int:
-        ctx = get_current_context()
-        conf = (ctx.get("dag_run").conf or {}) if ctx.get("dag_run") else {}
+    def trigger_init_runs(**context: Any) -> int:
+        dag_run = context.get("dag_run")
+        conf = (dag_run.conf or {}) if dag_run else {}
 
         start_date = str(conf.get("start_date") or "").strip()
         end_date = str(conf.get("end_date") or "").strip()
-        targets = _parse_targets(conf)
+        targets = parse_targets(conf)
+        if not targets:
+            raise ValueError("init run requires targets")
 
         if not start_date:
             raise ValueError("init run requires start_date")
@@ -93,4 +67,7 @@ with DAG(
             triggered += 1
         return triggered
 
-    trigger_init_runs()
+    PythonOperator(
+        task_id="trigger_dw_extractor_runs",
+        python_callable=trigger_init_runs,
+    )
