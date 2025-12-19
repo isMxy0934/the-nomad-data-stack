@@ -1,5 +1,5 @@
 import os
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from airflow import DAG
@@ -11,20 +11,6 @@ from dags.utils.dag_run_utils import parse_targets
 from dags.utils.time_utils import get_partition_date_str
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-
-
-def _build_date_list(start: str, end: str) -> list[str]:
-    start_dt = date.fromisoformat(start)
-    end_dt = date.fromisoformat(end)
-    if end_dt < start_dt:
-        raise ValueError("end_date must be >= start_date")
-    dates: list[str] = []
-    current = start_dt
-    while current <= end_dt:
-        dates.append(current.isoformat())
-        current += timedelta(days=1)
-    return dates
-
 
 with DAG(
     dag_id=DAG_ID,
@@ -54,45 +40,31 @@ with DAG(
 ) as dag:
 
     @task
-    def generate_run_confs(**context: Any) -> list[dict[str, Any]]:
-        # context["params"] contains the validated form values
+    def prepare_init_conf(**context: Any) -> dict[str, Any]:
         params = context.get("params") or {}
-
-        # 1. Validate inputs
         start_date = str(params.get("start_date") or "").strip()
         end_date = str(params.get("end_date") or "").strip()
-
-        # parse_targets returns None if empty, which means "all targets" in downstream DAGs
         targets = parse_targets(params)
 
         if not start_date:
-            raise ValueError("Init run requires 'start_date' (YYYY-MM-DD)")
-
+            raise ValueError("Init run requires 'start_date'")
         if not end_date:
             end_date = start_date
 
-        # 2. Build configurations for each date
-        partition_dates = _build_date_list(start_date, end_date)
-        run_confs = []
-        for dt in partition_dates:
-            run_confs.append(
-                {
-                    "partition_date": dt,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "init": True,
-                    "targets": targets
-                    or [],  # Pass empty list if None to avoid downstream schema errors
-                }
-            )
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "partition_date": end_date,
+            "targets": targets or [],
+            "init": True
+        }
 
-        return run_confs
+    init_conf = prepare_init_conf()
 
-    confs = generate_run_confs()
-
-    TriggerDagRunOperator.partial(
+    trigger_catalog = TriggerDagRunOperator(
         task_id="trigger_dw_catalog_dag",
         trigger_dag_id="dw_catalog_dag",
         reset_dag_run=True,
         wait_for_completion=False,
-    ).expand(conf=confs)
+        conf=init_conf,
+    )

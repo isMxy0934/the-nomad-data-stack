@@ -1,7 +1,7 @@
 """Airflow DAG to maintain the DuckDB analysis catalog (metadata-only).
 
 This DAG applies catalog migrations (versioned SQL under `catalog/migrations`),
-then triggers dw_ods for the requested partition_date (or default).
+then triggers dw_ods for the requested partition_date (or range).
 """
 
 from __future__ import annotations
@@ -69,11 +69,11 @@ def create_catalog_dag() -> DAG:
             wait_for_completion=False,
             reset_dag_run=True,
             conf={
-                "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
-                "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
-                "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
-                "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
-                "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
+                "partition_date": "{{ dag_run.conf.get('partition_date') }}",
+                "start_date": "{{ dag_run.conf.get('start_date') }}",
+                "end_date": "{{ dag_run.conf.get('end_date') }}",
+                "targets": "{{ dag_run.conf.get('targets') }}",
+                "init": "{{ dag_run.conf.get('init') }}",
             },
         )
 
