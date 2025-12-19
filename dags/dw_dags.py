@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from airflow import DAG
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 
+from dags.utils.dag_run_utils import parse_targets
 from dags.utils.duckdb_utils import (
     configure_s3_access,
     copy_parquet,
@@ -36,7 +37,6 @@ from dags.utils.etl_utils import (
     build_s3_connection_config,
     list_parquet_keys,
 )
-from dags.utils.dag_run_utils import parse_targets
 from dags.utils.sql_utils import load_and_render_sql
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"

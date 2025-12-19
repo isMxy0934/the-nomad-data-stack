@@ -57,18 +57,16 @@ with DAG(
     def generate_run_confs(**context: Any) -> list[dict[str, Any]]:
         # context["params"] contains the validated form values
         params = context.get("params") or {}
-        
+
         # 1. Validate inputs
         start_date = str(params.get("start_date") or "").strip()
         end_date = str(params.get("end_date") or "").strip()
-        
+
         # parse_targets returns None if empty, which means "all targets" in downstream DAGs
         targets = parse_targets(params)
 
         if not start_date:
-            raise ValueError(
-                "Init run requires 'start_date' (YYYY-MM-DD)"
-            )
+            raise ValueError("Init run requires 'start_date' (YYYY-MM-DD)")
 
         if not end_date:
             end_date = start_date
@@ -77,14 +75,17 @@ with DAG(
         partition_dates = _build_date_list(start_date, end_date)
         run_confs = []
         for dt in partition_dates:
-            run_confs.append({
-                "partition_date": dt,
-                "start_date": start_date,
-                "end_date": end_date,
-                "init": True,
-                "targets": targets or [], # Pass empty list if None to avoid downstream schema errors
-            })
-        
+            run_confs.append(
+                {
+                    "partition_date": dt,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "init": True,
+                    "targets": targets
+                    or [],  # Pass empty list if None to avoid downstream schema errors
+                }
+            )
+
         return run_confs
 
     confs = generate_run_confs()

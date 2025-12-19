@@ -25,10 +25,10 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
+from dags.utils.dag_run_utils import parse_targets
 from dags.utils.extractor_utils import CsvPayload, ExtractorSpec
 from dags.utils.s3_utils import S3Uploader
 from dags.utils.time_utils import get_partition_date_str
-from dags.utils.dag_run_utils import parse_targets
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +188,7 @@ def create_dw_extractor_dag() -> DAG:
     )
 
     with dag:
+
         def _should_run_extractor(**context) -> bool:  # noqa: ANN001
             dag_run = context.get("dag_run")
             conf = getattr(dag_run, "conf", None) or {}

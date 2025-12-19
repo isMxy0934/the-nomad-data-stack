@@ -15,6 +15,7 @@ with DAG(
     catchup=False,
     tags=["orchestration"],
 ) as dag:
+
     @task(task_id="finish")
     def finish() -> None:
         ctx = get_current_context()
