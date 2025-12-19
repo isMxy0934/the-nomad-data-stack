@@ -243,14 +243,23 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
 
             with TaskGroup(group_id=table.name) as tg:
                 # 1. Prepare
+                def _prepare_adapter(base_prefix, is_partitioned, partition_date, **context):
+                    # Inject partition_date into run_id to avoid parallel conflict in DuckDB COPY
+                    unique_run_id = f"{context['run_id']}_{partition_date.replace('-', '')}"
+                    return prepare_dataset(
+                        base_prefix=base_prefix,
+                        run_id=unique_run_id,
+                        is_partitioned=is_partitioned,
+                        partition_date=partition_date
+                    )
+
                 prepare = PythonOperator.partial(
                     task_id="prepare",
-                    python_callable=prepare_dataset,
+                    python_callable=_prepare_adapter,
                 ).expand(
                     op_kwargs=date_list.map(
                         lambda d, table=table: {
                             "base_prefix": f"lake/{table.layer}/{table.name}",
-                            "run_id": "{{ run_id }}",
                             "is_partitioned": table.is_partitioned,
                             "partition_date": d,
                         }
@@ -266,7 +275,6 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                         lambda p, table=table: {
                             "table_spec": table,
                             "bucket_name": DEFAULT_BUCKET_NAME,
-                            "run_id": "{{ run_id }}",
                             "task_group_id": table.name,
                             "paths_dict": p,
                         }
@@ -288,9 +296,12 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 )
 
                 # 4. Commit
-                def _commit_adapter(paths_dict, metrics, dest_name, run_id, **_):
+                def _commit_adapter(paths_dict, metrics, dest_name, **context):
                     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-                    res, _ = commit_dataset(dest_name, run_id, paths_dict, metrics, s3_hook)
+                    # Use the same unique run_id as prepare
+                    partition_date = str(paths_dict.get("partition_date"))
+                    unique_run_id = f"{context['run_id']}_{partition_date.replace('-', '')}"
+                    res, _ = commit_dataset(dest_name, unique_run_id, paths_dict, metrics, s3_hook)
                     return res
 
                 commit = PythonOperator.partial(
@@ -302,7 +313,6 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                             "paths_dict": x[0],
                             "metrics": x[1],
                             "dest_name": table.name,
-                            "run_id": "{{ run_id }}",
                         }
                     )
                 )
