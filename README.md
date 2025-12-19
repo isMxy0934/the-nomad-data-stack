@@ -40,6 +40,9 @@ docker compose up -d
 - `dw_catalog_dag`：应用 catalog migrations（metadata-only）
 - `dw_ods`：ODS 层（CSV → Parquet 分区）
 - `dw_{layer}`：DW 各层 DAG（如 `dw_dwd`、`dw_ads`），由 `dags/dw_dags.py` 动态生成
+- `dw_extractor_dag`：日增采集（配置驱动，写入 `lake/raw/daily/.../dt=.../data.csv`）
+- `dw_extractor_backfill_dag`：历史回填（写入 `lake/raw/backfill/.../dt=.../symbol=.../data.csv` + `_SUCCESS`）
+- `dw_extractor_compact_dag`：回填合并（扫描 backfill，全量覆盖写入 daily 的 `data.csv`）
 - `dw_finish_dag`：链路结束占位
 
 ### 目录速览
