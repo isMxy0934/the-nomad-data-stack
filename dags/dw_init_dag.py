@@ -3,11 +3,11 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.decorators import task
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-from dags.utils.time_utils import get_partition_date_str
 from dags.utils.dag_run_utils import parse_targets
+from dags.utils.time_utils import get_partition_date_str
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
@@ -30,44 +30,50 @@ with DAG(
     start_date=datetime(2024, 1, 1),
     schedule=None,
     catchup=False,
-    tags=["orchestration"],
+    tags=["orchestration", "init"],
 ) as dag:
 
-    def trigger_init_runs(**context: Any) -> int:
+    @task
+    def generate_run_confs(**context: Any) -> list[dict[str, Any]]:
         dag_run = context.get("dag_run")
         conf = (dag_run.conf or {}) if dag_run else {}
 
+        # 1. Validate inputs
         start_date = str(conf.get("start_date") or "").strip()
         end_date = str(conf.get("end_date") or "").strip()
         targets = parse_targets(conf)
-        if not targets:
-            raise ValueError("init run requires targets")
 
+        if not targets:
+            raise ValueError(
+                "Init run requires 'targets' (e.g., {'targets': ['fund_price_akshare']})"
+            )
         if not start_date:
-            raise ValueError("init run requires start_date")
+            raise ValueError(
+                "Init run requires 'start_date' (YYYY-MM-DD)"
+            )
+
         if not end_date:
             end_date = get_partition_date_str()
 
+        # 2. Build configurations for each date
         partition_dates = _build_date_list(start_date, end_date)
-        triggered = 0
+        run_confs = []
         for dt in partition_dates:
-            run_conf = {
+            run_confs.append({
                 "partition_date": dt,
                 "start_date": start_date,
                 "end_date": end_date,
                 "init": True,
                 "targets": targets,
-            }
-            TriggerDagRunOperator(
-                task_id=f"trigger_dw_extractor_dag_{dt}",
-                trigger_dag_id="dw_extractor_dag",
-                reset_dag_run=True,
-                conf=run_conf,
-            ).execute(context={})
-            triggered += 1
-        return triggered
+            })
+        
+        return run_confs
 
-    PythonOperator(
-        task_id="trigger_dw_extractor_runs",
-        python_callable=trigger_init_runs,
-    )
+    confs = generate_run_confs()
+
+    TriggerDagRunOperator.partial(
+        task_id="trigger_dw_catalog_dag",
+        trigger_dag_id="dw_catalog_dag",
+        reset_dag_run=True,
+        wait_for_completion=False,
+    ).expand(conf=confs)
