@@ -52,6 +52,7 @@ docker compose up -d
 - 初始化/回填：触发 `dw_start_dag` 并传参：
   - 必填：`start_date`
   - 可选：`end_date`（不填则默认 `get_partition_date_str()`）
+  - 可选：`init`（默认自动判断；`true` 表示初始化模式，Extractor 会跳过抓取）
   - 可选：`targets`（空则全量初始化所有表）
   - 规则：`start_date <= end_date`，将按天遍历分区
   - `targets` 必须是 `layer.table` 形式（例如 `ods.ods_daily_fund_price_akshare`），不支持通配

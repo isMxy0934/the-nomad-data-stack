@@ -66,6 +66,10 @@ with DAG(
         start_date = str(conf.get("start_date") or "").strip()
         end_date = str(conf.get("end_date") or "").strip()
         targets = _parse_targets(conf)
+        init_flag = conf.get("init")
+        if init_flag is None:
+            init_flag = bool(start_date or end_date)
+        init_mode = bool(init_flag)
 
         if start_date or end_date:
             if not start_date:
@@ -77,7 +81,16 @@ with DAG(
             start_date = end_date
 
         partition_dates = _build_date_list(start_date, end_date)
-        return [{"partition_date": dt, "targets": targets} for dt in partition_dates]
+        return [
+            {
+                "partition_date": dt,
+                "targets": targets,
+                "init": init_mode,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
+            for dt in partition_dates
+        ]
 
     @task
     def trigger_extractor_runs(run_confs: list[dict[str, object]]) -> int:

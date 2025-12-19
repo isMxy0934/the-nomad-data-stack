@@ -60,6 +60,8 @@ def _resolve_fetcher(fetcher_ref: str) -> Callable[[], CsvPayload | None]:
 def _should_run_target(*, target: str, **context) -> bool:  # noqa: ANN001
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
+    if bool(conf.get("init")):
+        return False
     targets = parse_targets(conf)
     if targets is None:
         return True
@@ -186,6 +188,16 @@ def create_dw_extractor_dag() -> DAG:
     )
 
     with dag:
+        def _should_run_extractor(**context) -> bool:  # noqa: ANN001
+            dag_run = context.get("dag_run")
+            conf = getattr(dag_run, "conf", None) or {}
+            return not bool(conf.get("init"))
+
+        run_guard = ShortCircuitOperator(
+            task_id="should_run_extractor",
+            python_callable=_should_run_extractor,
+        )
+
         groups: list[TaskGroup] = []
         for spec in specs:
             with TaskGroup(group_id=spec.target) as group:
@@ -217,6 +229,7 @@ def create_dw_extractor_dag() -> DAG:
 
             # Expose groups at DAG level
             group  # noqa: B018
+            run_guard >> group
             groups.append(group)
 
         all_done = EmptyOperator(task_id="all_done", trigger_rule=TriggerRule.ALL_DONE)
@@ -229,6 +242,9 @@ def create_dw_extractor_dag() -> DAG:
             conf={
                 "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
                 "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+                "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
+                "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
+                "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
             },
         )
         for group in groups:

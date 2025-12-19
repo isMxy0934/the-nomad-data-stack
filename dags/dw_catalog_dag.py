@@ -71,6 +71,9 @@ def create_catalog_dag() -> DAG:
             conf={
                 "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
                 "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+                "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
+                "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
+                "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
             },
         )
 
