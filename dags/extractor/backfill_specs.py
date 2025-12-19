@@ -125,6 +125,9 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
         if pool_name == "":
             pool_name = None
 
+        symbol_allowlist = entry.get("symbol_allowlist")
+        allowlist = [str(s) for s in symbol_allowlist] if symbol_allowlist else None
+
         transformer = entry.get("compact_transformer")
         transformer_ref = str(transformer).strip() if transformer is not None else None
         if transformer_ref == "":
@@ -141,6 +144,7 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
                 pieces_base_prefix=pieces_base_prefix,
                 daily_key_template=daily_key_template,
                 pool=pool_name,
+                symbol_allowlist=allowlist,
                 compact_transformer=transformer_ref,
             )
         )

@@ -36,7 +36,7 @@ from dags.extractor.backfill_specs import (
     load_backfill_specs,
 )
 from dags.utils.etl_utils import cleanup_dataset, commit_dataset
-from dags.utils.partition_utils import build_partition_paths
+from dags.utils.partition_utils import build_partition_paths, parse_s3_uri
 
 
 def _resolve_callable(ref: str) -> Callable[..., object]:
@@ -180,7 +180,10 @@ def create_dw_extractor_compact_dag() -> DAG:
                 )
 
                 # Write to standardized tmp location
-                tmp_key = f"{paths.tmp_partition_prefix}/data.csv"
+                # paths.tmp_partition_prefix is a URI (s3://...), we need the key
+                _, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
+                tmp_key = f"{tmp_prefix_key.strip('/')}/data.csv"
+                
                 csv_bytes = df.to_csv(index=False).encode("utf-8")
                 s3_hook.load_bytes(
                     bytes_data=csv_bytes,
@@ -202,6 +205,8 @@ def create_dw_extractor_compact_dag() -> DAG:
                     "tmp_partition_prefix": paths.tmp_partition_prefix,
                     "canonical_prefix": paths.canonical_prefix,
                     "tmp_prefix": paths.tmp_prefix,
+                    "manifest_path": paths.manifest_path,
+                    "success_flag_path": paths.success_flag_path,
                 }
 
                 commit_dataset(
