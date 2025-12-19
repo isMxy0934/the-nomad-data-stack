@@ -23,6 +23,7 @@
 - **M0 基础可运行**：本地 `docker compose up` 后 Airflow/MinIO/Postgres 可用，Extractor DAG 可写入 MinIO。
 - **M1 ODS 打通**：ODS Loader 能从 MinIO 读原始数据（CSV）→ DuckDB 执行 SQL → 写 ODS 分区 Parquet → 写 `_SUCCESS` 完成标记。
 - **M2 DW 打通（配置驱动）**：基于 `dags/dw_config.yaml` + `dags/{layer}/*.sql`（目录即配置）生成每层独立 DAG（`dw_{layer}`）；空层（无 SQL/目录不存在）跳过；任务运行时只读 attach DuckDB catalog 以支持 `SELECT * FROM ods.xxx`；像 ODS 一样执行（DuckDB 计算 → tmp 写入 → validate → publish → `_SUCCESS` → cleanup）。
+- **M2 DW 回填入口**：`dw_start_dag` 支持 `start_date/end_date/targets`，按日回放并向下游传递分区日期与目标表。
 - **M3 治理与运维**：小文件 compaction、schema 校验与演进、失败重试与回放、可观测与审计完善。
 
 ---

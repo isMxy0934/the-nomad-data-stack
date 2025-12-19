@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from collections.abc import Mapping, Sequence
 
 from airflow import DAG
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
@@ -42,6 +44,22 @@ SQL_BASE_DIR = Path(__file__).parent
 CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
 
 logger = logging.getLogger(__name__)
+
+
+def _conf_targets(context: Mapping[str, Any]) -> set[str] | None:
+    dag_run = context.get("dag_run")
+    conf = dag_run.conf if dag_run else {}
+    raw = conf.get("targets") if conf else None
+    if raw is None or raw == "" or raw == "None" or raw == "null":
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("dag_run.conf.targets must be a JSON list of strings") from exc
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        raise ValueError("dag_run.conf.targets must be a list of strings")
+    return {str(t) for t in raw}
 
 
 def _attach_catalog_if_available(connection) -> None:
@@ -114,6 +132,17 @@ def load_table(
         ti.xcom_push(key="load_metrics", value=metrics)
         return metrics
 
+    def skipped_metrics(*, partitioned: bool) -> dict[str, int]:
+        metrics = {
+            "row_count": 0,
+            "file_count": 0,
+            "has_data": 0,
+            "partitioned": int(partitioned),
+            "skipped": 1,
+        }
+        ti.xcom_push(key="load_metrics", value=metrics)
+        return metrics
+
     def ensure_table_registered(connection) -> None:
         check_sql = f"""
             SELECT COUNT(*)
@@ -157,6 +186,10 @@ def load_table(
         return len(list_parquet_keys(s3_hook, destination_prefix))
 
     ti = context["ti"]
+    targets = _conf_targets(context)
+    if targets is not None and table_spec.name not in targets:
+        logger.info("Skipping table %s (not in targets).", table_spec.name)
+        return skipped_metrics(partitioned=table_spec.is_partitioned)
     paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
     partitioned = bool(paths_dict.get("partitioned"))
     partition_date = paths_dict.get("partition_date")
@@ -268,6 +301,10 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     trigger_dag_id=f"dw_{ds_layer}",
                     wait_for_completion=False,
                     reset_dag_run=True,
+                    conf={
+                        "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                        "targets": "{{ dag_run.conf.get('targets') | tojson if dag_run and dag_run.conf else None }}",
+                    },
                 )
                 for tg in task_groups.values():
                     tg >> trigger
@@ -277,6 +314,10 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 trigger_dag_id="dw_finish_dag",
                 wait_for_completion=False,
                 reset_dag_run=True,
+                conf={
+                    "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                    "targets": "{{ dag_run.conf.get('targets') | tojson if dag_run and dag_run.conf else None }}",
+                },
             )
             for tg in task_groups.values():
                 tg >> trigger_finish

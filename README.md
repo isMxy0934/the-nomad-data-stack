@@ -45,6 +45,19 @@ docker compose up -d
 - `dw_extractor_compact_dag`：回填合并（扫描 backfill，全量覆盖写入 daily 的 `data.csv`）
 - `dw_finish_dag`：链路结束占位
 
+### DW 初始化与回填
+
+- 日增（默认）：不传参数触发 `dw_start_dag`，处理 `get_partition_date_str()` 对应的分区（T-1）。
+- 初始化/回填：触发 `dw_start_dag` 并传参：
+  - 必填：`start_date`、`targets`
+  - 可选：`end_date`（不填则默认 `get_partition_date_str()`）
+  - 规则：`start_date <= end_date`，将按天遍历分区
+
+示例：
+```json
+{"start_date":"2025-01-01","end_date":"2025-01-07","targets":["ods_daily_fund_price_akshare","dwd_daily_stock_price"]}
+```
+
 ### 目录速览
 
 - `dags/dw_config.yaml`：层依赖 + ODS sources（表清单）
