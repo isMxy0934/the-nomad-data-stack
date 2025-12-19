@@ -180,7 +180,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
         catchup=False,
         tags=["extractor", "backfill"],
         max_active_runs=1,
-        max_active_tasks=1,
+        max_active_tasks=4,
     )
 
     with dag:
