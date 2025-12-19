@@ -251,7 +251,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                         base_prefix=base_prefix,
                         run_id=unique_run_id,
                         is_partitioned=is_partitioned,
-                        partition_date=partition_date
+                        partition_date=partition_date,
                     )
 
                 prepare = PythonOperator.partial(
