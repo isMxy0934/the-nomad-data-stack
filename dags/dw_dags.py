@@ -10,7 +10,8 @@ from typing import Any
 from collections.abc import Mapping
 
 from airflow import DAG
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 
@@ -36,7 +37,7 @@ from dags.utils.etl_utils import (
     build_s3_connection_config,
     list_parquet_keys,
 )
-from dags.utils.dag_run_utils import parse_targets
+from dags.utils.dag_run_utils import build_downstream_conf, parse_targets
 from dags.utils.sql_utils import load_and_render_sql
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
@@ -292,36 +293,31 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     "Layer '%s' depends on %s but has no tables; skipping trigger.", ds_layer, layer
                 )
 
+        def _trigger_downstream(dag_id: str, **context: Any) -> None:
+            dag_run = context.get("dag_run")
+            conf = build_downstream_conf(dag_run.conf if dag_run else {})
+            run_id = f"{dag_id}__{conf.get('partition_date') or 'unknown'}"
+            trigger_dag(
+                dag_id=dag_id,
+                run_id=run_id,
+                conf=conf,
+                replace_microseconds=False,
+            )
+
         if valid_downstream:
             for ds_layer in valid_downstream:
-                trigger = TriggerDagRunOperator(
+                trigger = PythonOperator(
                     task_id=f"trigger_dw_{ds_layer}",
-                    trigger_dag_id=f"dw_{ds_layer}",
-                    wait_for_completion=False,
-                    reset_dag_run=True,
-                    conf={
-                        "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
-                        "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
-                        "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
-                        "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
-                        "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
-                    },
+                    python_callable=_trigger_downstream,
+                    op_kwargs={"dag_id": f"dw_{ds_layer}"},
                 )
                 for tg in task_groups.values():
                     tg >> trigger
         else:
-            trigger_finish = TriggerDagRunOperator(
+            trigger_finish = PythonOperator(
                 task_id="trigger_dw_finish",
-                trigger_dag_id="dw_finish_dag",
-                wait_for_completion=False,
-                reset_dag_run=True,
-                conf={
-                    "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
-                    "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
-                    "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
-                    "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
-                    "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
-                },
+                python_callable=_trigger_downstream,
+                op_kwargs={"dag_id": "dw_finish_dag"},
             )
             for tg in task_groups.values():
                 tg >> trigger_finish

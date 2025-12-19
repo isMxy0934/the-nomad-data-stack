@@ -49,3 +49,17 @@ def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
         if "." not in target:
             raise ValueError("dag_run.conf.targets must use layer.table format")
     return targets
+
+
+def build_downstream_conf(conf: dict[str, Any] | None) -> dict[str, object]:
+    """Build a normalized conf payload for downstream DAGs."""
+
+    conf = conf or {}
+    targets = parse_targets(conf) or []
+    return {
+        "partition_date": conf.get("partition_date"),
+        "start_date": conf.get("start_date"),
+        "end_date": conf.get("end_date"),
+        "init": conf.get("init"),
+        "targets": targets,
+    }
