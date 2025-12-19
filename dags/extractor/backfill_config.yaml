@@ -12,5 +12,5 @@ backfill_extractors:
     daily_key_template: "lake/raw/daily/fund_price/akshare/dt={TRADE_DATE}/data.csv"
     pool: "akshare_pool"
     # Optional: limit to specific symbols. If null/empty, runs all.
-    symbol_allowlist: null
+    symbol_allowlist: ['sh513770']
     compact_transformer: "dags.extractor.expect.expects:dedupe_trade_date_symbol"

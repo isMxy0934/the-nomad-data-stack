@@ -20,7 +20,7 @@
     *   **禁止**：不要将其重构为 Airflow `{{ ds }}` 或 `{{ data_interval_start }}`，除非你准备重写所有 SQL 模板和回填逻辑。
 
 2.  **Commit Protocol（非原子）**：
-    *   代码逻辑：`dags/utils/partition_utils.py` 中的 `publish_partition` 执行顺序是：`_delete_prefix` -> `_copy_prefix`。
+    *   代码逻辑：`dags/utils/partition_utils.py` 中的 `publish_partition` 执行顺序是：`delete_prefix` -> `_copy_prefix`。
     *   原因：纯 S3 架构不支持原子重命名（Atomic Rename）。
     *   **禁止**：不要试图引入“先写后切指针”的复杂逻辑（除非引入 Hive Metastore/Iceberg），也不要试图用 `OVERWRITE_OR_IGNORE` 替代 Delete。我们接受极小概率的数据丢失风险（Delete 成功 Copy 失败）。
 
@@ -30,7 +30,7 @@
 - 建议路径：
   - ODS：`lake/ods/{table}/dt=YYYY-MM-DD/*.parquet`
   - DW（DWD/DIM/ADS 等）：`lake/{layer}/{table}/dt=YYYY-MM-DD/*.parquet`
-  - 临时写入：`lake/ods/{table}/_tmp/run_{run_id}/dt=YYYY-MM-DD/*.parquet`
+  - 临时写入：`lake/{layer}/{table}/_tmp/run_{run_id}/dt=YYYY-MM-DD/*.parquet`（所有层统一）
 - 下游依赖：以 `_SUCCESS` / `manifest.json` 为完成标记，避免读到写入中间态；M2 约定“无 `_SUCCESS` 视为无数据”，由编排保证上游失败不触发下游。
 
 ## 写入与提交协议（Commit Protocol）
@@ -55,6 +55,7 @@
 - 迁移：`catalog/migrations/*.sql` → 写入 `catalog_meta.schema_migrations`（只记录文件名+checksum+时间）。
 - 刷新：扫描 `lake/ods`（或 `lake/_integration/ods`）创建/更新 `ods.*` 视图与 `ods.<table>_dt()` 宏。
 - 单写者：维护 catalog 的任务请使用 Airflow pool `duckdb_catalog_pool`（slots=1），或串行执行脚本，避免同一 DuckDB 文件被并发写入导致锁冲突。
+- 只读挂载：DW 任务运行时以 `ATTACH ... (READ_ONLY)` 方式使用 catalog，避免写入。
 - 相关入口：
   - 脚本：`scripts/duckdb_catalog_migrate.py`、`scripts/duckdb_catalog_refresh.py`
   - DAG：`dags/dw_catalog_dag.py`
@@ -76,6 +77,7 @@
 
 - 优先复用 `dags/utils/*.py`，新功能尽量抽象为可复用工具。
 - SQL 模板必须参数化，至少支持 `${PARTITION_DATE}`。
+- 非 SQL 模板（如 extractor 的 `destination_key_template`）使用 `{PARTITION_DATE}`（Python `str.format`）。
 - 类型注解完整、错误处理充分、日志记录清晰。
 
 ## 质量保障（本地）
