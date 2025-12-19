@@ -20,6 +20,7 @@ def test_load_backfill_specs_validates_required_fields(tmp_path: Path) -> None:
 backfill_extractors:
   - target: x
     tags: ["extractor", "backfill"]
+    start_date: "2020-01-01"
     universe: {from_target: u, symbol_column: symbol}
     history_fetcher: "m:f"
     pieces_base_prefix: "lake/raw/backfill/x/y"
