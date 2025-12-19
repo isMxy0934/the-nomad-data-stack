@@ -81,10 +81,11 @@ with DAG(
             start_date = end_date
 
         partition_dates = _build_date_list(start_date, end_date)
+        targets_payload: list[str] | None = targets if targets is not None else []
         return [
             {
                 "partition_date": dt,
-                "targets": targets,
+                "targets": targets_payload,
                 "init": init_mode,
                 "start_date": start_date,
                 "end_date": end_date,
