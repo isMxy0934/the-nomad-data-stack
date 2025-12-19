@@ -227,6 +227,21 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 symbols = [str(s).strip() for s in df[col].dropna().tolist()]
                 symbols = [s for s in symbols if s]
 
+                # Apply allowlist filtering (from config file or dag_run.conf)
+                # 1. Check spec (yaml config)
+                allowlist = set(spec_obj.symbol_allowlist or [])
+                
+                # 2. Check dag_run.conf (runtime override)
+                runtime_allowlist = conf.get("symbol_allowlist")
+                if runtime_allowlist:
+                    if not isinstance(runtime_allowlist, list):
+                        raise ValueError("dag_run.conf.symbol_allowlist must be a list of strings")
+                    allowlist.update(str(s) for s in runtime_allowlist)
+                
+                if allowlist:
+                    symbols = [s for s in symbols if s in allowlist]
+                    logger.info("Filtered universe to %d symbols based on allowlist", len(symbols))
+
                 max_symbols = int(conf.get("max_symbols") or 0)
                 if max_symbols > 0:
                     symbols = symbols[:max_symbols]

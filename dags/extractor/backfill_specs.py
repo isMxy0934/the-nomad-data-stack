@@ -26,6 +26,7 @@ class BackfillExtractorSpec:
     pieces_base_prefix: str = ""  # key prefix without bucket
     daily_key_template: str = ""  # key path without bucket
     pool: str | None = None
+    symbol_allowlist: list[str] | None = None
     compact_transformer: str | None = None  # module:function
 
 
@@ -52,6 +53,9 @@ def backfill_spec_from_mapping(payload: Mapping[str, object]) -> BackfillExtract
         pieces_base_prefix=str(payload.get("pieces_base_prefix", "")).strip(),
         daily_key_template=str(payload.get("daily_key_template", "")).strip(),
         pool=str(payload.get("pool")).strip() if payload.get("pool") else None,
+        symbol_allowlist=[str(s) for s in (payload.get("symbol_allowlist") or [])]
+        if payload.get("symbol_allowlist")
+        else None,
         compact_transformer=str(payload.get("compact_transformer")).strip()
         if payload.get("compact_transformer")
         else None,
