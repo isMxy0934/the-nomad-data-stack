@@ -259,6 +259,7 @@ def build_etl_task_group(
     load_op_kwargs: dict[str, Any] | None = None,
     is_partitioned: bool = True,
     pool_name: str | None = None,
+    partition_date: str | None = None,
 ) -> TaskGroup:
     """Build a standard ETL task group (prepare -> load -> validate -> commit -> cleanup -> refresh).
 
@@ -271,6 +272,7 @@ def build_etl_task_group(
         load_op_kwargs: Arguments to pass to the load_callable.
         is_partitioned: Whether the dataset is partitioned by date.
         pool_name: Airflow pool to limit concurrency (single writer).
+        partition_date: Optional partition date (string or Jinja template).
 
     Returns:
         The constructed TaskGroup.
@@ -286,7 +288,7 @@ def build_etl_task_group(
                 "base_prefix": base_prefix,
                 "run_id": "{{ run_id }}",
                 "is_partitioned": is_partitioned,
-                "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                "partition_date": partition_date,
             },
             pool=pool_name,
         )
