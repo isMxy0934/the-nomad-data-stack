@@ -126,6 +126,14 @@ def load_backfill_specs(path: Path = BACKFILL_CONFIG_PATH) -> list[BackfillExtra
             pool_name = None
 
         symbol_allowlist = entry.get("symbol_allowlist")
+        if symbol_allowlist is not None:
+            if isinstance(symbol_allowlist, str):
+                raise ValueError(
+                    f"symbol_allowlist must be a list, not a string: '{symbol_allowlist}' for target={target}"
+                )
+            if not isinstance(symbol_allowlist, Sequence):
+                raise ValueError(f"symbol_allowlist must be a sequence/list for target={target}")
+
         allowlist = [str(s) for s in symbol_allowlist] if symbol_allowlist else None
 
         transformer = entry.get("compact_transformer")

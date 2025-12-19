@@ -43,12 +43,12 @@ from airflow.operators.python import get_current_context
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from dags.utils.time_utils import get_partition_date_str
 from dags.extractor.backfill_specs import (
     backfill_spec_from_mapping,
     load_backfill_specs,
 )
 from dags.extractor.dw_extractor_dag import load_extractor_specs
+from dags.utils.time_utils import get_partition_date_str
 
 logger = logging.getLogger(__name__)
 
@@ -230,14 +230,14 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 # Apply allowlist filtering (from config file or dag_run.conf)
                 # 1. Check spec (yaml config)
                 allowlist = set(spec_obj.symbol_allowlist or [])
-                
+
                 # 2. Check dag_run.conf (runtime override)
                 runtime_allowlist = conf.get("symbol_allowlist")
                 if runtime_allowlist:
                     if not isinstance(runtime_allowlist, list):
                         raise ValueError("dag_run.conf.symbol_allowlist must be a list of strings")
                     allowlist.update(str(s) for s in runtime_allowlist)
-                
+
                 if allowlist:
                     symbols = [s for s in symbols if s in allowlist]
                     logger.info("Filtered universe to %d symbols based on allowlist", len(symbols))
@@ -262,7 +262,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
 
                 if not start_date:
                     raise ValueError("dag_run.conf must provide start_date for backfill")
-                
+
                 if not end_date:
                     # Default to yesterday (partition date) if not specified
                     end_date = get_partition_date_str()
@@ -378,7 +378,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
 
                     # Atomic Write: tmp -> copy -> delete
                     tmp_key = f"{day_prefix}/_tmp/data.csv"
-                    
+
                     csv_bytes = day_df.to_csv(index=False).encode("utf-8")
                     s3_hook.load_bytes(
                         bytes_data=csv_bytes,
@@ -386,7 +386,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
                         bucket_name=DEFAULT_BUCKET_NAME,
                         replace=True,
                     )
-                    
+
                     # For backfill pieces, we assume we can overwrite (no need to clear directory as it's a single file)
                     s3_hook.copy_object(
                         source_bucket_key=tmp_key,
@@ -453,7 +453,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
                         shard_end_dt = date(shard_y + 1, 1, 1) - timedelta(days=1)
                     else:
                         shard_end_dt = date(shard_y, shard_m + 1, 1) - timedelta(days=1)
-                    
+
                     job_start_dt = date.fromisoformat(start_date)
                     job_end_dt = date.fromisoformat(end_date)
 
@@ -468,7 +468,11 @@ def create_dw_extractor_backfill_dag() -> DAG:
                     else:
                         logger.info(
                             "Skipping shard success mark for %s: job range %s~%s partial vs shard %s~%s",
-                            part_id, start_date, end_date, shard_start_dt, shard_end_dt
+                            part_id,
+                            start_date,
+                            end_date,
+                            shard_start_dt,
+                            shard_end_dt,
                         )
                 except ValueError:
                     # Fallback for non-monthly shards (e.g. 'full'), always write success

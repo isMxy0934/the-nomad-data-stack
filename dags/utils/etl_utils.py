@@ -225,7 +225,7 @@ def commit_dataset(
             manifest=manifest,
             write_success_flag=True,
         )
-    
+
     return publish_result, manifest
 
 
@@ -304,14 +304,18 @@ def build_etl_task_group(
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
             return validate_dataset(paths_dict, metrics, s3_hook)
 
-        def _commit_adapter(dest_name: str, run_id: str, task_group_id: str, **context: Any) -> dict[str, str]:
+        def _commit_adapter(
+            dest_name: str, run_id: str, task_group_id: str, **context: Any
+        ) -> dict[str, str]:
             ti = context["ti"]
             paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
             metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
             if not metrics:
                 raise ValueError("Load metrics are required to publish")
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-            publish_result, manifest = commit_dataset(dest_name, run_id, paths_dict, metrics, s3_hook)
+            publish_result, manifest = commit_dataset(
+                dest_name, run_id, paths_dict, metrics, s3_hook
+            )
             if manifest:
                 ti.xcom_push(key="manifest", value=manifest)
             return publish_result

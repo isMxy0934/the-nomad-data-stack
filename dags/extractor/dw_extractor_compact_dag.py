@@ -16,12 +16,11 @@ dag_run.conf (optional):
 from __future__ import annotations
 
 import importlib
-import json
 import logging
 import os
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from io import BytesIO
 
 import pandas as pd
@@ -56,7 +55,6 @@ DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
-
 
 
 def _parse_dt_from_key(key: str) -> str | None:
@@ -171,7 +169,7 @@ def create_dw_extractor_compact_dag() -> DAG:
                 # Standard ETL Flow via Utils
                 run_id = f"compact_{trade_date}"
                 base_prefix = spec_obj.daily_key_template.split("/dt=", 1)[0]
-                
+
                 paths = build_partition_paths(
                     base_prefix=base_prefix,
                     partition_date=trade_date,
@@ -179,25 +177,12 @@ def create_dw_extractor_compact_dag() -> DAG:
                     bucket_name=DEFAULT_BUCKET_NAME,
                 )
 
-                # Write to standardized tmp location
-                # paths.tmp_partition_prefix is a URI (s3://...), we need the key
-                _, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
-                tmp_key = f"{tmp_prefix_key.strip('/')}/data.csv"
-                
-                csv_bytes = df.to_csv(index=False).encode("utf-8")
-                s3_hook.load_bytes(
-                    bytes_data=csv_bytes,
-                    key=tmp_key,
-                    bucket_name=DEFAULT_BUCKET_NAME,
-                    replace=True,
-                )
-
                 metrics = {
                     "row_count": int(len(df)),
-                    "file_count": 1,
-                    "has_data": 1,
+                    "file_count": 0 if df.empty else 1,
+                    "has_data": 0 if df.empty else 1,
                 }
-                
+
                 # Mock paths_dict expected by etl_utils
                 paths_dict = {
                     "partitioned": True,
@@ -209,6 +194,20 @@ def create_dw_extractor_compact_dag() -> DAG:
                     "success_flag_path": paths.success_flag_path,
                 }
 
+                if metrics["has_data"]:
+                    # Write to standardized tmp location
+                    # paths.tmp_partition_prefix is a URI (s3://...), we need the key
+                    _, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
+                    tmp_key = f"{tmp_prefix_key.strip('/')}/data.csv"
+
+                    csv_bytes = df.to_csv(index=False).encode("utf-8")
+                    s3_hook.load_bytes(
+                        bytes_data=csv_bytes,
+                        key=tmp_key,
+                        bucket_name=DEFAULT_BUCKET_NAME,
+                        replace=True,
+                    )
+
                 commit_dataset(
                     dest_name=spec_obj.target,
                     run_id=run_id,
@@ -216,7 +215,7 @@ def create_dw_extractor_compact_dag() -> DAG:
                     metrics=metrics,
                     s3_hook=s3_hook,
                 )
-                
+
                 cleanup_dataset(paths_dict, s3_hook)
 
                 return {
