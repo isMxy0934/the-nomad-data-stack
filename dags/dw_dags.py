@@ -343,6 +343,8 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 reset_dag_run=True,
                 conf={
                     "partition_date": "{{ dag_run.conf.get('partition_date') }}",
+                    "start_date": "{{ dag_run.conf.get('start_date') }}",
+                    "end_date": "{{ dag_run.conf.get('end_date') }}",
                     "init": "{{ dag_run.conf.get('init') }}",
                 },
             )

@@ -54,7 +54,6 @@ with DAG(
         return {
             "start_date": start_date,
             "end_date": end_date,
-            "partition_date": end_date,
             "targets": targets or [],
             "init": True
         }
