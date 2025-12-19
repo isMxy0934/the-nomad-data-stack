@@ -20,15 +20,15 @@ from pathlib import Path
 import yaml
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.api.common.trigger_dag import trigger_dag
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
 from dags.utils.extractor_utils import CsvPayload, ExtractorSpec
 from dags.utils.s3_utils import S3Uploader
 from dags.utils.time_utils import get_partition_date_str
-from dags.utils.dag_run_utils import build_downstream_conf, parse_targets
+from dags.utils.dag_run_utils import parse_targets
 
 logger = logging.getLogger(__name__)
 
@@ -233,23 +233,23 @@ def create_dw_extractor_dag() -> DAG:
             groups.append(group)
 
         all_done = EmptyOperator(task_id="all_done", trigger_rule=TriggerRule.ALL_DONE)
-        def _trigger_catalog(**context) -> None:  # noqa: ANN001
-            dag_run = context.get("dag_run")
-            conf = build_downstream_conf(dag_run.conf if dag_run else {})
-            run_id = f"dw_extractor__catalog__{conf.get('partition_date') or 'unknown'}"
-            trigger_dag(
-                dag_id="dw_catalog_dag",
-                run_id=run_id,
-                conf=conf,
-                replace_microseconds=False,
-            )
+        trigger_catalog = TriggerDagRunOperator(
+            task_id="trigger_dw_catalog_dag",
+            trigger_dag_id="dw_catalog_dag",
+            wait_for_completion=False,
+            reset_dag_run=True,
+            trigger_rule=TriggerRule.ALL_DONE,
+            conf={
+                "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+                "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
+                "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
+                "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
+            },
+        )
         for group in groups:
             group >> all_done
-        all_done >> PythonOperator(
-            task_id="trigger_dw_catalog_dag",
-            python_callable=_trigger_catalog,
-            trigger_rule=TriggerRule.ALL_DONE,
-        )
+        all_done >> trigger_catalog
 
     return dag
 

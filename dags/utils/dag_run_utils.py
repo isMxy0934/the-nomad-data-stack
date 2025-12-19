@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from collections.abc import Sequence
 from typing import Any
@@ -30,8 +31,11 @@ def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
         try:
             raw = json.loads(text)
         except json.JSONDecodeError:
-            # Not JSON, keep as-is to validate below.
-            break
+            # Try Python literal list string (e.g. "['a', 'b']").
+            try:
+                raw = ast.literal_eval(text)
+            except (SyntaxError, ValueError):
+                break
 
     if raw is None:
         return None

@@ -4,9 +4,9 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from airflow import DAG
-from airflow.api.common.trigger_dag import trigger_dag
 from airflow.decorators import task
 from airflow.operators.python import get_current_context
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from dags.utils.time_utils import get_partition_date_str
 
@@ -84,13 +84,12 @@ with DAG(
                 "init": True,
                 "targets": targets,
             }
-            run_id = f"dw_init__extractor__{dt}"
-            trigger_dag(
-                dag_id="dw_extractor_dag",
-                run_id=run_id,
+            TriggerDagRunOperator(
+                task_id=f"trigger_dw_extractor_dag_{dt}",
+                trigger_dag_id="dw_extractor_dag",
+                reset_dag_run=True,
                 conf=run_conf,
-                replace_microseconds=False,
-            )
+            ).execute(context={})
             triggered += 1
         return triggered
 

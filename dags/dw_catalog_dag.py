@@ -13,13 +13,12 @@ from typing import Any
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.api.common.trigger_dag import trigger_dag
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.utils.catalog_migrations import apply_migrations
 from dags.utils.duckdb_utils import configure_s3_access, create_temporary_connection
 from dags.utils.etl_utils import build_s3_connection_config
-from dags.utils.dag_run_utils import build_downstream_conf
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
@@ -64,20 +63,18 @@ def create_catalog_dag() -> DAG:
             },
         )
 
-        def _trigger_ods(**context) -> None:  # noqa: ANN001
-            dag_run = context.get("dag_run")
-            conf = build_downstream_conf(dag_run.conf if dag_run else {})
-            run_id = f"dw_catalog__ods__{conf.get('partition_date') or 'unknown'}"
-            trigger_dag(
-                dag_id="dw_ods",
-                run_id=run_id,
-                conf=conf,
-                replace_microseconds=False,
-            )
-
-        trigger_ods = PythonOperator(
+        trigger_ods = TriggerDagRunOperator(
             task_id="trigger_dw_ods",
-            python_callable=_trigger_ods,
+            trigger_dag_id="dw_ods",
+            wait_for_completion=False,
+            reset_dag_run=True,
+            conf={
+                "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+                "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
+                "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
+                "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
+            },
         )
 
         migrate >> trigger_ods
