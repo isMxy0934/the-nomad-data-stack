@@ -107,10 +107,14 @@ def prepare_dataset(
     run_id: str,
     is_partitioned: bool = True,
     bucket_name: str = DEFAULT_BUCKET_NAME,
+    partition_date: str | None = None,
     **_: Any,
 ) -> dict[str, Any]:
     """Prepare generic paths for a dataset write operation."""
-    partition_date = get_partition_date_str()
+    if partition_date is None or str(partition_date).strip() in {"", "None", "null"}:
+        partition_date = get_partition_date_str()
+    else:
+        partition_date = str(partition_date).strip()
 
     if is_partitioned:
         paths = build_partition_paths(
@@ -282,6 +286,7 @@ def build_etl_task_group(
                 "base_prefix": base_prefix,
                 "run_id": "{{ run_id }}",
                 "is_partitioned": is_partitioned,
+                "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
             },
             pool=pool_name,
         )
@@ -310,6 +315,8 @@ def build_etl_task_group(
             metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
             if not metrics:
                 raise ValueError("Load metrics are missing")
+            if metrics.get("skipped"):
+                return dict(metrics)
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
             return validate_dataset(paths_dict, metrics, s3_hook)
 
@@ -321,6 +328,9 @@ def build_etl_task_group(
             metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
             if not metrics:
                 raise ValueError("Load metrics are required to publish")
+            if metrics.get("skipped"):
+                logger.info("Skipping publish for %s (marked skipped).", dest_name)
+                return {"published": "0", "action": "skipped"}
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
             publish_result, manifest = commit_dataset(
                 dest_name, run_id, paths_dict, metrics, s3_hook

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 
+from dags.utils.dag_run_utils import parse_targets
 from dags.utils.duckdb_utils import (
     configure_s3_access,
     copy_parquet,
@@ -42,6 +44,20 @@ SQL_BASE_DIR = Path(__file__).parent
 CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
 
 logger = logging.getLogger(__name__)
+
+
+def _conf_targets(context: Mapping[str, Any]) -> list[str] | None:
+    dag_run = context.get("dag_run")
+    conf = dag_run.conf if dag_run else {}
+    return parse_targets(conf)
+
+
+def _target_matches(table_spec: TableSpec, target: str) -> bool:
+    target = target.strip()
+    if not target or "." not in target:
+        return False
+    layer, name = target.split(".", 1)
+    return layer == table_spec.layer and name == table_spec.name
 
 
 def _attach_catalog_if_available(connection) -> None:
@@ -114,6 +130,17 @@ def load_table(
         ti.xcom_push(key="load_metrics", value=metrics)
         return metrics
 
+    def skipped_metrics(*, partitioned: bool) -> dict[str, int]:
+        metrics = {
+            "row_count": 0,
+            "file_count": 0,
+            "has_data": 0,
+            "partitioned": int(partitioned),
+            "skipped": 1,
+        }
+        ti.xcom_push(key="load_metrics", value=metrics)
+        return metrics
+
     def ensure_table_registered(connection) -> None:
         check_sql = f"""
             SELECT COUNT(*)
@@ -157,6 +184,10 @@ def load_table(
         return len(list_parquet_keys(s3_hook, destination_prefix))
 
     ti = context["ti"]
+    targets = _conf_targets(context)
+    if targets is not None and not any(_target_matches(table_spec, t) for t in targets):
+        logger.info("Skipping table %s (not in targets).", table_spec.name)
+        return skipped_metrics(partitioned=table_spec.is_partitioned)
     paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
     partitioned = bool(paths_dict.get("partitioned"))
     partition_date = paths_dict.get("partition_date")
@@ -268,6 +299,13 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     trigger_dag_id=f"dw_{ds_layer}",
                     wait_for_completion=False,
                     reset_dag_run=True,
+                    conf={
+                        "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                        "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+                        "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
+                        "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
+                        "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
+                    },
                 )
                 for tg in task_groups.values():
                     tg >> trigger
@@ -277,6 +315,13 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 trigger_dag_id="dw_finish_dag",
                 wait_for_completion=False,
                 reset_dag_run=True,
+                conf={
+                    "partition_date": "{{ dag_run.conf.get('partition_date') if dag_run and dag_run.conf else None }}",
+                    "targets": "{{ dag_run.conf.get('targets') if dag_run and dag_run.conf else None }}",
+                    "init": "{{ dag_run.conf.get('init') if dag_run and dag_run.conf else None }}",
+                    "start_date": "{{ dag_run.conf.get('start_date') if dag_run and dag_run.conf else None }}",
+                    "end_date": "{{ dag_run.conf.get('end_date') if dag_run and dag_run.conf else None }}",
+                },
             )
             for tg in task_groups.values():
                 tg >> trigger_finish

@@ -2,10 +2,15 @@ import os
 from datetime import datetime
 
 from airflow import DAG
+from airflow.models.xcom_arg import XComArg
+from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
+from dags.utils.time_utils import get_partition_date_str
+
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-Trigger_DAG_ID = "dw_extractor_dag"
+
+
 with DAG(
     dag_id=DAG_ID,
     start_date=datetime(2024, 1, 1),
@@ -13,8 +18,27 @@ with DAG(
     catchup=False,
     tags=["orchestration"],
 ) as dag:
-    trigger_catalog = TriggerDagRunOperator(
-        task_id=f"trigger_{Trigger_DAG_ID}",
-        trigger_dag_id=Trigger_DAG_ID,
-        reset_dag_run=True,
+
+    def build_run_conf() -> dict[str, object]:
+        partition_date = get_partition_date_str()
+        return {
+            "partition_date": partition_date,
+            "start_date": partition_date,
+            "end_date": partition_date,
+            "init": False,
+            "targets": [],
+        }
+
+    build_conf = PythonOperator(
+        task_id="build_run_conf",
+        python_callable=build_run_conf,
     )
+
+    trigger_extractor = TriggerDagRunOperator(
+        task_id="trigger_dw_extractor_dag",
+        trigger_dag_id="dw_extractor_dag",
+        reset_dag_run=True,
+        conf=XComArg(build_conf),
+    )
+
+    build_conf >> trigger_extractor

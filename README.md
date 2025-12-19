@@ -17,9 +17,13 @@ docker compose up -d
 - MinIO：`http://localhost:9001`（默认 `minioadmin/minioadmin`）
 
 4) 跑一条完整链路（推荐触发“总开关” DAG）：
-- 在 Airflow UI 手动触发 `dw_start_dag`
-  - 它会触发 `dw_catalog_dag`（应用 DuckDB catalog migrations）
-  - 然后触发 `dw_ods`，再按 `dags/dw_config.yaml` 的层依赖顺序触发 `dw_{layer}`
+- 日增：在 Airflow UI 手动触发 `dw_start_dag`
+  - 它会触发 `dw_extractor_dag`
+  - extractor 完成后触发 `dw_catalog_dag`（应用 DuckDB catalog migrations）
+  - catalog 完成后触发 `dw_ods`，再按 `dags/dw_config.yaml` 的层依赖顺序触发 `dw_{layer}`
+- 初始化/回填：触发 `dw_init_dag`（推荐使用 Trigger DAG w/ config 表单）
+  - 必须填写 `start_date`
+  - `targets` 留空则全量运行所有表，或指定特定表初始化
 
 5) 验证产物：
 - 在 MinIO bucket（默认 `stock-data`）里查看 `lake/ods/.../dt=YYYY-MM-DD/` 下是否有 `*.parquet`、`manifest.json`、`_SUCCESS`
@@ -36,7 +40,8 @@ docker compose up -d
 
 ### 常用 DAG
 
-- `dw_start_dag`：一键跑“catalog → ods → dw 全链路”
+- `dw_start_dag`：日增入口（触发 extractor → catalog → ods → dw）
+- `dw_init_dag`：初始化/回填入口（有 UI 表单，触发 catalog → ods → dw，不触发 extractor）
 - `dw_catalog_dag`：应用 catalog migrations（metadata-only）
 - `dw_ods`：ODS 层（CSV → Parquet 分区）
 - `dw_{layer}`：DW 各层 DAG（如 `dw_dwd`、`dw_ads`），由 `dags/dw_dags.py` 动态生成
@@ -44,6 +49,20 @@ docker compose up -d
 - `dw_extractor_backfill_dag`：历史回填（写入 `lake/raw/backfill/.../dt=.../symbol=.../data.csv` + `_SUCCESS`）
 - `dw_extractor_compact_dag`：回填合并（扫描 backfill，全量覆盖写入 daily 的 `data.csv`）
 - `dw_finish_dag`：链路结束占位
+
+### DW 初始化与回填
+
+- 日增（默认）：不传参数触发 `dw_start_dag`，处理 `get_partition_date_str()` 对应的分区（T-1）。
+- 初始化/回填：触发 `dw_init_dag`（建议使用 Airflow UI 提供的参数表单）：
+  - 必填：`start_date`
+  - 可选：`end_date`（不填则默认等于 `start_date`）
+  - 可选：`targets`（留空则运行所有表；填写则必须是 `layer.table` 形式，如 `ods.fund_price_akshare`）
+  - 规则：`start_date <= end_date`，将按天遍历分区，并行触发 `dw_catalog_dag` 进而刷新下游
+
+示例（如需手动传 JSON）：
+```json
+{"start_date":"2025-01-01","end_date":"2025-01-07","targets":[]}
+```
 
 ### 目录速览
 
