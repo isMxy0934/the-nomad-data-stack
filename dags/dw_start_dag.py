@@ -25,7 +25,17 @@ def _parse_targets(conf: dict[str, Any]) -> list[str] | None:
             raise ValueError("dag_run.conf.targets must be a JSON list of strings") from exc
     if not isinstance(raw, list):
         raise ValueError("dag_run.conf.targets must be a list of strings")
-    return [str(t) for t in raw]
+    targets: list[str] = []
+    for target in raw:
+        value = str(target).strip()
+        if not value:
+            continue
+        if "*" in value:
+            raise ValueError("dag_run.conf.targets does not support wildcard targets")
+        if "." not in value:
+            raise ValueError("dag_run.conf.targets must use layer.table format")
+        targets.append(value)
+    return targets or None
 
 
 def _build_date_list(start: str, end: str) -> list[str]:
@@ -61,8 +71,6 @@ with DAG(
         if start_date or end_date:
             if not start_date:
                 raise ValueError("start_date is required when end_date is provided")
-            if targets is None:
-                raise ValueError("targets must be provided for backfill runs")
             if not end_date:
                 end_date = get_partition_date_str()
         else:

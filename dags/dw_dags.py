@@ -46,7 +46,7 @@ CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
 logger = logging.getLogger(__name__)
 
 
-def _conf_targets(context: Mapping[str, Any]) -> set[str] | None:
+def _conf_targets(context: Mapping[str, Any]) -> list[str] | None:
     dag_run = context.get("dag_run")
     conf = dag_run.conf if dag_run else {}
     raw = conf.get("targets") if conf else None
@@ -59,7 +59,23 @@ def _conf_targets(context: Mapping[str, Any]) -> set[str] | None:
             raise ValueError("dag_run.conf.targets must be a JSON list of strings") from exc
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         raise ValueError("dag_run.conf.targets must be a list of strings")
-    return {str(t) for t in raw}
+    targets = [str(t).strip() for t in raw if str(t).strip()]
+    if not targets:
+        return None
+    for target in targets:
+        if "*" in target:
+            raise ValueError("dag_run.conf.targets does not support wildcard targets")
+        if "." not in target:
+            raise ValueError("dag_run.conf.targets must use layer.table format")
+    return targets
+
+
+def _target_matches(table_spec: TableSpec, target: str) -> bool:
+    target = target.strip()
+    if not target or "." not in target:
+        return False
+    layer, name = target.split(".", 1)
+    return layer == table_spec.layer and name == table_spec.name
 
 
 def _attach_catalog_if_available(connection) -> None:
@@ -187,7 +203,7 @@ def load_table(
 
     ti = context["ti"]
     targets = _conf_targets(context)
-    if targets is not None and table_spec.name not in targets:
+    if targets is not None and not any(_target_matches(table_spec, t) for t in targets):
         logger.info("Skipping table %s (not in targets).", table_spec.name)
         return skipped_metrics(partitioned=table_spec.is_partitioned)
     paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
