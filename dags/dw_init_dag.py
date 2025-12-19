@@ -4,6 +4,7 @@ from typing import Any
 
 from airflow import DAG
 from airflow.decorators import task
+from airflow.models.param import Param
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from dags.utils.dag_run_utils import parse_targets
@@ -31,21 +32,42 @@ with DAG(
     schedule=None,
     catchup=False,
     tags=["orchestration", "init"],
+    params={
+        "start_date": Param(
+            default=get_partition_date_str(),
+            type="string",
+            format="date",
+            description="Start date (YYYY-MM-DD)",
+        ),
+        "end_date": Param(
+            default=get_partition_date_str(),
+            type="string",
+            format="date",
+            description="End date (YYYY-MM-DD). Defaults to start_date if empty.",
+        ),
+        "targets": Param(
+            default=[],
+            type="array",
+            description="List of targets to init (e.g. ['fund_price_akshare'])",
+        ),
+    },
 ) as dag:
 
     @task
     def generate_run_confs(**context: Any) -> list[dict[str, Any]]:
-        dag_run = context.get("dag_run")
-        conf = (dag_run.conf or {}) if dag_run else {}
-
+        # context["params"] contains the validated form values
+        params = context.get("params") or {}
+        
         # 1. Validate inputs
-        start_date = str(conf.get("start_date") or "").strip()
-        end_date = str(conf.get("end_date") or "").strip()
-        targets = parse_targets(conf)
+        start_date = str(params.get("start_date") or "").strip()
+        end_date = str(params.get("end_date") or "").strip()
+        
+        # parse_targets expects a dict like {'targets': ...}
+        targets = parse_targets(params)
 
         if not targets:
             raise ValueError(
-                "Init run requires 'targets' (e.g., {'targets': ['fund_price_akshare']})"
+                "Init run requires 'targets' (e.g., ['fund_price_akshare'])"
             )
         if not start_date:
             raise ValueError(
@@ -53,7 +75,7 @@ with DAG(
             )
 
         if not end_date:
-            end_date = get_partition_date_str()
+            end_date = start_date
 
         # 2. Build configurations for each date
         partition_dates = _build_date_list(start_date, end_date)
