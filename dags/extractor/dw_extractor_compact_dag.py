@@ -35,13 +35,8 @@ from dags.extractor.backfill_specs import (
     backfill_spec_from_mapping,
     load_backfill_specs,
 )
-
-logger = logging.getLogger(__name__)
-
-DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
-
-DEFAULT_AWS_CONN_ID = "MINIO_S3"
-DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
+from dags.utils.etl_utils import cleanup_dataset, commit_dataset
+from dags.utils.partition_utils import build_partition_paths
 
 
 def _resolve_callable(ref: str) -> Callable[..., object]:
@@ -53,6 +48,15 @@ def _resolve_callable(ref: str) -> Callable[..., object]:
     if fn is None or not callable(fn):
         raise ValueError(f"Callable not found or not callable: {ref}")
     return fn
+
+
+logger = logging.getLogger(__name__)
+
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
+
+DEFAULT_AWS_CONN_ID = "MINIO_S3"
+DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
+
 
 
 def _parse_dt_from_key(key: str) -> str | None:
@@ -164,16 +168,19 @@ def create_dw_extractor_compact_dag() -> DAG:
                     else:
                         df = transformed
 
-                daily_key = spec_obj.daily_key_template.format(
-                    TRADE_DATE=trade_date, PARTITION_DATE=trade_date
-                ).lstrip("/")
-                daily_dir = daily_key.rsplit("/", 1)[0]
+                # Standard ETL Flow via Utils
+                run_id = f"compact_{trade_date}"
+                base_prefix = spec_obj.daily_key_template.split("/dt=", 1)[0]
                 
-                # Safe Commit Protocol:
-                # 1. Write to isolated tmp location
-                tmp_dir = f"{daily_dir}/_tmp/compact_{trade_date}"
-                tmp_key = f"{tmp_dir}/data.csv"
-                
+                paths = build_partition_paths(
+                    base_prefix=base_prefix,
+                    partition_date=trade_date,
+                    run_id=run_id,
+                    bucket_name=DEFAULT_BUCKET_NAME,
+                )
+
+                # Write to standardized tmp location
+                tmp_key = f"{paths.tmp_partition_prefix}/data.csv"
                 csv_bytes = df.to_csv(index=False).encode("utf-8")
                 s3_hook.load_bytes(
                     bytes_data=csv_bytes,
@@ -182,48 +189,30 @@ def create_dw_extractor_compact_dag() -> DAG:
                     replace=True,
                 )
 
-                # 2. Clear canonical prefix (remove old files)
-                # Note: list_keys might return None if empty
-                existing_keys = s3_hook.list_keys(bucket_name=DEFAULT_BUCKET_NAME, prefix=daily_dir + "/") or []
-                if existing_keys:
-                    s3_hook.delete_objects(bucket=DEFAULT_BUCKET_NAME, keys=existing_keys)
-
-                # 3. Promote tmp to canonical
-                s3_hook.copy_object(
-                    source_bucket_key=tmp_key,
-                    dest_bucket_key=daily_key,
-                    source_bucket_name=DEFAULT_BUCKET_NAME,
-                    dest_bucket_name=DEFAULT_BUCKET_NAME,
-                )
-
-                # 4. Write completion markers
-                manifest_key = f"{daily_dir}/manifest.json"
-                success_key = f"{daily_dir}/_SUCCESS"
-                
-                manifest = {
-                    "target": spec_obj.target,
-                    "trade_date": trade_date,
-                    "symbol_file_count": int(len(data_keys)),
+                metrics = {
                     "row_count": int(len(df)),
-                    "source_prefix": f"s3://{DEFAULT_BUCKET_NAME}/{day_prefix}",
-                    "output": f"s3://{DEFAULT_BUCKET_NAME}/{daily_key}",
-                    "generated_at": datetime.now(UTC).isoformat(),
+                    "file_count": 1,
+                    "has_data": 1,
                 }
-                s3_hook.load_string(
-                    string_data=json.dumps(manifest, sort_keys=True),
-                    key=manifest_key,
-                    bucket_name=DEFAULT_BUCKET_NAME,
-                    replace=True,
-                )
-                s3_hook.load_string(
-                    string_data="",
-                    key=success_key,
-                    bucket_name=DEFAULT_BUCKET_NAME,
-                    replace=True,
-                )
+                
+                # Mock paths_dict expected by etl_utils
+                paths_dict = {
+                    "partitioned": True,
+                    "partition_date": trade_date,
+                    "tmp_partition_prefix": paths.tmp_partition_prefix,
+                    "canonical_prefix": paths.canonical_prefix,
+                    "tmp_prefix": paths.tmp_prefix,
+                }
 
-                # 5. Cleanup tmp
-                s3_hook.delete_objects(bucket=DEFAULT_BUCKET_NAME, keys=[tmp_key])
+                commit_dataset(
+                    dest_name=spec_obj.target,
+                    run_id=run_id,
+                    paths_dict=paths_dict,
+                    metrics=metrics,
+                    s3_hook=s3_hook,
+                )
+                
+                cleanup_dataset(paths_dict, s3_hook)
 
                 return {
                     "trade_date": trade_date,

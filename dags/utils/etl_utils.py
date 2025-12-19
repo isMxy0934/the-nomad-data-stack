@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 
 from airflow import DAG
@@ -144,26 +144,19 @@ def prepare_dataset(
 
 
 def validate_dataset(
-    task_group_id: str,
-    **context: Any,
+    paths_dict: Mapping[str, Any],
+    metrics: Mapping[str, int],
+    s3_hook: S3Hook,
 ) -> dict[str, int]:
-    """Validate that the load step produced the expected output."""
-    ti = context["ti"]
-    paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
-    metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
-
-    if not metrics:
-        raise ValueError("Load metrics are missing; load step did not run correctly")
-
+    """Core logic to validate dataset output (pure function)."""
     partitioned = bool(paths_dict.get("partitioned"))
-    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
 
     if not int(metrics.get("has_data", 1)):
         # If no data expected, ensure no files written
         file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_prefix"]))
         if file_count != 0:
             raise ValueError("Expected no parquet files in tmp prefix for empty source result")
-        return metrics
+        return dict(metrics)
 
     # Verify actual files on S3 match reported metrics
     target_prefix = paths_dict["tmp_partition_prefix"] if partitioned else paths_dict["tmp_prefix"]
@@ -176,25 +169,19 @@ def validate_dataset(
     if metrics["row_count"] < 0:
         raise ValueError("Row count cannot be negative")
 
-    return metrics
+    return dict(metrics)
 
 
 def commit_dataset(
     dest_name: str,
     run_id: str,
-    task_group_id: str,
-    **context: Any,
-) -> dict[str, str]:
-    """Publish the dataset by promoting tmp files to canonical location."""
-    ti = context["ti"]
-    paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
-    metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
-
-    if not metrics:
-        raise ValueError("Load metrics are required to publish a dataset")
-
+    paths_dict: Mapping[str, Any],
+    metrics: Mapping[str, int],
+    s3_hook: S3Hook,
+) -> tuple[dict[str, str], MutableMapping[str, object]]:
+    """Core logic to commit dataset (pure function). Returns (publish_result, manifest)."""
     partitioned = bool(paths_dict.get("partitioned"))
-    partition_date = paths_dict.get("partition_date")
+    partition_date = str(paths_dict.get("partition_date"))
 
     if not int(metrics.get("has_data", 1)):
         logger.info(
@@ -202,9 +189,7 @@ def commit_dataset(
             dest_name,
             partition_date,
         )
-        return {"published": "0"}
-
-    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+        return {"published": "0"}, {}
 
     if partitioned:
         paths = partition_paths_from_xcom(paths_dict)
@@ -240,16 +225,15 @@ def commit_dataset(
             manifest=manifest,
             write_success_flag=True,
         )
+    
+    return publish_result, manifest
 
-    ti.xcom_push(key="manifest", value=manifest)
-    return publish_result
 
-
-def cleanup_dataset(task_group_id: str, **context: Any) -> None:
-    """Clean up temporary files."""
-    ti = context["ti"]
-    paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
-    s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+def cleanup_dataset(
+    paths_dict: Mapping[str, Any],
+    s3_hook: S3Hook,
+) -> None:
+    """Clean up temporary files (pure function)."""
     delete_tmp_prefix(s3_hook, paths_dict["tmp_prefix"])
 
 
@@ -310,15 +294,43 @@ def build_etl_task_group(
             pool=pool_name,
         )
 
+        # --- Internal Adapters (Bridge XCom -> Pure Functions) ---
+        def _validate_adapter(task_group_id: str, **context: Any) -> dict[str, int]:
+            ti = context["ti"]
+            paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
+            metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
+            if not metrics:
+                raise ValueError("Load metrics are missing")
+            s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+            return validate_dataset(paths_dict, metrics, s3_hook)
+
+        def _commit_adapter(dest_name: str, run_id: str, task_group_id: str, **context: Any) -> dict[str, str]:
+            ti = context["ti"]
+            paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
+            metrics = ti.xcom_pull(task_ids=f"{task_group_id}.load", key="load_metrics")
+            if not metrics:
+                raise ValueError("Load metrics are required to publish")
+            s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+            publish_result, manifest = commit_dataset(dest_name, run_id, paths_dict, metrics, s3_hook)
+            if manifest:
+                ti.xcom_push(key="manifest", value=manifest)
+            return publish_result
+
+        def _cleanup_adapter(task_group_id: str, **context: Any) -> None:
+            ti = context["ti"]
+            paths_dict = ti.xcom_pull(task_ids=f"{task_group_id}.prepare")
+            s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+            cleanup_dataset(paths_dict, s3_hook)
+
         validate = PythonOperator(
             task_id="validate",
-            python_callable=validate_dataset,
+            python_callable=_validate_adapter,
             op_kwargs={"task_group_id": task_group_id},
         )
 
         commit = PythonOperator(
             task_id="commit",
-            python_callable=commit_dataset,
+            python_callable=_commit_adapter,
             op_kwargs={
                 "dest_name": dest_name,
                 "run_id": "{{ run_id }}",
@@ -329,7 +341,7 @@ def build_etl_task_group(
 
         cleanup = PythonOperator(
             task_id="cleanup",
-            python_callable=cleanup_dataset,
+            python_callable=_cleanup_adapter,
             op_kwargs={"task_group_id": task_group_id},
             trigger_rule=TriggerRule.ALL_DONE,
         )
