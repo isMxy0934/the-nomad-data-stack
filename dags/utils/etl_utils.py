@@ -23,6 +23,7 @@ from dags.utils.partition_utils import (
     build_manifest,
     build_non_partition_paths,
     build_partition_paths,
+    delete_prefix,
     parse_s3_uri,
     publish_non_partition,
     publish_partition,
@@ -183,16 +184,24 @@ def commit_dataset(
     partitioned = bool(paths_dict.get("partitioned"))
     partition_date = str(paths_dict.get("partition_date"))
 
+    if partitioned:
+        paths = partition_paths_from_xcom(paths_dict)
+        canonical_prefix = paths.canonical_prefix
+    else:
+        paths = non_partition_paths_from_xcom(paths_dict)
+        canonical_prefix = paths.canonical_prefix
+
     if not int(metrics.get("has_data", 1)):
         logger.info(
-            "No data for %s (dt=%s); skipping publish.",
+            "No data for %s (dt=%s); clearing partition and skipping publish.",
             dest_name,
             partition_date,
         )
-        return {"published": "0"}, {}
+        delete_prefix(s3_hook, canonical_prefix)
+        return {"published": "0", "action": "cleared"}, {}
 
     if partitioned:
-        paths = partition_paths_from_xcom(paths_dict)
+        # paths is already PartitionPaths from above
         manifest = build_manifest(
             dest=dest_name,
             partition_date=partition_date,
@@ -209,7 +218,7 @@ def commit_dataset(
             write_success_flag=True,
         )
     else:
-        paths = non_partition_paths_from_xcom(paths_dict)
+        # paths is already NonPartitionPaths from above
         manifest = build_manifest(
             dest=dest_name,
             partition_date=partition_date,
@@ -225,7 +234,7 @@ def commit_dataset(
             manifest=manifest,
             write_success_flag=True,
         )
-
+    
     return publish_result, manifest
 
 

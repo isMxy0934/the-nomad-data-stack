@@ -150,7 +150,7 @@ def build_manifest(
     }
 
 
-def _delete_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
+def delete_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
     bucket, key_prefix = parse_s3_uri(prefix_uri)
     normalized_prefix = _strip_slashes(key_prefix) + "/"
     keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
@@ -201,7 +201,7 @@ def publish_partition(
 ) -> Mapping[str, str]:
     """Publish a partition by promoting tmp outputs and writing markers."""
 
-    _delete_prefix(s3_hook, paths.canonical_prefix)
+    delete_prefix(s3_hook, paths.canonical_prefix)
     _copy_prefix(s3_hook, paths.tmp_partition_prefix, paths.canonical_prefix)
 
     manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
@@ -224,7 +224,7 @@ def publish_non_partition(
 ) -> Mapping[str, str]:
     """Publish non-partitioned outputs by promoting tmp contents."""
 
-    _delete_prefix(s3_hook, paths.canonical_prefix)
+    delete_prefix(s3_hook, paths.canonical_prefix)
     _copy_prefix(s3_hook, paths.tmp_prefix, paths.canonical_prefix)
 
     manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
