@@ -47,7 +47,7 @@ with DAG(
         ),
         "targets": Param(
             default=[],
-            type="array",
+            type=["array", "null"],
             description="List of targets (e.g. ['ods.fund_price_akshare']). Leave empty for ALL targets.",
         ),
     },
