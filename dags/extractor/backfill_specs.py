@@ -9,6 +9,7 @@ import yaml
 
 BACKFILL_CONFIG_PATH = Path(__file__).parent / "backfill_config.yaml"
 
+
 @dataclass(frozen=True)
 class UniverseSpec:
     from_target: str
