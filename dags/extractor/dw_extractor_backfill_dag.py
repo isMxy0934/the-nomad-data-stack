@@ -311,16 +311,38 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 end_date = job["end_date"]
                 part_id = job["part_id"]
 
+                logger.info(
+                    "Backfill fetch start: target=%s symbol=%s part_id=%s start_date=%s end_date=%s force=%s",
+                    spec_obj.target,
+                    symbol,
+                    part_id,
+                    start_date,
+                    end_date,
+                    force,
+                )
+
                 meta_prefix = f"{spec_obj.pieces_base_prefix.strip('/')}/_meta/symbol={symbol}/shard={part_id}"
                 shard_success_key = f"{meta_prefix}/_SUCCESS"
                 if not force and _s3_key_exists(
                     s3_hook, bucket=DEFAULT_BUCKET_NAME, key=shard_success_key
                 ):
+                    logger.info(
+                        "Backfill shard already done, skipping: target=%s symbol=%s part_id=%s",
+                        spec_obj.target,
+                        symbol,
+                        part_id,
+                    )
                     return {"skipped": 1, "symbol": symbol, "part_id": part_id}
 
                 fetcher = _resolve_callable(spec_obj.history_fetcher)
                 result = fetcher(symbol=symbol, start_date=start_date, end_date=end_date)
                 if result is None:
+                    logger.info(
+                        "Backfill fetch returned None: target=%s symbol=%s part_id=%s",
+                        spec_obj.target,
+                        symbol,
+                        part_id,
+                    )
                     return {
                         "skipped": 0,
                         "symbol": symbol,
@@ -334,6 +356,12 @@ def create_dw_extractor_backfill_dag() -> DAG:
                     )
                 df = result.copy()
                 if df.empty:
+                    logger.info(
+                        "Backfill fetch returned empty: target=%s symbol=%s part_id=%s",
+                        spec_obj.target,
+                        symbol,
+                        part_id,
+                    )
                     return {
                         "skipped": 0,
                         "symbol": symbol,
@@ -487,6 +515,14 @@ def create_dw_extractor_backfill_dag() -> DAG:
                         replace=True,
                     )
 
+                logger.info(
+                    "Backfill fetch complete: target=%s symbol=%s part_id=%s wrote_rows=%d wrote_days=%d",
+                    spec_obj.target,
+                    symbol,
+                    part_id,
+                    wrote_rows,
+                    wrote_days,
+                )
                 return {
                     "skipped": 0,
                     "symbol": symbol,
