@@ -11,12 +11,14 @@ final daily output for each day (full overwrite).
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import os
 import re
 from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from io import BytesIO
+from tempfile import NamedTemporaryFile
 
 import pandas as pd
 from airflow import DAG
@@ -65,6 +67,71 @@ def _parse_dt_from_key(key: str) -> str | None:
 
 def _normalize_prefix(prefix: str) -> str:
     return prefix.strip("/") + "/"
+
+
+def _sum_manifest_row_counts(
+    *,
+    s3_hook: S3Hook,
+    bucket: str,
+    manifest_keys: list[str],
+) -> int:
+    total = 0
+    for key in manifest_keys:
+        obj = s3_hook.get_key(key=key, bucket_name=bucket)
+        if obj is None:
+            continue
+        payload = obj.get()["Body"].read()
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        value = data.get("row_count")
+        if isinstance(value, int):
+            total += value
+    return total
+
+
+def _stream_merge_csv_to_tmp(
+    *,
+    s3_hook: S3Hook,
+    bucket: str,
+    data_keys: list[str],
+    tmp_key: str,
+) -> bool:
+    wrote_header = False
+
+    tmp_file = NamedTemporaryFile(mode="wb", delete=False)
+    try:
+        for key in data_keys:
+            obj = s3_hook.get_key(key=key, bucket_name=bucket)
+            if obj is None:
+                continue
+            body = obj.get()["Body"]
+            first_line = True
+            for line in body.iter_lines():
+                if first_line:
+                    first_line = False
+                    if wrote_header:
+                        continue
+                    wrote_header = True
+                    tmp_file.write(line + b"\n")
+                    continue
+                if not line:
+                    continue
+                tmp_file.write(line + b"\n")
+    finally:
+        tmp_file.close()
+
+    if wrote_header:
+        s3_hook.load_file(
+            filename=tmp_file.name,
+            key=tmp_key,
+            bucket_name=bucket,
+            replace=True,
+        )
+
+    os.unlink(tmp_file.name)
+    return wrote_header
 
 
 def create_dw_extractor_compact_dag() -> DAG:
@@ -121,31 +188,14 @@ def create_dw_extractor_compact_dag() -> DAG:
                 ]
 
                 data_keys = [k[: -len("/_SUCCESS")] + "/data.csv" for k in success_keys]
-                frames: list[pd.DataFrame] = []
-                for key in data_keys:
-                    obj = s3_hook.get_key(key=key, bucket_name=DEFAULT_BUCKET_NAME)
-                    if obj is None:
-                        continue
-                    payload: bytes = obj.get()["Body"].read()
-                    frames.append(pd.read_csv(BytesIO(payload)))
-
-                if frames:
-                    df = pd.concat(frames, ignore_index=True, copy=False)
-                else:
-                    df = pd.DataFrame()
-
-                if spec_obj.compact_transformer:
-                    transformer = _resolve_callable(spec_obj.compact_transformer)
-                    transformed = transformer(df, trade_date=trade_date, spec=spec_obj)
-                    if transformed is None:
-                        df = pd.DataFrame()
-                    elif not isinstance(transformed, pd.DataFrame):
-                        raise TypeError(
-                            f"compact_transformer must return pandas.DataFrame|None, got {type(transformed)}"
-                        )
-                    else:
-                        df = transformed
-
+                manifest_keys = [k[: -len("/_SUCCESS")] + "/manifest.json" for k in success_keys]
+                if not data_keys:
+                    logger.warning(
+                        "No backfill data.csv found for %s on %s under %s",
+                        spec_obj.target,
+                        trade_date,
+                        day_prefix,
+                    )
                 # Standard ETL Flow via Utils
                 run_id = f"compact_{trade_date}"
                 base_prefix = spec_obj.daily_key_template.split("/dt=", 1)[0]
@@ -157,10 +207,79 @@ def create_dw_extractor_compact_dag() -> DAG:
                     bucket_name=DEFAULT_BUCKET_NAME,
                 )
 
+                # paths.tmp_partition_prefix is a URI (s3://...), we need the key
+                _, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
+                tmp_key = f"{tmp_prefix_key.strip('/')}/data.csv"
+
+                row_count = 0
+                data_written = False
+                if spec_obj.compact_transformer:
+                    frames: list[pd.DataFrame] = []
+                    for key in data_keys:
+                        obj = s3_hook.get_key(key=key, bucket_name=DEFAULT_BUCKET_NAME)
+                        if obj is None:
+                            continue
+                        payload: bytes = obj.get()["Body"].read()
+                        frames.append(pd.read_csv(BytesIO(payload)))
+
+                    if frames:
+                        df = pd.concat(frames, ignore_index=True, copy=False)
+                    else:
+                        df = pd.DataFrame()
+
+                    transformer = _resolve_callable(spec_obj.compact_transformer)
+                    transformed = transformer(df, trade_date=trade_date, spec=spec_obj)
+                    if transformed is None:
+                        df = pd.DataFrame()
+                    elif not isinstance(transformed, pd.DataFrame):
+                        raise TypeError(
+                            f"compact_transformer must return pandas.DataFrame|None, got {type(transformed)}"
+                        )
+                    else:
+                        df = transformed
+
+                    row_count = int(len(df))
+                    if row_count:
+                        csv_bytes = df.to_csv(index=False).encode("utf-8")
+                        s3_hook.load_bytes(
+                            bytes_data=csv_bytes,
+                            key=tmp_key,
+                            bucket_name=DEFAULT_BUCKET_NAME,
+                            replace=True,
+                        )
+                        data_written = True
+                else:
+                    if len(data_keys) == 1:
+                        s3_hook.copy_object(
+                            source_bucket_key=data_keys[0],
+                            dest_bucket_key=tmp_key,
+                            source_bucket_name=DEFAULT_BUCKET_NAME,
+                            dest_bucket_name=DEFAULT_BUCKET_NAME,
+                        )
+                        data_written = True
+                        row_count = _sum_manifest_row_counts(
+                            s3_hook=s3_hook,
+                            bucket=DEFAULT_BUCKET_NAME,
+                            manifest_keys=manifest_keys,
+                        )
+                    else:
+                        data_written = _stream_merge_csv_to_tmp(
+                            s3_hook=s3_hook,
+                            bucket=DEFAULT_BUCKET_NAME,
+                            data_keys=data_keys,
+                            tmp_key=tmp_key,
+                        )
+                        row_count = _sum_manifest_row_counts(
+                            s3_hook=s3_hook,
+                            bucket=DEFAULT_BUCKET_NAME,
+                            manifest_keys=manifest_keys,
+                        )
+
+                has_data = 1 if data_written else 0
                 metrics = {
-                    "row_count": int(len(df)),
-                    "file_count": 0 if df.empty else 1,
-                    "has_data": 0 if df.empty else 1,
+                    "row_count": row_count,
+                    "file_count": 0 if not has_data else 1,
+                    "has_data": has_data,
                 }
 
                 # Mock paths_dict expected by etl_utils
@@ -173,20 +292,6 @@ def create_dw_extractor_compact_dag() -> DAG:
                     "manifest_path": paths.manifest_path,
                     "success_flag_path": paths.success_flag_path,
                 }
-
-                if metrics["has_data"]:
-                    # Write to standardized tmp location
-                    # paths.tmp_partition_prefix is a URI (s3://...), we need the key
-                    _, tmp_prefix_key = parse_s3_uri(paths.tmp_partition_prefix)
-                    tmp_key = f"{tmp_prefix_key.strip('/')}/data.csv"
-
-                    csv_bytes = df.to_csv(index=False).encode("utf-8")
-                    s3_hook.load_bytes(
-                        bytes_data=csv_bytes,
-                        key=tmp_key,
-                        bucket_name=DEFAULT_BUCKET_NAME,
-                        replace=True,
-                    )
 
                 commit_dataset(
                     dest_name=spec_obj.target,
