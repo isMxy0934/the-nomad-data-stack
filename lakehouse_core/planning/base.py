@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from lakehouse_core.models import RunContext, RunSpec
+from lakehouse_core.domain.models import RunContext, RunSpec
 
 
 class Planner(Protocol):

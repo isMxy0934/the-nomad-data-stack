@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 
-from lakehouse_core import commit as core_commit
 from lakehouse_core.api import prepare_paths
-from lakehouse_core.manifest import build_manifest
+from lakehouse_core.domain import commit_protocol as core_commit
+from lakehouse_core.domain.manifest import build_manifest
 from lakehouse_core.testing.local_store import LocalS3StyleStore
 
 

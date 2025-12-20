@@ -4,12 +4,12 @@ import logging
 from collections.abc import Sequence
 
 from lakehouse_core.api import materialize_query_to_tmp_and_measure
+from lakehouse_core.domain.models import RunSpec
+from lakehouse_core.domain.observability import log_event
 from lakehouse_core.inputs.base import InputRegistrar
-from lakehouse_core.models import RunSpec
-from lakehouse_core.observability import log_event
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
-from lakehouse_core.sql import render_sql
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.io.sql import render_sql
+from lakehouse_core.store.object_store import ObjectStore
 
 logger = logging.getLogger(__name__)
 

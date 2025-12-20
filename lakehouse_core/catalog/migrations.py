@@ -1,10 +1,3 @@
-"""DuckDB catalog migration utilities (metadata-only).
-
-Migrations are SQL files stored in ``catalog/migrations`` and applied into a
-persistent DuckDB database (the analysis catalog). This is metadata-only:
-no data is materialized into DuckDB; views/macros point to S3/MinIO paths.
-"""
-
 from __future__ import annotations
 
 import hashlib

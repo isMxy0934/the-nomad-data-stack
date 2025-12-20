@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.store.object_store import ObjectStore
 
 
 def _list_parquet_uris(store: ObjectStore, prefix_uri: str) -> list[str]:

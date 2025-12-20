@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lakehouse_core.storage import ObjectStore
-from lakehouse_core.uri import normalize_s3_key_prefix, parse_s3_uri
+from lakehouse_core.io.uri import normalize_s3_key_prefix, parse_s3_uri
+from lakehouse_core.store.object_store import ObjectStore
 
 
 @dataclass

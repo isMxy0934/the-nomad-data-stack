@@ -5,7 +5,7 @@ from typing import Any
 import duckdb
 import pytest
 
-from lakehouse_core.execution import (
+from lakehouse_core.compute.execution import (
     S3ConnectionConfig,
     configure_s3_access,
     copy_partitioned_parquet,

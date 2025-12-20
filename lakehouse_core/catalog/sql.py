@@ -1,11 +1,3 @@
-"""DuckDB catalog helpers (metadata-only) for interactive analysis.
-
-This module creates SCHEMAs, VIEWs and MACROs inside a persistent DuckDB database
-so analysts can query `SELECT * FROM ods.table` instead of typing long S3 paths.
-
-The catalog stores *no data*; all relations read from S3/MinIO paths.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

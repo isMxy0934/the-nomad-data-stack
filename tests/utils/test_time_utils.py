@@ -9,7 +9,7 @@ if str(ROOT_DIR) not in sys.path:
 
 try:
     from dags.utils.freezegun_utils import freeze_time
-    from lakehouse_core.time import (
+    from lakehouse_core.io.time import (
         get_current_date_str,
         get_current_partition_date_str,
         get_previous_date_str,

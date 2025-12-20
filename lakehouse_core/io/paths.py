@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lakehouse_core.uri import join_uri, strip_slashes
+from lakehouse_core.io.uri import join_uri, strip_slashes
 
 
 @dataclass(frozen=True)

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 
+from lakehouse_core.domain.models import RunSpec
+from lakehouse_core.domain.observability import log_event
+from lakehouse_core.domain.ods_sources import register_ods_csv_source_view
 from lakehouse_core.inputs.base import InputRegistrar, InputRegistration
-from lakehouse_core.models import RunSpec
-from lakehouse_core.observability import log_event
-from lakehouse_core.ods_sources import register_ods_csv_source_view
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.store.object_store import ObjectStore
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
-from lakehouse_core.storage import ObjectStore
-from lakehouse_core.uri import normalize_s3_key_prefix, parse_s3_uri
+from lakehouse_core.io.uri import normalize_s3_key_prefix, parse_s3_uri
+from lakehouse_core.store.object_store import ObjectStore
 
 
 def _normalize_prefix_uri(prefix_uri: str) -> str:

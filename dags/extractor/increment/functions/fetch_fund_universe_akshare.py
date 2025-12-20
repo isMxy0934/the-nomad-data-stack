@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dags.utils.extractor_utils import CsvPayload
-from lakehouse_core.time import get_date_str
+from lakehouse_core.io.time import get_date_str
 
 
 def fetch_fund_universe_akshare() -> CsvPayload | None:

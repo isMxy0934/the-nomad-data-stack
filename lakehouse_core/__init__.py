@@ -5,12 +5,16 @@ Lower-level utilities should be imported from their submodules explicitly.
 """
 
 import lakehouse_core.pipeline as pipeline
-from lakehouse_core.dw_config import DWConfig, DWConfigError, load_dw_config, order_layers
-from lakehouse_core.dw_planner import DirectoryDWPlanner
+from lakehouse_core.domain.models import RunContext, RunSpec
 from lakehouse_core.inputs import InputRegistrar, InputRegistration, OdsCsvRegistrar
-from lakehouse_core.models import RunContext, RunSpec
-from lakehouse_core.storage import ObjectStore
-from lakehouse_core.stores import Boto3S3Store, LocalFileStore
+from lakehouse_core.planning import (
+    DirectoryDWPlanner,
+    DWConfig,
+    DWConfigError,
+    load_dw_config,
+    order_layers,
+)
+from lakehouse_core.store import Boto3S3Store, LocalFileStore, ObjectStore
 
 __all__ = [
     "Boto3S3Store",

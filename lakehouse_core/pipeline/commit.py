@@ -4,10 +4,10 @@ import logging
 from collections.abc import Mapping, MutableMapping
 
 from lakehouse_core.api import publish_output
-from lakehouse_core.manifest import build_manifest
-from lakehouse_core.observability import log_event
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.domain.manifest import build_manifest
+from lakehouse_core.domain.observability import log_event
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.store.object_store import ObjectStore
 
 logger = logging.getLogger(__name__)
 

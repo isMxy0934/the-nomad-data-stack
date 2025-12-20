@@ -7,7 +7,7 @@ from pathlib import Path
 
 import duckdb
 
-from lakehouse_core.catalog_migrations import (
+from lakehouse_core.catalog import (
     CATALOG_META_SCHEMA,
     CATALOG_MIGRATIONS_TABLE,
     apply_migrations,

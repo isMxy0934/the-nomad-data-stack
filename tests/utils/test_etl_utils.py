@@ -17,7 +17,7 @@ try:
         prepare_dataset,
         validate_dataset,
     )
-    from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+    from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
         f"etl utils imports unavailable in this environment: {exc}", allow_module_level=True

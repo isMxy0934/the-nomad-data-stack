@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from lakehouse_core.models import RunSpec
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.domain.models import RunSpec
+from lakehouse_core.store.object_store import ObjectStore
 
 
 @dataclass(frozen=True)

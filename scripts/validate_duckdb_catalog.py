@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-from lakehouse_core.catalog_sql import (
+from lakehouse_core.catalog import (
     LayerSpec,
     build_layer_dt_macro_sql,
     build_layer_view_sql,
 )
-from lakehouse_core.execution import create_temporary_connection
+from lakehouse_core.compute import create_temporary_connection
 
 
 def main() -> int:

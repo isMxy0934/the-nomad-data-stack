@@ -39,7 +39,7 @@ class freeze_time(ContextDecorator):
 
     def __enter__(self):
         frozen_cls = _FrozenDateTime.with_value(self.time_to_freeze)
-        target_module = importlib.import_module("lakehouse_core.time")
+        target_module = importlib.import_module("lakehouse_core.io.time")
         patcher = mock.patch.object(target_module, "datetime", frozen_cls)
         self._patchers.append(patcher)
         patcher.start()

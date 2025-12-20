@@ -16,12 +16,12 @@ from airflow.utils.trigger_rule import TriggerRule
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.api import prepare_paths
-from lakehouse_core.execution import S3ConnectionConfig
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.compute import S3ConnectionConfig
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import cleanup as pipeline_cleanup
 from lakehouse_core.pipeline import commit as pipeline_commit
 from lakehouse_core.pipeline import validate as pipeline_validate
-from lakehouse_core.time import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
