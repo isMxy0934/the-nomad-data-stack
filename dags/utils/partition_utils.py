@@ -11,7 +11,7 @@ from collections.abc import Mapping, MutableMapping
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
-from lakehouse_core import commit as core_commit
+from lakehouse_core import api as core_api
 from lakehouse_core import manifest as core_manifest
 from lakehouse_core import paths as core_paths
 from lakehouse_core import uri as core_uri
@@ -52,12 +52,12 @@ def build_partition_paths(
     if not bucket_name:
         raise ValueError("bucket_name is required")
 
-    base_uri = f"s3://{bucket_name}"
-    return core_paths.build_partition_paths(
-        base_uri=base_uri,
+    return core_api.prepare_paths(
         base_prefix=_strip_slashes(base_prefix),
-        partition_date=partition_date,
         run_id=run_id,
+        partition_date=partition_date,
+        is_partitioned=True,
+        store_namespace=bucket_name,
     )
 
 
@@ -71,11 +71,12 @@ def build_non_partition_paths(
     if not bucket_name:
         raise ValueError("bucket_name is required")
 
-    base_uri = f"s3://{bucket_name}"
-    return core_paths.build_non_partition_paths(
-        base_uri=base_uri,
+    return core_api.prepare_paths(
         base_prefix=_strip_slashes(base_prefix),
         run_id=run_id,
+        partition_date=None,
+        is_partitioned=False,
+        store_namespace=bucket_name,
     )
 
 
@@ -108,7 +109,7 @@ def build_manifest(
 
 def delete_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
     store = AirflowS3Store(s3_hook)
-    core_commit.delete_prefix(store, prefix_uri)
+    store.delete_prefix(prefix_uri)
 
 
 def publish_partition(
@@ -121,7 +122,7 @@ def publish_partition(
     """Publish a partition by promoting tmp outputs and writing markers."""
 
     store = AirflowS3Store(s3_hook)
-    return core_commit.publish_partition(
+    return core_api.publish_output(
         store=store,
         paths=paths,
         manifest=manifest,
@@ -139,7 +140,7 @@ def publish_non_partition(
     """Publish non-partitioned outputs by promoting tmp contents."""
 
     store = AirflowS3Store(s3_hook)
-    return core_commit.publish_non_partition(
+    return core_api.publish_output(
         store=store,
         paths=paths,
         manifest=manifest,

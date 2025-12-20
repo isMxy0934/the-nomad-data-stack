@@ -28,7 +28,7 @@ from dags.utils.partition_utils import (
     publish_non_partition,
     publish_partition,
 )
-from lakehouse_core.validate import validate_dataset as core_validate_dataset
+from lakehouse_core import validate_output as core_validate_output
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.time_utils import get_partition_date_str
 
@@ -155,9 +155,39 @@ def validate_dataset(
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
 ) -> dict[str, int]:
-    """Core logic to validate dataset output (delegates to lakehouse_core)."""
+    """Core logic to validate dataset output (delegates to lakehouse_core API)."""
     store = AirflowS3Store(s3_hook)
-    return core_validate_dataset(paths_dict, metrics, store)
+    partitioned = bool(paths_dict.get("partitioned"))
+
+    # Backwards-compatible: some unit tests pass a partial paths_dict with only tmp_prefix.
+    if partitioned:
+        try:
+            paths = partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            tmp_prefix = str(paths_dict["tmp_prefix"])
+            partition_date = str(paths_dict.get("partition_date") or "").strip()
+            tmp_partition_prefix = str(paths_dict.get("tmp_partition_prefix") or "").strip()
+            if not tmp_partition_prefix and partition_date:
+                tmp_partition_prefix = f"{tmp_prefix}/dt={partition_date}"
+            paths = PartitionPaths(
+                partition_date=partition_date,
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=tmp_prefix,
+                tmp_partition_prefix=tmp_partition_prefix,
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+    else:
+        try:
+            paths = non_partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            paths = NonPartitionPaths(
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=str(paths_dict["tmp_prefix"]),
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+    return core_validate_output(store=store, paths=paths, metrics=metrics)
 
 
 def commit_dataset(

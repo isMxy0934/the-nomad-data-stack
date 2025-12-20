@@ -41,7 +41,7 @@
 
 ## Phase 0：基线锁定（必须）
 
-- [ ] `uv run python -m pytest tests/ -v` 通过，作为重构前基线。
+- [x] `uv run python -m pytest tests/ -v` 通过，作为重构前基线。
 - [ ] 记录当前关键入口与依赖：
   - `dags/dw_start_dag.py`（日常入口）
   - `dags/dw_init_dag.py`（回填入口）
@@ -60,51 +60,51 @@
 
 ### 1.1 新增目录与包骨架
 
-- [ ] 新增包：`lakehouse_core/`
-  - [ ] `lakehouse_core/__init__.py`
+- [x] 新增包：`lakehouse_core/`
+  - [x] `lakehouse_core/__init__.py`
   - [ ] `lakehouse_core/models.py`：`RunContext`、`RunSpec` 等核心数据结构（建议 dataclass）
   - [ ] `lakehouse_core/planning.py`：`Planner` 协议（可选，但建议先定接口，避免后续反复改）
-  - [ ] `lakehouse_core/storage.py`：定义 `ObjectStore`（Protocol/ABC）
-  - [ ] `lakehouse_core/paths.py`：路径规划（canonical/tmp/manifest/_SUCCESS）
-  - [ ] `lakehouse_core/manifest.py`：manifest 结构与构建
-  - [ ] `lakehouse_core/commit.py`：publish（delete+copy）与完成标记
-  - [ ] `lakehouse_core/validate.py`：校验（file_count/row_count/存在性）
+  - [x] `lakehouse_core/storage.py`：定义 `ObjectStore`（Protocol/ABC）
+  - [x] `lakehouse_core/paths.py`：路径规划（canonical/tmp/manifest/_SUCCESS）
+  - [x] `lakehouse_core/manifest.py`：manifest 结构与构建
+  - [x] `lakehouse_core/commit.py`：publish（delete+copy）与完成标记
+  - [x] `lakehouse_core/validate.py`：校验（file_count/row_count/存在性）
   - [ ] `lakehouse_core/errors.py`：统一异常类型（可选，但建议）
 
 验收标准：
-- [ ] 在 `lakehouse_core/` 目录执行 `rg -n \"\\bairflow\\b|S3Hook|dag_run|xcom\" lakehouse_core` 无命中。
+- [x] 在 `lakehouse_core/` 目录执行 `rg -n \"\\bairflow\\b|S3Hook|dag_run|xcom\" lakehouse_core` 无命中。
 
 ### 1.1.1 动态 DAG 生成如何处理（明确边界）
 
-- [ ] `dags/dw_dags.py` 这类“动态生成 DAG/TaskGroup/expand/TriggerDagRun”的逻辑属于 orchestrator 层，**第一阶段继续保留在 `dags/`**。
-- [ ] 第一阶段的改造重点是：把这些 DAG 里每个 task 最终调用的“业务动作”替换为 core 用例函数（通过 adapter 注入 `ObjectStore`），而不是迁移 Airflow 的 DSL。
+- [x] `dags/dw_dags.py` 这类“动态生成 DAG/TaskGroup/expand/TriggerDagRun”的逻辑属于 orchestrator 层，**第一阶段继续保留在 `dags/`**。
+- [x] 第一阶段的改造重点是：把这些 DAG 里每个 task 最终调用的“业务动作”替换为 core 用例函数（通过 adapter 注入 `ObjectStore`），而不是迁移 Airflow 的 DSL。
 - [ ] 后续若迁 Prefect/脚本：可重用同一个 Planner 产出的 `RunSpec` 列表，用不同 orchestrator 将其映射为任务图（而不要求复刻 Airflow UI 结构）。
 
 ### 1.2 定义核心存储抽象：`ObjectStore`
 
 Checklist：
 - [ ] `ObjectStore` 最小接口（建议）：
-  - [ ] `list_keys(prefix: str) -> list[str]`
-  - [ ] `exists(key: str) -> bool`
-  - [ ] `read_bytes(key: str) -> bytes`
+  - [x] `list_keys(prefix: str) -> list[str]`
+  - [x] `exists(key: str) -> bool`
+  - [x] `read_bytes(key: str) -> bytes`
   - [ ] `write_bytes(key: str, data: bytes) -> None`
-  - [ ] `delete_prefix(prefix: str) -> None`
-  - [ ] `copy_prefix(src_prefix: str, dst_prefix: str) -> None`
-- [ ] 约定 key 形式：
-  - [ ] 统一使用“URI 或 bucket/key”其中一种（建议沿用现有 `s3://bucket/prefix` URI 形式，减少改动）。
-  - [ ] 在 core 中集中解析与规范化，避免散落在各处。
+  - [x] `delete_prefix(prefix: str) -> None`
+  - [x] `copy_prefix(src_prefix: str, dst_prefix: str) -> None`
+- [x] 约定 key 形式：
+  - [x] 统一使用“URI 或 bucket/key”其中一种（建议沿用现有 `s3://bucket/prefix` URI 形式，减少改动）。
+  - [x] 在 core 中集中解析与规范化，避免散落在各处。
 
 验收标准：
-- [ ] Phase 1 的 core 逻辑只依赖 `ObjectStore`，不直接依赖 S3/本地 API。
+- [x] Phase 1 的 core 逻辑只依赖 `ObjectStore`，不直接依赖 S3/本地 API。
 
 ### 1.2.1 定义 core 的最小用例函数边界（建议写死在文档里）
 
 > 目的：让 orchestrator 只做“编排”，所有关键语义都集中在 core，且对未来调度器迁移友好。
 
-- [ ] `prepare_paths(base_prefix, run_id, partition_date, is_partitioned, store_namespace=...) -> Paths`
-- [ ] `validate_output(store, paths, metrics) -> metrics`
-- [ ] `publish_output(store, paths, manifest, write_success_flag=True) -> result`
-- [ ] `cleanup_tmp(store, paths) -> None`
+- [x] `prepare_paths(base_prefix, run_id, partition_date, is_partitioned, store_namespace=...) -> Paths`
+- [x] `validate_output(store, paths, metrics) -> metrics`
+- [x] `publish_output(store, paths, manifest, write_success_flag=True) -> result`
+- [x] `cleanup_tmp(store, paths) -> None`
 
 说明：
 - [ ] Phase 1 允许 “DuckDB 执行 + 产出 metrics” 仍由 DAG 层函数完成（如当前 `dags/dw_dags.py#load_table`），但其输出 metrics 必须能被 core 的 validate/publish 接收。
@@ -112,45 +112,46 @@ Checklist：
 ### 1.3 提供两个存储适配器（一个给测试，一个给 Airflow）
 
 #### 1.3.1 本地适配器（用于 core 单测）
-- [ ] 新增：`lakehouse_core/testing/local_store.py`（或 `tests/helpers/local_store.py`）
-  - [ ] 用临时目录模拟 `lake/...` 前缀
-  - [ ] 支持前缀删除、前缀拷贝、写入 bytes、列举 keys
+- [x] 新增：`lakehouse_core/testing/local_store.py`（或 `tests/helpers/local_store.py`）
+  - [x] 用临时目录模拟 `lake/...` 前缀
+  - [x] 支持前缀删除、前缀拷贝、写入 bytes、列举 keys
 
 #### 1.3.2 Airflow S3 适配器（用于现有 DAG，不改变行为）
-- [ ] 新增：`dags/adapters/airflow_s3_store.py`
-  - [ ] 内部使用 `airflow.providers.amazon.aws.hooks.s3.S3Hook`
-  - [ ] 将 `S3Hook` 的 list/get/put/copy/delete 映射到 `ObjectStore`
+- [x] 新增：`dags/adapters/airflow_s3_store.py`
+  - [x] 内部使用 `airflow.providers.amazon.aws.hooks.s3.S3Hook`
+  - [x] 将 `S3Hook` 的 list/get/put/copy/delete 映射到 `ObjectStore`
   - [ ] 读取连接（endpoint/ak/sk 等）仍通过 Airflow Connection（adapter 责任）
 
 验收标准：
-- [ ] DAG 层仍可读写 MinIO/S3（行为与当前一致）。
-- [ ] core 层完全不 import Airflow。
+- [x] DAG 层仍可读写 MinIO/S3（行为与当前一致）。
+- [x] core 层完全不 import Airflow。
+ 
 
 ### 1.4 抽离 commit protocol 到 core（最关键）
 
 目标：将 `dags/utils/partition_utils.py` 中与存储提交相关的“规则”迁到 `lakehouse_core`，并在 Airflow 层保留薄包装。
 
 Checklist（按顺序做，避免大爆炸）：
-- [ ] 在 `lakehouse_core/paths.py` 复刻并稳定化以下概念：
-  - [ ] canonical 前缀：`lake/{layer}/{table}/dt=.../`（分区表）或 `lake/{layer}/{table}/`（非分区）
-  - [ ] tmp 前缀：`.../_tmp/run_{run_id}/...`
-  - [ ] `manifest.json` 与 `_SUCCESS` 的位置规则
-- [ ] 在 `lakehouse_core/manifest.py` 提供 `build_manifest(...)`
-- [ ] 在 `lakehouse_core/commit.py` 提供 publish 函数：
-  - [ ] 先 `delete_prefix(canonical_partition_prefix)` 再 `copy_prefix(tmp_partition_prefix, canonical_partition_prefix)`
-  - [ ] 写入 `manifest.json`、`_SUCCESS`
-- [ ] 在 `lakehouse_core/validate.py` 提供 validate 函数：
-  - [ ] 有数据：tmp 下 parquet 文件数与 metrics 一致
-  - [ ] 无数据：确认 tmp 前缀无残留；并按现有语义清理 canonical 分区
+- [x] 在 `lakehouse_core/paths.py` 复刻并稳定化以下概念：
+  - [x] canonical 前缀：`lake/{layer}/{table}/dt=.../`（分区表）或 `lake/{layer}/{table}/`（非分区）
+  - [x] tmp 前缀：`.../_tmp/run_{run_id}/...`
+  - [x] `manifest.json` 与 `_SUCCESS` 的位置规则
+- [x] 在 `lakehouse_core/manifest.py` 提供 `build_manifest(...)`
+- [x] 在 `lakehouse_core/commit.py` 提供 publish 函数：
+  - [x] 先 `delete_prefix(canonical_partition_prefix)` 再 `copy_prefix(tmp_partition_prefix, canonical_partition_prefix)`
+  - [x] 写入 `manifest.json`、`_SUCCESS`
+- [x] 在 `lakehouse_core/validate.py` 提供 validate 函数：
+  - [x] 有数据：tmp 下 parquet 文件数与 metrics 一致
+  - [x] 无数据：确认 tmp 前缀无残留；并按现有语义清理 canonical 分区
 
 Airflow 层改造（最小侵入策略）：
-- [ ] `dags/utils/partition_utils.py` 逐步变成“调用 core + 适配 S3Hook”的薄层
-  - [ ] 保持原函数签名一段时间（兼容现有调用）
-  - [ ] 内部改为：`store = AirflowS3Store(s3_hook)` → 调 `lakehouse_core.*`
+- [x] `dags/utils/partition_utils.py` 逐步变成“调用 core + 适配 S3Hook”的薄层
+  - [x] 保持原函数签名一段时间（兼容现有调用）
+  - [x] 内部改为：`store = AirflowS3Store(s3_hook)` → 调 `lakehouse_core.*`
 
 验收标准：
-- [ ] `docs/commit-protocol.md` 描述与实现一致（如有差异，先修文档/实现对齐，再继续拆）。
-- [ ] 现有 DAG 正常 import/生成（`tests/dags/*` 通过）。
+- [x] `docs/commit-protocol.md` 描述与实现一致（如有差异，先修文档/实现对齐，再继续拆）。
+- [x] 现有 DAG 正常 import/生成（`tests/dags/*` 通过）。
 
 ### 1.5 抽离 ETL 通用逻辑到 core（保留 Airflow bridge）
 
@@ -158,9 +159,9 @@ Airflow 层改造（最小侵入策略）：
 
 Checklist：
 - [ ] 将以下“纯逻辑”迁到 core：
-  - [ ] `prepare_dataset` 的路径规划（调用 `lakehouse_core/paths.py`）
-  - [ ] `validate_dataset`（调用 `lakehouse_core/validate.py`）
-  - [ ] `commit_dataset`（调用 `lakehouse_core/commit.py`）
+  - [x] `prepare_dataset` 的路径规划（调用 `lakehouse_core/paths.py`）
+  - [x] `validate_dataset`（调用 `lakehouse_core/validate.py`）
+  - [x] `commit_dataset`（调用 `lakehouse_core/commit.py`）
   - [ ] `cleanup_dataset`（调用 `ObjectStore.delete_prefix`）
 - [ ] `build_etl_task_group` 继续留在 `dags/utils/etl_utils.py`（Airflow 专属），但其内部调用 core 函数，不再承载业务规则。
 
@@ -184,19 +185,19 @@ Checklist：
 ### 1.6 测试策略（Phase 1 必须落地）
 
 新增/调整测试：
-- [ ] 新增 `tests/lakehouse_core/test_commit_protocol.py`（示例命名）
-  - [ ] 使用 `LocalStore` 构造 tmp 前缀若干 parquet 文件（可用空 bytes 代表文件存在）
-  - [ ] 调用 core publish，断言：
-    - [ ] canonical 下出现目标文件
-    - [ ] `manifest.json` 内容字段齐全
-    - [ ] `_SUCCESS` 存在
-    - [ ] publish 顺序语义可验证（至少能证明 delete 在 copy 前发生；可通过 LocalStore 记录操作日志）
-- [ ] 现有 DAG import/generation 测试保持通过（`tests/dags/*`）
+- [x] 新增 `tests/lakehouse_core/test_commit_protocol.py`（示例命名）
+  - [x] 使用 `LocalStore` 构造 tmp 前缀若干 parquet 文件（可用空 bytes 代表文件存在）
+  - [x] 调用 core publish，断言：
+    - [x] canonical 下出现目标文件
+    - [x] `manifest.json` 内容字段齐全
+    - [x] `_SUCCESS` 存在
+    - [x] publish 顺序语义可验证（至少能证明 delete 在 copy 前发生；可通过 LocalStore 记录操作日志）
+- [x] 现有 DAG import/generation 测试保持通过（`tests/dags/*`）
 
 Phase 1 总验收（必须全部满足）：
-- [ ] `lakehouse_core/` 无 Airflow 依赖（grep/rg 校验）
-- [ ] `uv run python -m pytest tests/ -v` 全绿
-- [ ] 产物路径与完成标记与重构前一致（`dt=...`、`manifest.json`、`_SUCCESS`）
+- [x] `lakehouse_core/` 无 Airflow 依赖（grep/rg 校验）
+- [x] `uv run python -m pytest tests/ -v` 全绿
+- [x] 产物路径与完成标记与重构前一致（`dt=...`、`manifest.json`、`_SUCCESS`）
 
 ---
 
@@ -249,7 +250,7 @@ Checklist：
 背景：DuckDB 读写通常需要可识别的 URI（如 `s3://bucket/path/file.parquet` 或本地绝对路径），而存储抽象常见形态是 “bucket+key / key-only”。
 
 约定（Phase 1 必须选定其一，禁止混用）：
-- [ ] **方案 1（推荐）**：`ObjectStore` 全程使用 “URI” 作为资源标识（入参/返回值都是 URI）。Local/S3 都实现对 URI 的解析与操作。
+- [x] **方案 1（推荐）**：`ObjectStore` 全程使用 “URI” 作为资源标识（入参/返回值都是 URI）。Local/S3 都实现对 URI 的解析与操作。
 - [ ] **方案 2**：`ObjectStore` 使用 “key” 作为资源标识，但必须提供 `get_uri(key) -> str`（或 `to_uri(...)`）用于 DuckDB/外部系统；禁止在 core 以外零散拼接 `s3://...`。
 
 验收标准：
@@ -260,8 +261,8 @@ Checklist：
 风险：S3/MinIO 的 prefix copy 是逐对象 CopyObject，非原子、可能很慢；中途失败会产生“半拷贝”结果。
 
 建议（Phase 1 必须明确）：
-- [ ] publish 语义必须 **可安全重试（幂等）**：重试时允许先清理目标前缀，再执行 copy；不得因为“目标已存在”而失败。
-- [ ] `AirflowS3Store.copy_prefix` 必须使用 **服务端 copy**（S3 CopyObject / boto3 copy）实现；严禁 download→upload。
+- [x] publish 语义必须 **可安全重试（幂等）**：重试时允许先清理目标前缀，再执行 copy；不得因为“目标已存在”而失败。
+- [x] `AirflowS3Store.copy_prefix` 必须使用 **服务端 copy**（S3 CopyObject / boto3 copy）实现；严禁 download→upload。
 - [ ] 如未来文件量大，可在 adapter 内增加并发 copy（受限于单写者/资源）但保持逻辑顺序不变：`delete_prefix` 完成后才开始 copy。
 
 验收标准：
