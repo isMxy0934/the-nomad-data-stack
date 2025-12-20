@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 
 from lakehouse_core import commit as core_commit
 from lakehouse_core import paths as core_paths
 from lakehouse_core.execution import execute_sql, run_query_to_parquet, run_query_to_partitioned_parquet
 from lakehouse_core.execution import normalize_duckdb_path
+from lakehouse_core.observability import log_event
 from lakehouse_core.storage import ObjectStore
+
+logger = logging.getLogger(__name__)
 
 
 def prepare_paths(
@@ -30,18 +34,39 @@ def prepare_paths(
     if is_partitioned:
         if not partition_date or not str(partition_date).strip():
             raise ValueError("partition_date is required for partitioned datasets")
-        return core_paths.build_partition_paths(
+        paths = core_paths.build_partition_paths(
             base_uri=base_uri,
             base_prefix=base_prefix,
             partition_date=str(partition_date).strip(),
             run_id=run_id,
         )
+        log_event(
+            logger,
+            "core.prepare_paths",
+            base_prefix=base_prefix,
+            dt=paths.partition_date,
+            run_id=run_id,
+            is_partitioned=True,
+            canonical_prefix=paths.canonical_prefix,
+            tmp_prefix=paths.tmp_prefix,
+        )
+        return paths
 
-    return core_paths.build_non_partition_paths(
+    paths = core_paths.build_non_partition_paths(
         base_uri=base_uri,
         base_prefix=base_prefix,
         run_id=run_id,
     )
+    log_event(
+        logger,
+        "core.prepare_paths",
+        base_prefix=base_prefix,
+        run_id=run_id,
+        is_partitioned=False,
+        canonical_prefix=paths.canonical_prefix,
+        tmp_prefix=paths.tmp_prefix,
+    )
+    return paths
 
 
 def validate_output(
@@ -63,6 +88,14 @@ def validate_output(
         count = _parquet_count(paths.tmp_prefix)
         if count != 0:
             raise ValueError("Expected no parquet files in tmp prefix for empty source result")
+        log_event(
+            logger,
+            "core.validate_output",
+            status="no_data",
+            file_count=0,
+            row_count=0,
+            tmp_prefix=paths.tmp_prefix,
+        )
         return dict(metrics)
 
     expected_files = int(metrics["file_count"])
@@ -79,6 +112,14 @@ def validate_output(
     if int(metrics["row_count"]) < 0:
         raise ValueError("Row count cannot be negative")
 
+    log_event(
+        logger,
+        "core.validate_output",
+        status="ok",
+        file_count=actual_files,
+        row_count=int(metrics["row_count"]),
+        tmp_prefix=paths.tmp_prefix,
+    )
     return dict(metrics)
 
 
@@ -89,6 +130,13 @@ def publish_output(
     manifest: Mapping[str, object],
     write_success_flag: bool = True,
 ) -> Mapping[str, str]:
+    log_event(
+        logger,
+        "core.publish_output",
+        status="start",
+        manifest_path=getattr(paths, "manifest_path", ""),
+        success_flag_path=getattr(paths, "success_flag_path", "") if write_success_flag else "",
+    )
     if isinstance(paths, core_paths.PartitionPaths):
         return core_commit.publish_partition(
             store=store,
@@ -107,6 +155,7 @@ def publish_output(
 def cleanup_tmp(
     *, store: ObjectStore, paths: core_paths.PartitionPaths | core_paths.NonPartitionPaths
 ) -> None:
+    log_event(logger, "core.cleanup_tmp", tmp_prefix=paths.tmp_prefix)
     store.delete_prefix(paths.tmp_prefix)
 
 
@@ -151,6 +200,13 @@ def materialize_query_to_tmp_and_measure(
 
     file_count = len([uri for uri in store.list_keys(count_prefix) if uri.endswith(".parquet")])
     if file_count == 0:
+        log_event(
+            logger,
+            "core.materialize_query",
+            status="no_data",
+            partitioned=partitioned,
+            destination_prefix=destination_prefix,
+        )
         return {"row_count": 0, "file_count": 0, "has_data": 0}
 
     parquet_glob_duckdb = normalize_duckdb_path(parquet_glob)
@@ -158,4 +214,13 @@ def materialize_query_to_tmp_and_measure(
         connection, f"SELECT COUNT(*) AS row_count FROM read_parquet('{parquet_glob_duckdb}')"
     )
     row_count = int(relation.fetchone()[0])
+    log_event(
+        logger,
+        "core.materialize_query",
+        status="ok",
+        partitioned=partitioned,
+        destination_prefix=destination_prefix,
+        file_count=file_count,
+        row_count=row_count,
+    )
     return {"row_count": row_count, "file_count": file_count, "has_data": 1}

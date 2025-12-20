@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from lakehouse_core.storage import ObjectStore
-from lakehouse_core.uri import parse_s3_uri
+from lakehouse_core.uri import normalize_s3_key_prefix, parse_s3_uri
 
 
 def _normalize_prefix_uri(prefix_uri: str) -> str:
@@ -167,7 +167,7 @@ class Boto3S3Store(ObjectStore):
 
     def list_keys(self, prefix_uri: str) -> list[str]:
         bucket, key_prefix = parse_s3_uri(prefix_uri)
-        normalized_prefix = key_prefix.strip("/") + "/"
+        normalized_prefix = normalize_s3_key_prefix(key_prefix)
 
         paginator = self._client.get_paginator("list_objects_v2")
         keys: list[str] = []
@@ -229,14 +229,16 @@ class Boto3S3Store(ObjectStore):
         source_bucket, source_prefix = parse_s3_uri(source_prefix_uri)
         dest_bucket, dest_prefix = parse_s3_uri(dest_prefix_uri)
 
-        source_base = _normalize_prefix_uri(f"s3://{source_bucket}/{source_prefix}")
-        dest_base = _normalize_prefix_uri(f"s3://{dest_bucket}/{dest_prefix}")
+        normalized_src = normalize_s3_key_prefix(source_prefix)
+        normalized_dest = normalize_s3_key_prefix(dest_prefix)
+        source_list_uri = f"s3://{source_bucket}/{normalized_src}"
 
-        for src_uri in self.list_keys(source_base):
-            suffix = src_uri[len(source_base) :]
-            dst_uri = dest_base + suffix
+        for src_uri in self.list_keys(source_list_uri):
             _, src_key = parse_s3_uri(src_uri)
-            _, dst_key = parse_s3_uri(dst_uri)
+            if not src_key.startswith(normalized_src):
+                continue
+            suffix = src_key[len(normalized_src) :]
+            dst_key = normalized_dest + suffix
             self._client.copy_object(
                 Bucket=dest_bucket,
                 Key=dst_key,

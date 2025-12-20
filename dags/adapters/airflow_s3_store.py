@@ -4,6 +4,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from lakehouse_core import parse_s3_uri
 from lakehouse_core.storage import ObjectStore
+from lakehouse_core.uri import normalize_s3_key_prefix
 
 
 class AirflowS3Store(ObjectStore):
@@ -14,7 +15,7 @@ class AirflowS3Store(ObjectStore):
 
     def list_keys(self, prefix_uri: str) -> list[str]:
         bucket, key_prefix = parse_s3_uri(prefix_uri)
-        normalized_prefix = key_prefix.strip("/") + "/"
+        normalized_prefix = normalize_s3_key_prefix(key_prefix)
         keys = self._hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
         return [f"s3://{bucket}/{key}" for key in keys]
 
@@ -42,7 +43,7 @@ class AirflowS3Store(ObjectStore):
 
     def delete_prefix(self, prefix_uri: str) -> None:
         bucket, key_prefix = parse_s3_uri(prefix_uri)
-        normalized_prefix = key_prefix.strip("/") + "/"
+        normalized_prefix = normalize_s3_key_prefix(key_prefix)
         keys = self._hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
         if keys:
             self._hook.delete_objects(bucket=bucket, keys=keys)
@@ -63,15 +64,15 @@ class AirflowS3Store(ObjectStore):
         src_bucket, src_prefix = parse_s3_uri(source_prefix_uri)
         dest_bucket, dest_prefix = parse_s3_uri(dest_prefix_uri)
 
-        normalized_src = src_prefix.strip("/") + "/"
-        normalized_dest = dest_prefix.strip("/") + "/"
+        normalized_src = normalize_s3_key_prefix(src_prefix)
+        normalized_dest = normalize_s3_key_prefix(dest_prefix)
 
         keys = self._hook.list_keys(bucket_name=src_bucket, prefix=normalized_src) or []
         for key in keys:
             if not key.startswith(normalized_src):
                 continue
-            relative_key = key[len(normalized_src) :]
-            dest_key = normalized_dest + relative_key
+            suffix = key[len(normalized_src) :]
+            dest_key = normalized_dest + suffix
             self._hook.copy_object(
                 source_bucket_key=key,
                 dest_bucket_key=dest_key,

@@ -33,6 +33,21 @@ def parse_s3_uri(uri: str) -> tuple[str, str]:
     return parsed.authority, parsed.path
 
 
+def normalize_s3_key_prefix(key: str) -> str:
+    """Normalize S3 key prefix for string-prefix semantics.
+
+    - No directory inference: prefix is a raw string prefix.
+    - Trailing slashes are ignored: ``a`` and ``a/`` behave the same.
+    - Leading slashes are ignored: callers should not rely on ``/``-rooted keys.
+    """
+
+    value = (key or "").strip()
+    value = value.lstrip("/").rstrip("/")
+    if not value:
+        raise ValueError("S3 key prefix is required")
+    return value
+
+
 def strip_slashes(value: str) -> str:
     return value.strip("/")
 
@@ -41,4 +56,3 @@ def join_uri(base_uri: str, key: str) -> str:
     base = base_uri.rstrip("/")
     k = key.lstrip("/")
     return f"{base}/{k}"
-

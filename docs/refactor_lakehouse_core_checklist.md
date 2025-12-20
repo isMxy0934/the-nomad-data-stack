@@ -277,12 +277,12 @@ Checklist：
 ### C. 日志与可观测性（Core 仍要“可运维”）
 
 约定：
-- [ ] `lakehouse_core` 统一使用 Python 标准库 `logging.getLogger(__name__)`。
-- [ ] Airflow 层负责把标准 logging 输出接入 Airflow task log（通常 Airflow 已处理 root handler；如需额外格式化，在 DAG 镜像/配置侧完成）。
-- [ ] core 日志字段建议结构化：`dest/table/dt/run_id/file_count/row_count/status`（保持与现有日志约定一致）。
+- [x] `lakehouse_core` 统一使用 Python 标准库 `logging.getLogger(__name__)`。
+- [x] Airflow 层负责把标准 logging 输出接入 Airflow task log（通常 Airflow 已处理 root handler；如需额外格式化，在 DAG 镜像/配置侧完成）。
+- [x] core 日志字段建议结构化：`dest/table/dt/run_id/file_count/row_count/status`（保持与现有日志约定一致）。
 
 验收标准：
-- [ ] 在 Airflow UI 的 task log 中能看到 core 的关键日志（无需依赖 `airflow.utils.log`）。
+- [x] 在 Airflow UI 的 task log 中能看到 core 的关键日志（无需依赖 `airflow.utils.log`）。
 
 ### D. RunSpec 预留连接/存储选项（为 Phase 2 做接口稳定）
 
@@ -301,9 +301,9 @@ Checklist：
 风险：本地文件系统有“目录”概念，而 S3 prefix 是字符串匹配；如果 LocalStore 行为不一致，单测会给出虚假的安全感。
 
 建议（Phase 1 必须写清楚并在实现中遵守）：
-- [ ] `list_keys(prefix)` 语义：按“字符串前缀匹配”返回所有对象 keys（递归），不引入目录层级推断。
-- [ ] 统一规范化：prefix 是否补 `/`、是否允许空 prefix、返回 keys 是否包含 leading `/`，都要在实现里固定并写测试覆盖。
-- [ ] 覆盖边界用例：`prefix="lake/a"` 与 `prefix="lake/a/"` 的行为一致性。
+- [x] `list_keys(prefix)` 语义：按“字符串前缀匹配”返回所有对象 keys（递归），不引入目录层级推断。
+- [x] 统一规范化：prefix 是否补 `/`、是否允许空 prefix、返回 keys 是否包含 leading `/`，都要在实现里固定并写测试覆盖。
+- [x] 覆盖边界用例：`prefix="lake/a"` 与 `prefix="lake/a/"` 的行为一致性。
 
 验收标准：
-- [ ] 同一组对象 keys 下，LocalStore 与 S3Store 对 `list_keys/delete_prefix/copy_prefix` 的行为一致（除性能差异外）。
+- [x] 同一组对象 keys 下，LocalStore 与 S3Store 对 `list_keys/delete_prefix/copy_prefix` 的行为一致（除性能差异外）。
