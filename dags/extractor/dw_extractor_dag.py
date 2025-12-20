@@ -32,7 +32,7 @@ from dags.utils.time_utils import get_partition_date_str
 
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = Path(__file__).parent / "config.yaml"
+CONFIG_PATH = Path(__file__).parent / "configs/config.yaml"
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 
