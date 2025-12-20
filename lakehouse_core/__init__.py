@@ -11,7 +11,9 @@ from lakehouse_core.api import (
     publish_output,
     validate_output,
 )
+from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.errors import LakehouseCoreError, PlanningError, ValidationError
+from lakehouse_core.dw_config import DWConfig, DWConfigError, SourceSpec, TableSpec, discover_tables_for_layer, load_dw_config, order_layers, order_tables_within_layer
 from lakehouse_core.execution import (
     Executor,
     S3ConnectionConfig,
@@ -24,11 +26,13 @@ from lakehouse_core.execution import (
     run_query_to_partitioned_parquet,
     temporary_connection,
 )
+from lakehouse_core.input_views import has_csv_under_prefix, register_csv_glob_as_temp_view
 from lakehouse_core.manifest import build_manifest
 from lakehouse_core.models import RunContext, RunSpec
 from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.planning import Planner
 from lakehouse_core.uri import parse_s3_uri
+from lakehouse_core.sql import MissingTemplateVariableError, load_and_render_sql, load_sql, render_sql
 
 __all__ = [
     "LakehouseCoreError",
@@ -41,6 +45,7 @@ __all__ = [
     "ValidationError",
     "Executor",
     "S3ConnectionConfig",
+    "attach_catalog_if_available",
     "build_manifest",
     "cleanup_tmp",
     "materialize_query_to_tmp_and_measure",
@@ -49,9 +54,23 @@ __all__ = [
     "copy_partitioned_parquet",
     "create_temporary_connection",
     "execute_sql",
+    "has_csv_under_prefix",
+    "DWConfig",
+    "DWConfigError",
+    "SourceSpec",
+    "TableSpec",
+    "discover_tables_for_layer",
+    "load_dw_config",
+    "order_layers",
+    "order_tables_within_layer",
+    "MissingTemplateVariableError",
+    "load_and_render_sql",
+    "load_sql",
+    "render_sql",
     "parse_s3_uri",
     "prepare_paths",
     "publish_output",
+    "register_csv_glob_as_temp_view",
     "run_query_to_parquet",
     "run_query_to_partitioned_parquet",
     "temporary_connection",

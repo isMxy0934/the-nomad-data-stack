@@ -44,6 +44,8 @@ from lakehouse_core import materialize_query_to_tmp_and_measure
 from dags.utils.sql_utils import load_and_render_sql
 from dags.utils.time_utils import get_partition_date_str
 
+from lakehouse_core import attach_catalog_if_available, has_csv_under_prefix, register_csv_glob_as_temp_view
+
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent
 CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
@@ -66,15 +68,7 @@ def _target_matches(table_spec: TableSpec, target: str) -> bool:
 
 
 def _attach_catalog_if_available(connection) -> None:
-    if not CATALOG_PATH.exists():
-        logger.info("Catalog file %s not found; skipping attach.", CATALOG_PATH)
-        return
-    connection.execute(f"ATTACH '{CATALOG_PATH}' AS catalog (READ_ONLY);")
-    # Prefer search_path to keep temp views resolvable while making catalog schemas visible.
-    try:
-        connection.execute("SET search_path='temp, catalog, main';")
-    except Exception:  # noqa: BLE001
-        connection.execute("USE catalog;")
+    attach_catalog_if_available(connection, catalog_path=CATALOG_PATH)
 
 
 def _register_ods_raw_view(
@@ -99,26 +93,19 @@ def _register_ods_raw_view(
         )
 
     source_path = source.path.strip("/")
-    source_prefix = f"{source_path}/dt={partition_date}/"
-    source_keys = s3_hook.list_keys(bucket_name=bucket_name, prefix=source_prefix) or []
-    csv_keys = [key for key in source_keys if key.endswith(".csv")]
-    if not csv_keys:
+    prefix_uri = f"s3://{bucket_name}/{source_path}/dt={partition_date}/"
+    store = AirflowS3Store(s3_hook)
+    if not has_csv_under_prefix(store, prefix_uri=prefix_uri):
         logger.info(
-            "No source CSV found under s3://%s/%s (partition_date=%s, table=%s); no-op.",
-            bucket_name,
-            source_prefix,
+            "No source CSV found under %s (partition_date=%s, table=%s); no-op.",
+            prefix_uri,
             partition_date,
             table_name,
         )
         return False
 
     source_uri = f"s3://{bucket_name}/{source_path}/dt={partition_date}/*.csv"
-    connection.execute(
-        f"""
-        CREATE OR REPLACE TEMP VIEW tmp_{table_name} AS
-        SELECT * FROM read_csv_auto('{source_uri}', hive_partitioning=false);
-        """
-    )
+    register_csv_glob_as_temp_view(connection, view_name=f"tmp_{table_name}", csv_glob_uri=source_uri)
     return True
 
 
