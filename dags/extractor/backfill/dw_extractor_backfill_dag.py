@@ -46,11 +46,11 @@ from airflow.operators.python import get_current_context
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from dags.extractor.backfill_specs import (
+from dags.extractor.backfill.backfill_specs import (
     backfill_spec_from_mapping,
     load_backfill_specs,
 )
-from dags.extractor.dw_extractor_dag import load_extractor_specs
+from dags.extractor.increment.dw_extractor_dag import load_extractor_specs
 from dags.utils.time_utils import get_partition_date_str
 
 logger = logging.getLogger(__name__)

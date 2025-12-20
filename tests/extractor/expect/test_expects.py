@@ -9,7 +9,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
-    from dags.extractor.expect.expects import dedupe_trade_date_symbol, identity
+    from dags.extractor.expect.functions.expects import dedupe_trade_date_symbol, identity
 except ImportError as exc:
     pytest.skip(
         f"expect functions imports unavailable in this environment: {exc}", allow_module_level=True

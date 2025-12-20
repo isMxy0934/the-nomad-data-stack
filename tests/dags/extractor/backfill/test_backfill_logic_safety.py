@@ -7,13 +7,13 @@ import pytest
 
 @pytest.fixture
 def mock_s3_hook():
-    with mock.patch("dags.extractor.dw_extractor_backfill_dag.S3Hook") as m:
+    with mock.patch("dags.extractor.backfill.dw_extractor_backfill_dag.S3Hook") as m:
         yield m
 
 
 @pytest.fixture
 def mock_s3_hook_compact():
-    with mock.patch("dags.extractor.dw_extractor_compact_dag.S3Hook") as m:
+    with mock.patch("dags.extractor.expect.dw_extractor_compact_dag.S3Hook") as m:
         yield m
 
 
@@ -24,7 +24,7 @@ def mock_s3_hook_compact():
 
 def test_compact_uses_etl_utils():
     """Verify that compact DAG uses commit_dataset from etl_utils."""
-    with open("dags/extractor/dw_extractor_compact_dag.py") as f:
+    with open("dags/extractor/expect/dw_extractor_compact_dag.py") as f:
         content = f.read()
     assert "commit_dataset" in content
     assert "cleanup_dataset" in content
@@ -34,7 +34,7 @@ def test_compact_uses_etl_utils():
 
 def test_backfill_atomic_logic_present():
     """Verify that backfill DAG contains atomic write logic."""
-    with open("dags/extractor/dw_extractor_backfill_dag.py") as f:
+    with open("dags/extractor/backfill/dw_extractor_backfill_dag.py") as f:
         content = f.read()
     assert "_tmp/data.csv" in content
     assert "s3_hook.copy_object" in content
@@ -43,7 +43,7 @@ def test_backfill_atomic_logic_present():
 
 def test_backfill_partial_month_logic():
     """Verify that backfill DAG checks for partial month."""
-    with open("dags/extractor/dw_extractor_backfill_dag.py") as f:
+    with open("dags/extractor/backfill/dw_extractor_backfill_dag.py") as f:
         content = f.read()
     assert "job_start_dt <= shard_start_dt" in content
     assert "job_end_dt >= shard_end_dt" in content

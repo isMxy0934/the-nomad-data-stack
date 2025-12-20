@@ -26,7 +26,7 @@ from airflow.decorators import task
 from airflow.operators.empty import EmptyOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from dags.extractor.backfill_specs import (
+from dags.extractor.backfill.backfill_specs import (
     backfill_spec_from_mapping,
     load_backfill_specs,
 )

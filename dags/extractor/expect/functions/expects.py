@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from dags.extractor.backfill_specs import BackfillExtractorSpec
+from dags.extractor.backfill.backfill_specs import BackfillExtractorSpec
 
 
 def identity(df: pd.DataFrame, *, trade_date: str, spec: BackfillExtractorSpec) -> pd.DataFrame:

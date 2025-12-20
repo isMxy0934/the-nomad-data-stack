@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-BACKFILL_CONFIG_PATH = Path(__file__).parent / "configs/backfill_config.yaml"
+BACKFILL_CONFIG_PATH = Path(__file__).parent / "backfill_config.yaml"
 
 
 @dataclass(frozen=True)

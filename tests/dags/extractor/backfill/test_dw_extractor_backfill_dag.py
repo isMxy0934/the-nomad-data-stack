@@ -6,7 +6,7 @@ airflow = pytest.importorskip("airflow")
 
 from airflow.models import DAG  # noqa: E402
 
-from dags.extractor.dw_extractor_backfill_dag import create_dw_extractor_backfill_dag  # noqa: E402
+from dags.extractor.backfill.dw_extractor_backfill_dag import create_dw_extractor_backfill_dag  # noqa: E402
 
 
 def test_dw_extractor_backfill_dag_builds() -> None:
