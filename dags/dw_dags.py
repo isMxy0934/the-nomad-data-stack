@@ -19,9 +19,9 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.dag_run_utils import parse_targets
 from dags.utils.duckdb_utils import (
     configure_s3_access,
-    copy_parquet,
-    copy_partitioned_parquet,
     execute_sql,
+    run_query_to_parquet,
+    run_query_to_partitioned_parquet,
     temporary_connection,
 )
 from dags.utils.dw_config_utils import (
@@ -164,7 +164,7 @@ def load_table(
         )
         destination_prefix = paths_dict["tmp_prefix"]
         if partitioned:
-            copy_partitioned_parquet(
+            run_query_to_partitioned_parquet(
                 connection,
                 query=rendered_sql,
                 destination=destination_prefix,
@@ -174,7 +174,7 @@ def load_table(
             )
             file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_partition_prefix"]))
         else:
-            copy_parquet(
+            run_query_to_parquet(
                 connection,
                 query=rendered_sql,
                 destination=destination_prefix,
