@@ -10,7 +10,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote
 from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import duckdb
 from typing import Protocol
@@ -92,6 +94,30 @@ def execute_sql(connection: duckdb.DuckDBPyConnection, sql: str) -> duckdb.DuckD
     return connection.execute(sql)
 
 
+def normalize_duckdb_path(path_or_uri: str) -> str:
+    """Normalize a destination path/URI for DuckDB.
+
+    DuckDB accepts S3 URIs (via httpfs) but local paths are generally best passed
+    as filesystem paths rather than ``file://`` URIs. This helper converts
+    ``file://`` URIs into OS paths and leaves other schemes untouched.
+    """
+
+    value = (path_or_uri or "").strip()
+    if not value:
+        raise ValueError("path_or_uri is required")
+    if value.startswith("s3://"):
+        return value
+    if value.startswith("file://"):
+        parsed = urlparse(value)
+        raw_path = unquote(parsed.path or "")
+        local_path = url2pathname(raw_path)
+        if local_path.startswith("/") and len(local_path) >= 3 and local_path[2] == ":":
+            # Windows drive letter: /C:/path -> C:/path
+            local_path = local_path[1:]
+        return local_path
+    return value
+
+
 def copy_partitioned_parquet(
     connection: duckdb.DuckDBPyConnection,
     *,
@@ -119,7 +145,8 @@ def copy_partitioned_parquet(
     if use_tmp_file:
         options.append("USE_TMP_FILE true")
 
-    copy_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(options) + ");"
+    dest = normalize_duckdb_path(destination)
+    copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     try:
         connection.execute(copy_sql)
     except duckdb.NotImplementedException:
@@ -128,9 +155,7 @@ def copy_partitioned_parquet(
         if not use_tmp_file:
             raise
         fallback_options = [opt for opt in options if opt != "USE_TMP_FILE true"]
-        fallback_sql = (
-            "COPY (" + query + f") TO '{destination}' (" + ", ".join(fallback_options) + ");"
-        )
+        fallback_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(fallback_options) + ");"
         connection.execute(fallback_sql)
 
 
@@ -153,7 +178,8 @@ def copy_parquet(
     if use_tmp_file:
         options.append("USE_TMP_FILE true")
 
-    copy_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(options) + ");"
+    dest = normalize_duckdb_path(destination)
+    copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     connection.execute(copy_sql)
 
 

@@ -22,6 +22,7 @@ from lakehouse_core.execution import (
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
+    normalize_duckdb_path,
     run_query_to_parquet,
     run_query_to_partitioned_parquet,
     temporary_connection,
@@ -29,15 +30,19 @@ from lakehouse_core.execution import (
 from lakehouse_core.input_views import has_csv_under_prefix, register_csv_glob_as_temp_view
 from lakehouse_core.manifest import build_manifest
 from lakehouse_core.models import RunContext, RunSpec
+from lakehouse_core.ods_sources import register_ods_csv_source_view
 from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.planning import Planner
+from lakehouse_core.dw_planner import DirectoryDWPlanner
 from lakehouse_core.uri import parse_s3_uri
 from lakehouse_core.sql import MissingTemplateVariableError, load_and_render_sql, load_sql, render_sql
+from lakehouse_core.stores import Boto3S3Store, LocalFileStore
 
 __all__ = [
     "LakehouseCoreError",
     "NonPartitionPaths",
     "Planner",
+    "DirectoryDWPlanner",
     "PlanningError",
     "PartitionPaths",
     "RunContext",
@@ -54,7 +59,11 @@ __all__ = [
     "copy_partitioned_parquet",
     "create_temporary_connection",
     "execute_sql",
+    "normalize_duckdb_path",
     "has_csv_under_prefix",
+    "register_ods_csv_source_view",
+    "Boto3S3Store",
+    "LocalFileStore",
     "DWConfig",
     "DWConfigError",
     "SourceSpec",

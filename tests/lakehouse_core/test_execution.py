@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import duckdb
 import pytest
 
-from lakehouse_core.execution import copy_partitioned_parquet
+from lakehouse_core.execution import copy_partitioned_parquet, normalize_duckdb_path
 
 
 def test_copy_partitioned_parquet_falls_back_when_use_tmp_file_not_supported():
@@ -47,3 +47,8 @@ def test_copy_partitioned_parquet_validates_inputs(query: str, destination: str,
             partition_column=partition_column,
         )
 
+
+def test_normalize_duckdb_path_converts_file_uri(tmp_path):
+    uri = (tmp_path / "out").resolve().as_uri()
+    normalized = normalize_duckdb_path(uri)
+    assert not normalized.startswith("file://")

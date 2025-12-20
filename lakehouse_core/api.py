@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from lakehouse_core import commit as core_commit
 from lakehouse_core import paths as core_paths
 from lakehouse_core.execution import execute_sql, run_query_to_parquet, run_query_to_partitioned_parquet
+from lakehouse_core.execution import normalize_duckdb_path
 from lakehouse_core.storage import ObjectStore
 
 
@@ -21,7 +22,7 @@ def prepare_paths(
     Phase 1 convention: ``store_namespace`` is either an ``s3://bucket`` URI or a bucket name.
     """
 
-    if store_namespace.startswith("s3://"):
+    if "://" in store_namespace:
         base_uri = store_namespace.rstrip("/")
     else:
         base_uri = f"s3://{store_namespace.strip()}"
@@ -152,8 +153,9 @@ def materialize_query_to_tmp_and_measure(
     if file_count == 0:
         return {"row_count": 0, "file_count": 0, "has_data": 0}
 
+    parquet_glob_duckdb = normalize_duckdb_path(parquet_glob)
     relation = execute_sql(
-        connection, f"SELECT COUNT(*) AS row_count FROM read_parquet('{parquet_glob}')"
+        connection, f"SELECT COUNT(*) AS row_count FROM read_parquet('{parquet_glob_duckdb}')"
     )
     row_count = int(relation.fetchone()[0])
     return {"row_count": row_count, "file_count": file_count, "has_data": 1}

@@ -174,14 +174,15 @@ Checklist：
 
 第一阶段建议不动“表发现/依赖解析”的位置（继续在 `dags/utils/dw_config_utils.py` + `dags/dw_dags.py`），但先把接口写清楚，避免未来迁 Prefect/脚本时无从下手：
 
-- [ ] 新增 `lakehouse_core/planning.py`，定义：
-  - [ ] `class Planner(Protocol): def build(self, context: RunContext) -> list[RunSpec]: ...`
-- [ ] 新增一个默认实现（位置二选一）：
-  - [ ] **方案 A（推荐 Phase 1）**：默认 planner 仍留在 `dags/`（Airflow scope 内），只负责把现有扫描结果转换成 `RunSpec`（不引入 core 对 dags 的依赖）。
-  - [ ] **方案 B（Phase 2）**：把“目录即配置”的 planner 下沉到 `lakehouse_core`（依赖纯文件系统读取，不依赖 Airflow）。
+- [x] 新增 `lakehouse_core/planning.py`，定义：
+  - [x] `class Planner(Protocol): def build(self, context: RunContext) -> list[RunSpec]: ...`
+- [x] 新增一个默认实现（位置二选一）：
+  - [ ] **方案 A**：默认 planner 仍留在 `dags/`（Airflow scope 内），只负责把现有扫描结果转换成 `RunSpec`（不引入 core 对 dags 的依赖）。
+  - [x] **方案 B**：把“目录即配置”的 planner 下沉到 `lakehouse_core`（依赖纯文件系统读取，不依赖 Airflow）。
+    - [x] `lakehouse_core/dw_planner.py`：`DirectoryDWPlanner`
 
 验收标准：
-- [ ] core 只依赖 `RunSpec`，不依赖 `dw_config.yaml`/SQL 目录约定本身。
+- [x] orchestrator 只依赖 `Planner`/`RunSpec`（默认实现可替换）；`dags/` 与 `scripts/` 都可复用同一套 planner 输出。
 
 ### 1.6 测试策略（Phase 1 必须落地）
 
@@ -227,9 +228,10 @@ Checklist：
 目标：提供最轻量的运行方式，为后续替换调度器铺路。
 
 Checklist：
-- [ ] 新增 `scripts/run_dw.py`：
-  - [ ] `--layer/--table/--dt/--start-date/--end-date/--targets`
-  - [ ] `--store=local|s3`（选择对应 adapter）
+- [x] 新增 `scripts/run_dw.py`：
+  - [x] `--layer/--table/--dt/--start-date/--end-date/--targets`
+  - [x] `--store=local|s3`（选择对应 adapter）
+  - [x] 复用 `lakehouse_core.DirectoryDWPlanner` + `lakehouse_core.api`（prepare/validate/publish/cleanup）+ `lakehouse_core.execution`
 - [ ] 编写最小 end-to-end 验证脚本（或复用现有 integration）
 
 验收标准：
