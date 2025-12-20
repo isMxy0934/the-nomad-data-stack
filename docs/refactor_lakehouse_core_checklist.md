@@ -62,15 +62,15 @@
 
 - [x] 新增包：`lakehouse_core/`
   - [x] `lakehouse_core/__init__.py`
-  - [ ] `lakehouse_core/models.py`：`RunContext`、`RunSpec` 等核心数据结构（建议 dataclass）
-  - [ ] `lakehouse_core/planning.py`：`Planner` 协议（可选，但建议先定接口，避免后续反复改）
+  - [x] `lakehouse_core/models.py`：`RunContext`、`RunSpec` 等核心数据结构（建议 dataclass）
+  - [x] `lakehouse_core/planning.py`：`Planner` 协议（可选，但建议先定接口，避免后续反复改）
   - [x] `lakehouse_core/storage.py`：定义 `ObjectStore`（Protocol/ABC）
   - [x] `lakehouse_core/paths.py`：路径规划（canonical/tmp/manifest/_SUCCESS）
   - [x] `lakehouse_core/manifest.py`：manifest 结构与构建
   - [x] `lakehouse_core/commit.py`：publish（delete+copy）与完成标记
   - [x] `lakehouse_core/validate.py`：校验（file_count/row_count/存在性）
   - [x] `lakehouse_core/api.py`：统一入口（prepare/validate/publish/cleanup）
-  - [ ] `lakehouse_core/errors.py`：统一异常类型（可选，但建议）
+  - [x] `lakehouse_core/errors.py`：统一异常类型（可选，但建议）
 
 验收标准：
 - [x] 在 `lakehouse_core/` 目录执行 `rg -n \"\\bairflow\\b|S3Hook|dag_run|xcom\" lakehouse_core` 无命中。
@@ -79,7 +79,7 @@
 
 - [x] `dags/dw_dags.py` 这类“动态生成 DAG/TaskGroup/expand/TriggerDagRun”的逻辑属于 orchestrator 层，**第一阶段继续保留在 `dags/`**。
 - [x] 第一阶段的改造重点是：把这些 DAG 里每个 task 最终调用的“业务动作”替换为 core 用例函数（通过 adapter 注入 `ObjectStore`），而不是迁移 Airflow 的 DSL。
-- [ ] 后续若迁 Prefect/脚本：可重用同一个 Planner 产出的 `RunSpec` 列表，用不同 orchestrator 将其映射为任务图（而不要求复刻 Airflow UI 结构）。
+- 后续若迁 Prefect/脚本：可重用同一个 Planner 产出的 `RunSpec` 列表，用不同 orchestrator 将其映射为任务图（而不要求复刻 Airflow UI 结构）。
 
 ### 1.2 定义核心存储抽象：`ObjectStore`
 
@@ -108,7 +108,7 @@ Checklist：
 - [x] `cleanup_tmp(store, paths) -> None`
 
 说明：
-- [ ] Phase 1 允许 “DuckDB 执行 + 产出 metrics” 仍由 DAG 层函数完成（如当前 `dags/dw_dags.py#load_table`），但其输出 metrics 必须能被 core 的 validate/publish 接收。
+- Phase 1 允许 “DuckDB 执行 + 产出 metrics” 仍由 DAG 层函数完成（如当前 `dags/dw_dags.py#load_table`），但其输出 metrics 必须能被 core 的 validate/publish 接收。
 
 ### 1.3 提供两个存储适配器（一个给测试，一个给 Airflow）
 
