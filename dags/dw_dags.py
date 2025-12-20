@@ -16,11 +16,8 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.trigger_rule import TriggerRule
 
+from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.dag_run_utils import parse_targets
-from lakehouse_core.execution import (
-    configure_s3_access,
-    temporary_connection,
-)
 from dags.utils.etl_utils import (
     DEFAULT_AWS_CONN_ID,
     DEFAULT_BUCKET_NAME,
@@ -30,13 +27,12 @@ from dags.utils.etl_utils import (
     prepare_dataset,
     validate_dataset,
 )
-from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.dw_config import DWConfig, DWConfigError, load_dw_config, order_layers
 from lakehouse_core.dw_planner import DirectoryDWPlanner
+from lakehouse_core.execution import configure_s3_access, temporary_connection
 from lakehouse_core.inputs import OdsCsvRegistrar
-from lakehouse_core.models import RunSpec
-from lakehouse_core.models import RunContext
+from lakehouse_core.models import RunContext, RunSpec
 from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.pipeline import load as pipeline_load
 from lakehouse_core.time import get_partition_date_str

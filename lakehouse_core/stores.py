@@ -152,16 +152,16 @@ class Boto3S3Store(ObjectStore):
         config = Config(s3={"addressing_style": url_style})
         kwargs: dict[str, Any] = dict(client_kwargs or {})
         kwargs.update(
-            dict(
-                service_name="s3",
-                endpoint_url=endpoint_url,
-                region_name=region,
-                use_ssl=use_ssl,
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key,
-                aws_session_token=session_token,
-                config=config,
-            )
+            {
+                "service_name": "s3",
+                "endpoint_url": endpoint_url,
+                "region_name": region,
+                "use_ssl": use_ssl,
+                "aws_access_key_id": access_key,
+                "aws_secret_access_key": secret_key,
+                "aws_session_token": session_token,
+                "config": config,
+            }
         )
         self._client = boto3.client(**kwargs)
 

@@ -14,13 +14,13 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from lakehouse_core.execution import S3ConnectionConfig
+from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.api import prepare_paths
+from lakehouse_core.execution import S3ConnectionConfig
 from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.pipeline import cleanup as pipeline_cleanup
 from lakehouse_core.pipeline import commit as pipeline_commit
 from lakehouse_core.pipeline import validate as pipeline_validate
-from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.time import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
@@ -185,10 +185,8 @@ def commit_dataset(
     store = AirflowS3Store(s3_hook)
     if partitioned:
         paths = partition_paths_from_xcom(paths_dict)
-        canonical_prefix = paths.canonical_prefix
     else:
         paths = non_partition_paths_from_xcom(paths_dict)
-        canonical_prefix = paths.canonical_prefix
 
     publish_result, manifest = pipeline_commit(
         store=store,

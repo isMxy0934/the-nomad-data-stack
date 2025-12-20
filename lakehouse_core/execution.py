@@ -10,12 +10,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import unquote
-from urllib.parse import urlparse
+from typing import Protocol
+from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 import duckdb
-from typing import Protocol
 
 
 @dataclass(frozen=True)

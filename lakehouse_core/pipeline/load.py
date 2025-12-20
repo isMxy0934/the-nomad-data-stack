@@ -11,7 +11,6 @@ from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.sql import render_sql
 from lakehouse_core.storage import ObjectStore
 
-
 logger = logging.getLogger(__name__)
 
 

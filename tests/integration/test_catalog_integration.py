@@ -8,16 +8,16 @@ import duckdb
 
 from dags.utils.catalog_migrations import apply_migrations
 from dags.utils.catalog_utils import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
+from lakehouse_core.api import prepare_paths
 from lakehouse_core.execution import (
     configure_s3_access,
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
 )
-from lakehouse_core.api import prepare_paths
 from lakehouse_core.manifest import build_manifest
-from lakehouse_core.uri import parse_s3_uri
 from lakehouse_core.sql import load_and_render_sql
+from lakehouse_core.uri import parse_s3_uri
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 

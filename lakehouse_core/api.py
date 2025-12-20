@@ -5,8 +5,12 @@ from collections.abc import Mapping
 
 from lakehouse_core import commit as core_commit
 from lakehouse_core import paths as core_paths
-from lakehouse_core.execution import execute_sql, run_query_to_parquet, run_query_to_partitioned_parquet
-from lakehouse_core.execution import normalize_duckdb_path
+from lakehouse_core.execution import (
+    execute_sql,
+    normalize_duckdb_path,
+    run_query_to_parquet,
+    run_query_to_partitioned_parquet,
+)
 from lakehouse_core.observability import log_event
 from lakehouse_core.storage import ObjectStore
 

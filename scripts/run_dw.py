@@ -9,10 +9,9 @@ from typing import Any
 from lakehouse_core.api import prepare_paths
 from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.dw_planner import DirectoryDWPlanner
-from lakehouse_core.execution import S3ConnectionConfig, configure_s3_access
-from lakehouse_core.models import RunContext
+from lakehouse_core.execution import S3ConnectionConfig, configure_s3_access, temporary_connection
 from lakehouse_core.inputs import OdsCsvRegistrar
-from lakehouse_core.execution import temporary_connection
+from lakehouse_core.models import RunContext
 from lakehouse_core.pipeline import cleanup, commit, load, validate
 from lakehouse_core.stores import Boto3S3Store, LocalFileStore
 from lakehouse_core.time import get_default_partition_date_str

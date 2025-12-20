@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Any
 
 
 def _kv_pairs(fields: Mapping[str, object]) -> str:

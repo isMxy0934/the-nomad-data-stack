@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 import json
+import logging
 from collections.abc import Mapping
 
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.observability import log_event, manifest_log_fields
+from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.storage import ObjectStore
 
 logger = logging.getLogger(__name__)
