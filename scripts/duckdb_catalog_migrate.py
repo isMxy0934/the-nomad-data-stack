@@ -7,7 +7,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from dags.utils.catalog_migrations import apply_migrations
+from lakehouse_core.catalog_migrations import apply_migrations
 from lakehouse_core.execution import create_temporary_connection
 
 logger = logging.getLogger(__name__)

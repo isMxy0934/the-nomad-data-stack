@@ -16,7 +16,7 @@ from pathlib import Path
 import boto3
 from botocore.config import Config
 
-from dags.utils.catalog_utils import (
+from lakehouse_core.catalog_sql import (
     LayerSpec,
     build_layer_dt_macro_sql,
     build_layer_view_sql,

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import duckdb
 
-from dags.utils.catalog_migrations import apply_migrations
-from dags.utils.catalog_utils import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
 from lakehouse_core.api import prepare_paths
+from lakehouse_core.catalog_migrations import apply_migrations
+from lakehouse_core.catalog_sql import LayerSpec, build_layer_dt_macro_sql, build_layer_view_sql
 from lakehouse_core.execution import (
     configure_s3_access,
     copy_partitioned_parquet,

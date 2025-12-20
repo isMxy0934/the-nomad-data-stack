@@ -1,4 +1,4 @@
-"""DuckDB catalog migration utilities.
+"""DuckDB catalog migration utilities (metadata-only).
 
 Migrations are SQL files stored in ``catalog/migrations`` and applied into a
 persistent DuckDB database (the analysis catalog). This is metadata-only:
@@ -110,3 +110,4 @@ def apply_migrations(
         applied_now.append(filename)
 
     return applied_now
+
