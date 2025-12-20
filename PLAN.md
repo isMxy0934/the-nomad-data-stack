@@ -25,6 +25,7 @@
 - **M2 DW 打通（配置驱动）**：基于 `dags/dw_config.yaml` + `dags/{layer}/*.sql`（目录即配置）生成每层独立 DAG（`dw_{layer}`）；空层（无 SQL/目录不存在）跳过；任务运行时只读 attach DuckDB catalog 以支持 `SELECT * FROM ods.xxx`；像 ODS 一样执行（DuckDB 计算 → tmp 写入 → validate → publish → `_SUCCESS` → cleanup）。
 - **M2 DW 回填入口**：`dw_start_dag` 支持 `start_date/end_date/targets`，按日回放并向下游传递分区日期与目标表。
 - **M3 治理与运维**：小文件 compaction、schema 校验与演进、失败重试与回放、可观测与审计完善。
+- **M4 Core 解耦（lakehouse_core）**：将“提交协议/路径规划/校验”下沉到 core，调度（Airflow/Prefect/脚本）与存储（S3/本地）通过适配器接入（见 `docs/refactor_lakehouse_core_checklist.md`）。
 
 ---
 
