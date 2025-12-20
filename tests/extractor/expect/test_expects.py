@@ -23,11 +23,13 @@ def test_identity():
 
 
 def test_dedupe_trade_date_symbol():
-    df = pd.DataFrame({
-        "trade_date": ["2024-01-01", "2024-01-01", "2024-01-01"],
-        "symbol": ["A", "A", "B"],
-        "value": [1, 2, 3]
-    })
+    df = pd.DataFrame(
+        {
+            "trade_date": ["2024-01-01", "2024-01-01", "2024-01-01"],
+            "symbol": ["A", "A", "B"],
+            "value": [1, 2, 3],
+        }
+    )
     result = dedupe_trade_date_symbol(df, trade_date="2024-01-01", spec=None)
 
     assert len(result) == 2

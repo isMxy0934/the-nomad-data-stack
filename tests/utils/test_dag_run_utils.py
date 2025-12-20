@@ -22,11 +22,17 @@ def test_parse_targets_none():
 
 
 def test_parse_targets_list():
-    assert parse_targets({"targets": ["layer.table1", "layer.table2"]}) == ["layer.table1", "layer.table2"]
+    assert parse_targets({"targets": ["layer.table1", "layer.table2"]}) == [
+        "layer.table1",
+        "layer.table2",
+    ]
 
 
 def test_parse_targets_json_string():
-    assert parse_targets({"targets": '["layer.table1", "layer.table2"]'}) == ["layer.table1", "layer.table2"]
+    assert parse_targets({"targets": '["layer.table1", "layer.table2"]'}) == [
+        "layer.table1",
+        "layer.table2",
+    ]
 
 
 def test_parse_targets_single_string():
@@ -50,10 +56,7 @@ def test_parse_targets_wildcard_error():
 
 
 def test_build_downstream_conf():
-    conf = {
-        "partition_date": "2024-01-01",
-        "targets": ["ods.table1"]
-    }
+    conf = {"partition_date": "2024-01-01", "targets": ["ods.table1"]}
     result = build_downstream_conf(conf)
     assert result["partition_date"] == "2024-01-01"
     assert result["targets"] == ["ods.table1"]

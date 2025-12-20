@@ -11,9 +11,7 @@ if str(ROOT_DIR) not in sys.path:
 try:
     from dags.dw_dags import build_dw_dags
 except ImportError as exc:
-    pytest.skip(
-        f"dw_dags imports unavailable in this environment: {exc}", allow_module_level=True
-    )
+    pytest.skip(f"dw_dags imports unavailable in this environment: {exc}", allow_module_level=True)
 
 
 def test_build_dw_dags():

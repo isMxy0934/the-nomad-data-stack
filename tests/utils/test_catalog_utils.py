@@ -37,7 +37,9 @@ def test_build_layer_view_sql_parquet_non_partitioned():
 
 
 def test_build_layer_view_sql_csv():
-    layer = LayerSpec(schema="raw", base_prefix="lake/raw", partitioned_by_dt=False, file_extension="csv")
+    layer = LayerSpec(
+        schema="raw", base_prefix="lake/raw", partitioned_by_dt=False, file_extension="csv"
+    )
     sql = build_layer_view_sql(bucket="stock-data", layer=layer, table="raw_stock")
     assert "read_csv_auto" in sql
 
@@ -53,7 +55,9 @@ def test_build_layer_dt_macro_sql_errors():
     with pytest.raises(ValueError, match="macro only applies to dt-partitioned layers"):
         build_layer_dt_macro_sql(bucket="b", layer=layer, table="t")
 
-    layer_csv = LayerSpec(schema="ods", base_prefix="lake/ods", partitioned_by_dt=True, file_extension="csv")
+    layer_csv = LayerSpec(
+        schema="ods", base_prefix="lake/ods", partitioned_by_dt=True, file_extension="csv"
+    )
     with pytest.raises(ValueError, match="macro currently supports parquet only"):
         build_layer_dt_macro_sql(bucket="b", layer=layer_csv, table="t")
 
