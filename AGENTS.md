@@ -15,7 +15,7 @@
 以下设计决策是基于业务场景（每日批处理 + 轻量级）的权衡，**在没有明确重构指令前，请勿修改**：
 
 1.  **分区时间（T-1）**：
-    *   代码逻辑：`dags/utils/time_utils.py` 中的 `get_partition_date_str()` 默认取 `now() - 1 day`。
+    *   代码逻辑：`lakehouse_core/time.py` 中的 `get_partition_date_str()` 默认取 `now() - 1 day`。
     *   原因：简化了 DAG 的参数传递，任务总是处理“昨天的”数据。
     *   **禁止**：不要将其重构为 Airflow `{{ ds }}` 或 `{{ data_interval_start }}`，除非你准备重写所有 SQL 模板和回填逻辑。
 

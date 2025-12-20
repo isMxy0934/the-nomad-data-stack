@@ -12,7 +12,7 @@
 - [x] Extractor DAG：`dags/extractor/*` 已存在（AkShare/TuShare → MinIO CSV）
 - [ ] Extractor Backfill/Compact：新增 `dw_extractor_backfill_dag` / `dw_extractor_compact_dag`（历史回填 pieces → 合并到 daily）
 - [x] ODS 配置与示例 SQL：`dags/dw_config.yaml` (sources)、`dags/ods/*.sql` 已存在
-- [x] 工具类：`dags/utils/s3_utils.py`、`dags/utils/time_utils.py` 已存在
+- [x] 工具类：`dags/utils/s3_utils.py`、`lakehouse_core/time.py` 已存在
 
 > 说明：以上是“文件/结构已存在”，不等价于“已跑通验证”。跑通验证会在对应任务项里单独勾选。
 

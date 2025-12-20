@@ -40,7 +40,7 @@ def get_previous_partition_date_str(tz: str = "Asia/Shanghai") -> str:
 def get_default_partition_date_str(tz: str = "Asia/Shanghai") -> str:
     """Return yesterday's date (YYYY-MM-DD) in the given timezone.
 
-    Mirrors `dags/utils/time_utils.py#get_partition_date_str()` without importing Airflow code.
+    Mirrors the previous Airflow/DAG-facing time util behavior (T-1) without importing Airflow code.
     """
 
     return get_previous_partition_date_str(tz)

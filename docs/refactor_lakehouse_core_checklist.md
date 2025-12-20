@@ -3,7 +3,7 @@
 目标：建立一个稳定的 `lakehouse_core` 核心层，使 **调度层（Airflow/Prefect/脚本）** 与 **存储层（S3/本地/其他）** 都通过适配器接入，核心逻辑不再与任何具体调度器/存储协议绑定。
 
 本仓库强约束（重构期间必须保持不变）：
-- 分区时间默认 T-1：`dags/utils/time_utils.py#get_partition_date_str()` 不重构为 Airflow `{{ ds }}`。
+- 分区时间默认 T-1：`lakehouse_core/time.py#get_partition_date_str()` 不重构为 Airflow `{{ ds }}`。
 - Commit Protocol（非原子）：`delete_prefix -> copy_prefix` 顺序不变（见 `docs/commit-protocol.md`）。
 - 分区命名：`dt=YYYY-MM-DD` 不变，完成标记 `manifest.json` + `_SUCCESS` 语义不变。
 - Catalog：`.duckdb/catalog.duckdb` 为 metadata-only，单写者约束保留（并发控制属于调度层职责）。
