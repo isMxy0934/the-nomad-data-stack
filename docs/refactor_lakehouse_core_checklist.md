@@ -47,7 +47,7 @@
   - `dags/dw_init_dag.py`（回填入口）
   - `dags/dw_catalog_dag.py`（catalog migrations）
   - `dags/dw_dags.py`（DW 分层 DAG 动态生成）
-  - `dags/utils/partition_utils.py`（commit protocol）
+  - `lakehouse_core/commit.py` + `dags/adapters/airflow_s3_store.py` + `dags/utils/etl_utils.py`（commit protocol）
   - `dags/utils/etl_utils.py`（prepare/validate/commit/cleanup）
   - `dags/utils/s3_utils.py`、`dags/utils/duckdb_utils.py`
 
@@ -130,7 +130,7 @@ Checklist：
 
 ### 1.4 抽离 commit protocol 到 core（最关键）
 
-目标：将 `dags/utils/partition_utils.py` 中与存储提交相关的“规则”迁到 `lakehouse_core`，并在 Airflow 层保留薄包装。
+目标：将与存储提交相关的“规则”迁到 `lakehouse_core`，并在 Airflow 层通过 `AirflowS3Store` 直接调用 core（不再保留 `dags/utils/partition_utils.py`）。
 
 Checklist（按顺序做，避免大爆炸）：
 - [x] 在 `lakehouse_core/paths.py` 复刻并稳定化以下概念：
@@ -146,7 +146,7 @@ Checklist（按顺序做，避免大爆炸）：
   - [x] 无数据：确认 tmp 前缀无残留；并按现有语义清理 canonical 分区
 
 Airflow 层改造（最小侵入策略）：
-- [x] `dags/utils/partition_utils.py` 逐步变成“调用 core + 适配 S3Hook”的薄层
+- [x] 移除 `dags/utils/partition_utils.py`；Airflow 层直接使用 `AirflowS3Store` + `lakehouse_core` 用例函数
   - [x] 保持原函数签名一段时间（兼容现有调用）
   - [x] 内部改为：`store = AirflowS3Store(s3_hook)` → 调 `lakehouse_core.*`
 
@@ -218,7 +218,7 @@ Checklist：
 - [x] 将 `dags/utils/duckdb_utils.py` 的可复用执行逻辑迁到 core（保留 Airflow 侧的配置获取）
 
 验收标准：
-- [ ] Airflow 与脚本（或 Prefect）调用相同的执行用例函数，结果一致。
+- [x] Airflow 与脚本（或 Prefect）调用相同的执行用例函数，结果一致。
 
 补充（Phase 2 执行下沉进度）：
 - [x] `dags/dw_dags.py#load_table` 的 “query → parquet → (file_count,row_count)” 已收口到 `lakehouse_core.materialize_query_to_tmp_and_measure`，编排层只负责组装参数与上游 view 注册。
@@ -241,8 +241,8 @@ Checklist：
 
 ## 回滚与风险控制（强制）
 
-- [ ] 每一步迁移都保留旧入口函数一段时间（仅内部改为调用 core），不要一次性删掉旧文件/旧函数。
-- [ ] 任意阶段失败可回滚到“旧函数直连 S3Hook”实现（通过 git diff/小步提交来保障）。
+- [x] 完成收口与测试后，删除旧入口/过渡代码（以 pytest 全绿作为保护网）。
+- [x] 任意阶段失败通过 git 回滚（而非保留双实现并行）来保障可恢复性。
 - [ ] 任何涉及路径/完成标记语义变更都必须同步更新 `docs/commit-protocol.md` 与 `README.md`/`PLAN.md`（如适用）。
 
 ---

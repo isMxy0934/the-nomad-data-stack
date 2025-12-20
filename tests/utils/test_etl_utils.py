@@ -12,14 +12,12 @@ try:
     from dags.utils.etl_utils import (
         build_s3_connection_config,
         commit_dataset,
-        delete_tmp_prefix,
-        list_parquet_keys,
         non_partition_paths_from_xcom,
         partition_paths_from_xcom,
         prepare_dataset,
         validate_dataset,
     )
-    from dags.utils.partition_utils import NonPartitionPaths, PartitionPaths
+    from lakehouse_core import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
         f"etl utils imports unavailable in this environment: {exc}", allow_module_level=True
@@ -82,29 +80,6 @@ def test_build_s3_connection_config_missing_endpoint():
         build_s3_connection_config(mock_s3_hook)
 
 
-def test_list_parquet_keys():
-    mock_s3_hook = MagicMock()
-    mock_s3_hook.list_keys.return_value = [
-        "table/file1.parquet",
-        "table/file2.txt",
-        "table/sub/file3.parquet",
-    ]
-
-    keys = list_parquet_keys(mock_s3_hook, "s3://bucket/table/")
-    assert keys == ["table/file1.parquet", "table/sub/file3.parquet"]
-    mock_s3_hook.list_keys.assert_called_once_with(bucket_name="bucket", prefix="table/")
-
-
-def test_delete_tmp_prefix():
-    mock_s3_hook = MagicMock()
-    mock_s3_hook.list_keys.return_value = ["tmp/f1.pq", "tmp/f2.pq"]
-
-    delete_tmp_prefix(mock_s3_hook, "s3://bucket/tmp/")
-    mock_s3_hook.delete_objects.assert_called_once_with(
-        bucket="bucket", keys=["tmp/f1.pq", "tmp/f2.pq"]
-    )
-
-
 def test_prepare_dataset_partitioned():
     result = prepare_dataset(
         base_prefix="lake/ods/table",
@@ -160,7 +135,7 @@ def test_validate_dataset_file_count_mismatch():
         validate_dataset(paths_dict, metrics, mock_s3_hook)
 
 
-@patch("dags.utils.etl_utils.publish_partition")
+@patch("dags.utils.etl_utils.publish_output")
 @patch("dags.utils.etl_utils.build_manifest")
 def test_commit_dataset_partitioned(mock_build_manifest, mock_publish):
     mock_s3_hook = MagicMock()
@@ -196,8 +171,9 @@ def test_commit_dataset_no_data():
     }
     metrics = {"has_data": 0}
 
-    with patch("dags.utils.etl_utils.delete_prefix") as mock_delete:
+    with patch("dags.utils.etl_utils.AirflowS3Store") as mock_store_cls:
+        mock_store = mock_store_cls.return_value
         res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
         assert res["action"] == "cleared"
         assert manifest == {}
-        mock_delete.assert_called_once_with(mock_s3_hook, "s3://b/t")
+        mock_store.delete_prefix.assert_called_once_with("s3://b/t")

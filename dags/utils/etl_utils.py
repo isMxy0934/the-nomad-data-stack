@@ -17,19 +17,15 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.duckdb_utils import (
     S3ConnectionConfig,
 )
-from dags.utils.partition_utils import (
+from lakehouse_core import (
     NonPartitionPaths,
     PartitionPaths,
     build_manifest,
-    build_non_partition_paths,
-    build_partition_paths,
-    delete_prefix,
-    parse_s3_uri,
-    publish_non_partition,
-    publish_partition,
+    cleanup_tmp as core_cleanup_tmp,
+    prepare_paths,
+    publish_output,
+    validate_output as core_validate_output,
 )
-from lakehouse_core import validate_output as core_validate_output
-from lakehouse_core import cleanup_tmp as core_cleanup_tmp
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.time_utils import get_partition_date_str
 
@@ -88,21 +84,8 @@ def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
     )
 
 
-def list_parquet_keys(s3_hook: S3Hook, prefix_uri: str) -> list[str]:
-    """List parquet files under a given S3 URI prefix."""
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = key_prefix.strip("/") + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    return [key for key in keys if key.endswith(".parquet")]
-
-
-def delete_tmp_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
-    """Delete all objects under a temporary S3 URI prefix."""
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = key_prefix.strip("/") + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    if keys:
-        s3_hook.delete_objects(bucket=bucket, keys=keys)
+def _strip_slashes(path: str) -> str:
+    return path.strip("/")
 
 
 def prepare_dataset(
@@ -120,11 +103,12 @@ def prepare_dataset(
         partition_date = str(partition_date).strip()
 
     if is_partitioned:
-        paths = build_partition_paths(
-            base_prefix=base_prefix,
-            partition_date=partition_date,
+        paths = prepare_paths(
+            base_prefix=_strip_slashes(base_prefix),
             run_id=run_id,
-            bucket_name=bucket_name,
+            partition_date=partition_date,
+            is_partitioned=True,
+            store_namespace=bucket_name,
         )
         return {
             "partition_date": partition_date,
@@ -136,10 +120,12 @@ def prepare_dataset(
             "success_flag_path": paths.success_flag_path,
         }
 
-    paths = build_non_partition_paths(
-        base_prefix=base_prefix,
+    paths = prepare_paths(
+        base_prefix=_strip_slashes(base_prefix),
         run_id=run_id,
-        bucket_name=bucket_name,
+        partition_date=None,
+        is_partitioned=False,
+        store_namespace=bucket_name,
     )
     return {
         "partition_date": partition_date,
@@ -198,10 +184,11 @@ def commit_dataset(
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
 ) -> tuple[dict[str, str], MutableMapping[str, object]]:
-    """Core logic to commit dataset (pure function). Returns (publish_result, manifest)."""
+    """Commit tmp outputs into canonical and write markers (core-backed)."""
     partitioned = bool(paths_dict.get("partitioned"))
     partition_date = str(paths_dict.get("partition_date"))
 
+    store = AirflowS3Store(s3_hook)
     if partitioned:
         paths = partition_paths_from_xcom(paths_dict)
         canonical_prefix = paths.canonical_prefix
@@ -215,7 +202,7 @@ def commit_dataset(
             dest_name,
             partition_date,
         )
-        delete_prefix(s3_hook, canonical_prefix)
+        store.delete_prefix(canonical_prefix)
         return {"published": "0", "action": "cleared"}, {}
 
     if partitioned:
@@ -229,11 +216,8 @@ def commit_dataset(
             source_prefix=paths.tmp_partition_prefix,
             target_prefix=paths.canonical_prefix,
         )
-        publish_result = publish_partition(
-            s3_hook=s3_hook,
-            paths=paths,
-            manifest=manifest,
-            write_success_flag=True,
+        publish_result = publish_output(
+            store=store, paths=paths, manifest=manifest, write_success_flag=True
         )
     else:
         # paths is already NonPartitionPaths from above
@@ -246,11 +230,8 @@ def commit_dataset(
             source_prefix=paths.tmp_prefix,
             target_prefix=paths.canonical_prefix,
         )
-        publish_result = publish_non_partition(
-            s3_hook=s3_hook,
-            paths=paths,
-            manifest=manifest,
-            write_success_flag=True,
+        publish_result = publish_output(
+            store=store, paths=paths, manifest=manifest, write_success_flag=True
         )
 
     return publish_result, manifest

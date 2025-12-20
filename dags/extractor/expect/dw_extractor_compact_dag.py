@@ -31,7 +31,7 @@ from dags.extractor.backfill.backfill_specs import (
     load_backfill_specs,
 )
 from dags.utils.etl_utils import cleanup_dataset, commit_dataset
-from dags.utils.partition_utils import build_partition_paths, parse_s3_uri
+from lakehouse_core import parse_s3_uri, prepare_paths
 
 
 def _resolve_callable(ref: str) -> Callable[..., object]:
@@ -201,11 +201,12 @@ def create_dw_extractor_compact_dag() -> DAG:
                 run_id = f"compact_{trade_date}"
                 base_prefix = spec_obj.daily_key_template.split("/dt=", 1)[0]
 
-                paths = build_partition_paths(
+                paths = prepare_paths(
                     base_prefix=base_prefix,
-                    partition_date=trade_date,
                     run_id=run_id,
-                    bucket_name=DEFAULT_BUCKET_NAME,
+                    partition_date=trade_date,
+                    is_partitioned=True,
+                    store_namespace=DEFAULT_BUCKET_NAME,
                 )
 
                 # paths.tmp_partition_prefix is a URI (s3://...), we need the key
