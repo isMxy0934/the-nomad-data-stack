@@ -1,5 +1,5 @@
 from dags.utils.extractor_utils import CsvPayload
-from dags.utils.time_utils import get_date_str
+from lakehouse_core.time import get_date_str
 
 
 def fetch_fund_name_from_em_akshare() -> CsvPayload | None:

@@ -6,7 +6,7 @@ from airflow.models.xcom_arg import XComArg
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-from dags.utils.time_utils import get_partition_date_str
+from lakehouse_core.time import get_partition_date_str
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 

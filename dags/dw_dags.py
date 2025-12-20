@@ -39,7 +39,7 @@ from lakehouse_core.models import RunSpec
 from lakehouse_core.models import RunContext
 from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.pipeline import load as pipeline_load
-from dags.utils.time_utils import get_partition_date_str
+from lakehouse_core.time import get_partition_date_str
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent

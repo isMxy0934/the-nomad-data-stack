@@ -1,5 +1,5 @@
 from dags.utils.extractor_utils import CsvPayload
-from dags.utils.time_utils import get_date_str
+from lakehouse_core.time import get_date_str
 
 
 def fetch_stock_price_akshare() -> CsvPayload | None:

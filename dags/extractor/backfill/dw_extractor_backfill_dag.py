@@ -51,7 +51,7 @@ from dags.extractor.backfill.backfill_specs import (
     load_backfill_specs,
 )
 from dags.extractor.increment.dw_extractor_dag import load_extractor_specs
-from dags.utils.time_utils import get_partition_date_str
+from lakehouse_core.time import get_partition_date_str
 
 logger = logging.getLogger(__name__)
 

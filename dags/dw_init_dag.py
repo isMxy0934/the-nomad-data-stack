@@ -8,7 +8,7 @@ from airflow.models.param import Param
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
 from dags.utils.dag_run_utils import parse_targets
-from dags.utils.time_utils import get_partition_date_str
+from lakehouse_core.time import get_partition_date_str
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 

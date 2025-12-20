@@ -1,40 +1,25 @@
-from datetime import datetime, timedelta
+"""Airflow-facing time helpers.
 
-import pytz
+The project-wide T-1 date convention lives in `lakehouse_core.time`.
+This module is kept for backwards-compatible imports in DAG code.
+"""
 
+from __future__ import annotations
 
-def get_current_partition_date_str(tz="Asia/Shanghai") -> str:
-    """Return today's date formatted for partition columns (YYYY-MM-DD)."""
-    timezone = pytz.timezone(tz)
-    now = datetime.now(timezone)
-    return now.strftime("%Y-%m-%d")
+from lakehouse_core.time import (
+    get_current_date_str,
+    get_current_partition_date_str,
+    get_date_str,
+    get_partition_date_str,
+    get_previous_date_str,
+    get_previous_partition_date_str,
+)
 
-
-def get_current_date_str(tz="Asia/Shanghai") -> str:
-    """Return today's date in compact form (YYYYMMDD)."""
-    timezone = pytz.timezone(tz)
-    now = datetime.now(timezone)
-    return now.strftime("%Y%m%d")
-
-
-def get_previous_date_str(tz="Asia/Shanghai") -> str:
-    """Return yesterday's date in compact form (YYYYMMDD)."""
-    timezone = pytz.timezone(tz)
-    previous_day = datetime.now(timezone) - timedelta(days=1)
-    return previous_day.strftime("%Y%m%d")
-
-
-def get_previous_partition_date_str(tz="Asia/Shanghai") -> str:
-    """Return yesterday's date formatted for partition columns (YYYY-MM-DD)."""
-    timezone = pytz.timezone(tz)
-    previous_day = datetime.now(timezone) - timedelta(days=1)
-    return previous_day.strftime("%Y-%m-%d")
-
-
-# set partition date
-def get_partition_date_str(tz="Asia/Shanghai") -> str:
-    return get_previous_partition_date_str(tz)
-
-
-def get_date_str(tz="Asia/Shanghai") -> str:
-    return get_previous_date_str(tz)
+__all__ = [
+    "get_current_date_str",
+    "get_current_partition_date_str",
+    "get_date_str",
+    "get_partition_date_str",
+    "get_previous_date_str",
+    "get_previous_partition_date_str",
+]
