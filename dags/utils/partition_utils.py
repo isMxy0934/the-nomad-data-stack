@@ -11,13 +11,14 @@ from collections.abc import Mapping, MutableMapping
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
-from lakehouse_core import api as core_api
-from lakehouse_core import manifest as core_manifest
-from lakehouse_core import paths as core_paths
-from lakehouse_core import uri as core_uri
-
-PartitionPaths = core_paths.PartitionPaths
-NonPartitionPaths = core_paths.NonPartitionPaths
+from lakehouse_core import (
+    NonPartitionPaths,
+    PartitionPaths,
+    build_manifest as core_build_manifest,
+    parse_s3_uri as core_parse_s3_uri,
+    prepare_paths as core_prepare_paths,
+    publish_output as core_publish_output,
+)
 
 
 def _strip_slashes(path: str) -> str:
@@ -27,7 +28,7 @@ def _strip_slashes(path: str) -> str:
 def parse_s3_uri(uri: str) -> tuple[str, str]:
     """Split an ``s3://`` URI into bucket and key components."""
 
-    return core_uri.parse_s3_uri(uri)
+    return core_parse_s3_uri(uri)
 
 
 def build_partition_paths(
@@ -52,7 +53,7 @@ def build_partition_paths(
     if not bucket_name:
         raise ValueError("bucket_name is required")
 
-    return core_api.prepare_paths(
+    return core_prepare_paths(
         base_prefix=_strip_slashes(base_prefix),
         run_id=run_id,
         partition_date=partition_date,
@@ -71,7 +72,7 @@ def build_non_partition_paths(
     if not bucket_name:
         raise ValueError("bucket_name is required")
 
-    return core_api.prepare_paths(
+    return core_prepare_paths(
         base_prefix=_strip_slashes(base_prefix),
         run_id=run_id,
         partition_date=None,
@@ -94,7 +95,7 @@ def build_manifest(
 ) -> MutableMapping[str, object]:
     """Compose manifest metadata for a committed partition."""
 
-    return core_manifest.build_manifest(
+    return core_build_manifest(
         dest=dest,
         partition_date=partition_date,
         run_id=run_id,
@@ -122,7 +123,7 @@ def publish_partition(
     """Publish a partition by promoting tmp outputs and writing markers."""
 
     store = AirflowS3Store(s3_hook)
-    return core_api.publish_output(
+    return core_publish_output(
         store=store,
         paths=paths,
         manifest=manifest,
@@ -140,7 +141,7 @@ def publish_non_partition(
     """Publish non-partitioned outputs by promoting tmp contents."""
 
     store = AirflowS3Store(s3_hook)
-    return core_api.publish_output(
+    return core_publish_output(
         store=store,
         paths=paths,
         manifest=manifest,

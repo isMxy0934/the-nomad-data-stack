@@ -57,6 +57,12 @@ class LocalS3StyleStore(ObjectStore):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
+    def write_bytes(self, uri: str, data: bytes) -> None:
+        self.ops.append(StoreOp("write_bytes", (uri,)))
+        path = self._to_path(uri)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
     def delete_prefix(self, prefix_uri: str) -> None:
         self.ops.append(StoreOp("delete_prefix", (prefix_uri,)))
         self.delete_objects(self.list_keys(prefix_uri))

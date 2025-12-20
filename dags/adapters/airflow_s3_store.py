@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+from lakehouse_core import parse_s3_uri
 from lakehouse_core.storage import ObjectStore
-from lakehouse_core.uri import parse_s3_uri
 
 
 class AirflowS3Store(ObjectStore):
@@ -35,6 +35,10 @@ class AirflowS3Store(ObjectStore):
     def write_text(self, uri: str, text: str) -> None:
         bucket, key = parse_s3_uri(uri)
         self._hook.load_string(string_data=text, key=key, bucket_name=bucket, replace=True)
+
+    def write_bytes(self, uri: str, data: bytes) -> None:
+        bucket, key = parse_s3_uri(uri)
+        self._hook.load_bytes(bytes_data=data, key=key, bucket_name=bucket, replace=True)
 
     def delete_prefix(self, prefix_uri: str) -> None:
         bucket, key_prefix = parse_s3_uri(prefix_uri)

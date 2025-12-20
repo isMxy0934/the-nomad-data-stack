@@ -69,6 +69,7 @@
   - [x] `lakehouse_core/manifest.py`：manifest 结构与构建
   - [x] `lakehouse_core/commit.py`：publish（delete+copy）与完成标记
   - [x] `lakehouse_core/validate.py`：校验（file_count/row_count/存在性）
+  - [x] `lakehouse_core/api.py`：统一入口（prepare/validate/publish/cleanup）
   - [ ] `lakehouse_core/errors.py`：统一异常类型（可选，但建议）
 
 验收标准：
@@ -87,7 +88,7 @@ Checklist：
   - [x] `list_keys(prefix: str) -> list[str]`
   - [x] `exists(key: str) -> bool`
   - [x] `read_bytes(key: str) -> bytes`
-  - [ ] `write_bytes(key: str, data: bytes) -> None`
+  - [x] `write_bytes(key: str, data: bytes) -> None`
   - [x] `delete_prefix(prefix: str) -> None`
   - [x] `copy_prefix(src_prefix: str, dst_prefix: str) -> None`
 - [x] 约定 key 形式：
@@ -120,7 +121,7 @@ Checklist：
 - [x] 新增：`dags/adapters/airflow_s3_store.py`
   - [x] 内部使用 `airflow.providers.amazon.aws.hooks.s3.S3Hook`
   - [x] 将 `S3Hook` 的 list/get/put/copy/delete 映射到 `ObjectStore`
-  - [ ] 读取连接（endpoint/ak/sk 等）仍通过 Airflow Connection（adapter 责任）
+  - [x] 读取连接（endpoint/ak/sk 等）仍通过 Airflow Connection（adapter 责任）
 
 验收标准：
 - [x] DAG 层仍可读写 MinIO/S3（行为与当前一致）。
@@ -162,12 +163,12 @@ Checklist：
   - [x] `prepare_dataset` 的路径规划（调用 `lakehouse_core/paths.py`）
   - [x] `validate_dataset`（调用 `lakehouse_core/validate.py`）
   - [x] `commit_dataset`（调用 `lakehouse_core/commit.py`）
-  - [ ] `cleanup_dataset`（调用 `ObjectStore.delete_prefix`）
-- [ ] `build_etl_task_group` 继续留在 `dags/utils/etl_utils.py`（Airflow 专属），但其内部调用 core 函数，不再承载业务规则。
+  - [x] `cleanup_dataset`（调用 `ObjectStore.delete_prefix`）
+- [x] `build_etl_task_group` 继续留在 `dags/utils/etl_utils.py`（Airflow 专属），但其内部调用 core 函数，不再承载业务规则。
 
 验收标准：
-- [ ] core 单测覆盖：prepare/validate/commit/cleanup（至少覆盖分区表 + 非分区表 + 空数据分支）。
-- [ ] `dags/utils/etl_utils.py` 仍可用于 DAG（只做桥接）。
+- [x] core 单测覆盖：prepare/validate/commit/cleanup（至少覆盖分区表 + 非分区表 + 空数据分支）。
+- [x] `dags/utils/etl_utils.py` 仍可用于 DAG（只做桥接）。
 
 ### 1.5.1 默认 Planner（可选：Phase 1 先“保留现状”，Phase 2 再迁）
 

@@ -22,6 +22,9 @@ class ObjectStore(Protocol):
     def write_text(self, uri: str, text: str) -> None:
         """Write UTF-8 text to the target URI (overwrite)."""
 
+    def write_bytes(self, uri: str, data: bytes) -> None:
+        """Write bytes to the target URI (overwrite)."""
+
     def delete_objects(self, uris: list[str]) -> None:
         """Delete the listed object URIs (best-effort)."""
 

@@ -29,6 +29,7 @@ from dags.utils.partition_utils import (
     publish_partition,
 )
 from lakehouse_core import validate_output as core_validate_output
+from lakehouse_core import cleanup_tmp as core_cleanup_tmp
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.time_utils import get_partition_date_str
 
@@ -259,8 +260,34 @@ def cleanup_dataset(
     paths_dict: Mapping[str, Any],
     s3_hook: S3Hook,
 ) -> None:
-    """Clean up temporary files (pure function)."""
-    delete_tmp_prefix(s3_hook, paths_dict["tmp_prefix"])
+    """Clean up temporary files (delegates to lakehouse_core API)."""
+    store = AirflowS3Store(s3_hook)
+    tmp_prefix = str(paths_dict["tmp_prefix"])
+    partitioned = bool(paths_dict.get("partitioned"))
+    if partitioned:
+        try:
+            paths = partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            paths = PartitionPaths(
+                partition_date=str(paths_dict.get("partition_date") or ""),
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=tmp_prefix,
+                tmp_partition_prefix=str(paths_dict.get("tmp_partition_prefix") or ""),
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+    else:
+        try:
+            paths = non_partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            paths = NonPartitionPaths(
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=tmp_prefix,
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+
+    core_cleanup_tmp(store=store, paths=paths)
 
 
 def build_etl_task_group(
