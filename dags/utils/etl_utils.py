@@ -28,6 +28,8 @@ from dags.utils.partition_utils import (
     publish_non_partition,
     publish_partition,
 )
+from lakehouse_core.validate import validate_dataset as core_validate_dataset
+from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.time_utils import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
@@ -153,28 +155,9 @@ def validate_dataset(
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
 ) -> dict[str, int]:
-    """Core logic to validate dataset output (pure function)."""
-    partitioned = bool(paths_dict.get("partitioned"))
-
-    if not int(metrics.get("has_data", 1)):
-        # If no data expected, ensure no files written
-        file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_prefix"]))
-        if file_count != 0:
-            raise ValueError("Expected no parquet files in tmp prefix for empty source result")
-        return dict(metrics)
-
-    # Verify actual files on S3 match reported metrics
-    target_prefix = paths_dict["tmp_partition_prefix"] if partitioned else paths_dict["tmp_prefix"]
-    file_count = len(list_parquet_keys(s3_hook, target_prefix))
-
-    if file_count == 0:
-        raise ValueError("No parquet files were written to the tmp prefix")
-    if file_count != metrics["file_count"]:
-        raise ValueError("File count mismatch between load metrics and S3 contents")
-    if metrics["row_count"] < 0:
-        raise ValueError("Row count cannot be negative")
-
-    return dict(metrics)
+    """Core logic to validate dataset output (delegates to lakehouse_core)."""
+    store = AirflowS3Store(s3_hook)
+    return core_validate_dataset(paths_dict, metrics, store)
 
 
 def commit_dataset(

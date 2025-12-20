@@ -1,35 +1,23 @@
-"""Utilities for partition publish workflow using S3-compatible storage."""
+"""Utilities for partition publish workflow using S3-compatible storage.
+
+This module is an Airflow-facing adapter layer. Core commit protocol logic lives
+in `lakehouse_core` and is orchestrator-agnostic.
+"""
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, MutableMapping
-from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+from dags.adapters.airflow_s3_store import AirflowS3Store
+from lakehouse_core import commit as core_commit
+from lakehouse_core import manifest as core_manifest
+from lakehouse_core import paths as core_paths
+from lakehouse_core import uri as core_uri
 
-@dataclass(frozen=True)
-class PartitionPaths:
-    """Resolved locations for a single partition commit."""
-
-    partition_date: str
-    canonical_prefix: str
-    tmp_prefix: str
-    tmp_partition_prefix: str
-    manifest_path: str
-    success_flag_path: str
-
-
-@dataclass(frozen=True)
-class NonPartitionPaths:
-    """Resolved locations for non-partitioned tables."""
-
-    canonical_prefix: str
-    tmp_prefix: str
-    manifest_path: str
-    success_flag_path: str
+PartitionPaths = core_paths.PartitionPaths
+NonPartitionPaths = core_paths.NonPartitionPaths
 
 
 def _strip_slashes(path: str) -> str:
@@ -39,18 +27,7 @@ def _strip_slashes(path: str) -> str:
 def parse_s3_uri(uri: str) -> tuple[str, str]:
     """Split an ``s3://`` URI into bucket and key components."""
 
-    if not uri.startswith("s3://"):
-        raise ValueError(f"Invalid S3 URI: {uri}")
-
-    remainder = uri[len("s3://") :]
-    if "/" not in remainder:
-        raise ValueError(f"S3 URI missing key: {uri}")
-
-    bucket, key = remainder.split("/", 1)
-    if not bucket or not key:
-        raise ValueError(f"S3 URI missing bucket or key: {uri}")
-
-    return bucket, key
+    return core_uri.parse_s3_uri(uri)
 
 
 def build_partition_paths(
@@ -75,20 +52,12 @@ def build_partition_paths(
     if not bucket_name:
         raise ValueError("bucket_name is required")
 
-    normalized_base = _strip_slashes(base_prefix)
-    canonical_prefix = f"s3://{bucket_name}/{normalized_base}/dt={partition_date}"
-    tmp_prefix = f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}"
-    tmp_partition_prefix = f"{tmp_prefix}/dt={partition_date}"
-    manifest_path = f"{canonical_prefix}/manifest.json"
-    success_flag_path = f"{canonical_prefix}/_SUCCESS"
-
-    return PartitionPaths(
+    base_uri = f"s3://{bucket_name}"
+    return core_paths.build_partition_paths(
+        base_uri=base_uri,
+        base_prefix=_strip_slashes(base_prefix),
         partition_date=partition_date,
-        canonical_prefix=canonical_prefix,
-        tmp_prefix=tmp_prefix,
-        tmp_partition_prefix=tmp_partition_prefix,
-        manifest_path=manifest_path,
-        success_flag_path=success_flag_path,
+        run_id=run_id,
     )
 
 
@@ -102,17 +71,11 @@ def build_non_partition_paths(
     if not bucket_name:
         raise ValueError("bucket_name is required")
 
-    normalized_base = _strip_slashes(base_prefix)
-    canonical_prefix = f"s3://{bucket_name}/{normalized_base}"
-    tmp_prefix = f"s3://{bucket_name}/{normalized_base}/_tmp/run_{run_id}"
-    manifest_path = f"{canonical_prefix}/manifest.json"
-    success_flag_path = f"{canonical_prefix}/_SUCCESS"
-
-    return NonPartitionPaths(
-        canonical_prefix=canonical_prefix,
-        tmp_prefix=tmp_prefix,
-        manifest_path=manifest_path,
-        success_flag_path=success_flag_path,
+    base_uri = f"s3://{bucket_name}"
+    return core_paths.build_non_partition_paths(
+        base_uri=base_uri,
+        base_prefix=_strip_slashes(base_prefix),
+        run_id=run_id,
     )
 
 
@@ -130,66 +93,22 @@ def build_manifest(
 ) -> MutableMapping[str, object]:
     """Compose manifest metadata for a committed partition."""
 
-    if file_count < 0:
-        raise ValueError("file_count cannot be negative")
-    if row_count < 0:
-        raise ValueError("row_count cannot be negative")
-
-    timestamp = generated_at or datetime.now(UTC).isoformat()
-
-    return {
-        "dest": dest,
-        "partition_date": partition_date,
-        "run_id": run_id,
-        "file_count": file_count,
-        "row_count": row_count,
-        "status": status,
-        "source_prefix": source_prefix,
-        "target_prefix": target_prefix,
-        "generated_at": timestamp,
-    }
+    return core_manifest.build_manifest(
+        dest=dest,
+        partition_date=partition_date,
+        run_id=run_id,
+        file_count=file_count,
+        row_count=row_count,
+        source_prefix=source_prefix,
+        target_prefix=target_prefix,
+        status=status,
+        generated_at=generated_at,
+    )
 
 
 def delete_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = _strip_slashes(key_prefix) + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    if keys:
-        s3_hook.delete_objects(bucket=bucket, keys=keys)
-
-
-def _copy_prefix(s3_hook: S3Hook, source_uri: str, dest_uri: str) -> None:
-    src_bucket, src_prefix = parse_s3_uri(source_uri)
-    dest_bucket, dest_prefix = parse_s3_uri(dest_uri)
-
-    normalized_src = _strip_slashes(src_prefix) + "/"
-    normalized_dest = _strip_slashes(dest_prefix) + "/"
-
-    keys = s3_hook.list_keys(bucket_name=src_bucket, prefix=normalized_src) or []
-    for key in keys:
-        if not key.startswith(normalized_src):
-            continue
-        relative_key = key[len(normalized_src) :]
-        dest_key = normalized_dest + relative_key
-        s3_hook.copy_object(
-            source_bucket_key=key,
-            dest_bucket_key=dest_key,
-            source_bucket_name=src_bucket,
-            dest_bucket_name=dest_bucket,
-        )
-
-
-def _write_json(s3_hook: S3Hook, content: Mapping[str, object], target_uri: str) -> str:
-    bucket, key = parse_s3_uri(target_uri)
-    payload = json.dumps(content, sort_keys=True)
-    s3_hook.load_string(string_data=payload, key=key, bucket_name=bucket, replace=True)
-    return target_uri
-
-
-def _write_success_flag(s3_hook: S3Hook, target_uri: str) -> str:
-    bucket, key = parse_s3_uri(target_uri)
-    s3_hook.load_string(string_data="", key=key, bucket_name=bucket, replace=True)
-    return target_uri
+    store = AirflowS3Store(s3_hook)
+    core_commit.delete_prefix(store, prefix_uri)
 
 
 def publish_partition(
@@ -201,18 +120,13 @@ def publish_partition(
 ) -> Mapping[str, str]:
     """Publish a partition by promoting tmp outputs and writing markers."""
 
-    delete_prefix(s3_hook, paths.canonical_prefix)
-    _copy_prefix(s3_hook, paths.tmp_partition_prefix, paths.canonical_prefix)
-
-    manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
-    success_path = None
-    if write_success_flag:
-        success_path = _write_success_flag(s3_hook, paths.success_flag_path)
-
-    result = {"manifest_path": manifest_path}
-    if success_path:
-        result["success_flag_path"] = success_path
-    return result
+    store = AirflowS3Store(s3_hook)
+    return core_commit.publish_partition(
+        store=store,
+        paths=paths,
+        manifest=manifest,
+        write_success_flag=write_success_flag,
+    )
 
 
 def publish_non_partition(
@@ -224,15 +138,10 @@ def publish_non_partition(
 ) -> Mapping[str, str]:
     """Publish non-partitioned outputs by promoting tmp contents."""
 
-    delete_prefix(s3_hook, paths.canonical_prefix)
-    _copy_prefix(s3_hook, paths.tmp_prefix, paths.canonical_prefix)
-
-    manifest_path = _write_json(s3_hook, manifest, paths.manifest_path)
-    success_path = None
-    if write_success_flag:
-        success_path = _write_success_flag(s3_hook, paths.success_flag_path)
-
-    result = {"manifest_path": manifest_path}
-    if success_path:
-        result["success_flag_path"] = success_path
-    return result
+    store = AirflowS3Store(s3_hook)
+    return core_commit.publish_non_partition(
+        store=store,
+        paths=paths,
+        manifest=manifest,
+        write_success_flag=write_success_flag,
+    )

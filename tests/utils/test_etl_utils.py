@@ -129,33 +129,35 @@ def test_prepare_dataset_non_partitioned():
 
 def test_validate_dataset_success():
     mock_s3_hook = MagicMock()
-    # Mock list_parquet_keys to return 2 files
-    with patch("dags.utils.etl_utils.list_parquet_keys", return_value=["f1.pq", "f2.pq"]):
-        paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
-        metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+    mock_s3_hook.list_keys.return_value = ["tmp/f1.parquet", "tmp/f2.parquet"]
 
-        result = validate_dataset(paths_dict, metrics, mock_s3_hook)
-        assert result == metrics
+    paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
+    metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+
+    result = validate_dataset(paths_dict, metrics, mock_s3_hook)
+    assert result == metrics
 
 
 def test_validate_dataset_no_data_expected():
     mock_s3_hook = MagicMock()
-    with patch("dags.utils.etl_utils.list_parquet_keys", return_value=[]):
-        paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
-        metrics = {"has_data": 0, "file_count": 0, "row_count": 0}
+    mock_s3_hook.list_keys.return_value = []
 
-        result = validate_dataset(paths_dict, metrics, mock_s3_hook)
-        assert result == metrics
+    paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
+    metrics = {"has_data": 0, "file_count": 0, "row_count": 0}
+
+    result = validate_dataset(paths_dict, metrics, mock_s3_hook)
+    assert result == metrics
 
 
 def test_validate_dataset_file_count_mismatch():
     mock_s3_hook = MagicMock()
-    with patch("dags.utils.etl_utils.list_parquet_keys", return_value=["f1.pq"]):
-        paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
-        metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+    mock_s3_hook.list_keys.return_value = ["tmp/f1.parquet"]
 
-        with pytest.raises(ValueError, match="File count mismatch"):
-            validate_dataset(paths_dict, metrics, mock_s3_hook)
+    paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
+    metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+
+    with pytest.raises(ValueError, match="File count mismatch"):
+        validate_dataset(paths_dict, metrics, mock_s3_hook)
 
 
 @patch("dags.utils.etl_utils.publish_partition")

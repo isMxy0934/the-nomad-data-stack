@@ -198,12 +198,34 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 if targets is not None and spec_obj.target not in targets:
                     return []
 
+                allowlist = set(spec_obj.symbol_allowlist or [])
+                runtime_allowlist = conf.get("symbol_allowlist")
+                if runtime_allowlist:
+                    if not isinstance(runtime_allowlist, list):
+                        raise ValueError("dag_run.conf.symbol_allowlist must be a list of strings")
+                    allowlist.update(str(s) for s in runtime_allowlist)
+
+                max_symbols = int(conf.get("max_symbols") or 0)
+                if allowlist:
+                    symbols = [str(s).strip() for s in allowlist if str(s).strip()]
+                    symbols = _iter_unique(symbols)
+                    if max_symbols > 0:
+                        symbols = symbols[:max_symbols]
+                    logger.info(
+                        "Resolved universe via allowlist: target=%s symbols=%d",
+                        spec_obj.target,
+                        len(symbols),
+                    )
+                    return symbols
+
                 s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
                 daily_prefix = daily_target_to_prefix.get(spec_obj.universe.from_target)
                 if not daily_prefix:
+                    available = ", ".join(sorted(daily_target_to_prefix.keys())) or "<none>"
                     raise ValueError(
                         f"Unknown universe.from_target={spec_obj.universe.from_target}; "
-                        "ensure it exists in dags/extractor/configs/config.yaml"
+                        "ensure it exists in dags/extractor/increment/config.yaml "
+                        f"(available targets: {available})"
                     )
 
                 universe_dt = str(conf.get("universe_dt") or "latest")
@@ -231,22 +253,10 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 symbols = [str(s).strip() for s in df[col].dropna().tolist()]
                 symbols = [s for s in symbols if s]
 
-                # Apply allowlist filtering (from config file or dag_run.conf)
-                # 1. Check spec (yaml config)
-                allowlist = set(spec_obj.symbol_allowlist or [])
-
-                # 2. Check dag_run.conf (runtime override)
-                runtime_allowlist = conf.get("symbol_allowlist")
-                if runtime_allowlist:
-                    if not isinstance(runtime_allowlist, list):
-                        raise ValueError("dag_run.conf.symbol_allowlist must be a list of strings")
-                    allowlist.update(str(s) for s in runtime_allowlist)
-
                 if allowlist:
                     symbols = [s for s in symbols if s in allowlist]
                     logger.info("Filtered universe to %d symbols based on allowlist", len(symbols))
 
-                max_symbols = int(conf.get("max_symbols") or 0)
                 if max_symbols > 0:
                     symbols = symbols[:max_symbols]
 
