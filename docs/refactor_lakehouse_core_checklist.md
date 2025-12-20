@@ -52,7 +52,7 @@
   - `dags/utils/s3_utils.py`、`dags/utils/duckdb_utils.py`
 
 验收标准：
-- [ ] 重构开始前测试全绿（否则先修复/隔离失败用例，避免把问题带入重构）。
+- [x] 重构开始前测试全绿（否则先修复/隔离失败用例，避免把问题带入重构）。
 
 ---
 
@@ -84,7 +84,7 @@
 ### 1.2 定义核心存储抽象：`ObjectStore`
 
 Checklist：
-- [ ] `ObjectStore` 最小接口（建议）：
+- [x] `ObjectStore` 最小接口（建议）：
   - [x] `list_keys(prefix: str) -> list[str]`
   - [x] `exists(key: str) -> bool`
   - [x] `read_bytes(key: str) -> bytes`
@@ -159,7 +159,7 @@ Airflow 层改造（最小侵入策略）：
 目标：`dags/utils/etl_utils.py` 中的“纯逻辑”下沉到 core，XCom/context 相关逻辑留在 Airflow 层。
 
 Checklist：
-- [ ] 将以下“纯逻辑”迁到 core：
+- [x] 将以下“纯逻辑”迁到 core：
   - [x] `prepare_dataset` 的路径规划（调用 `lakehouse_core/paths.py`）
   - [x] `validate_dataset`（调用 `lakehouse_core/validate.py`）
   - [x] `commit_dataset`（调用 `lakehouse_core/commit.py`）
@@ -289,8 +289,8 @@ Checklist：
 背景：Phase 2 下沉 DuckDB 执行时，需要 S3 endpoint/AK/SK/url_style 等配置；这些不应由 core 去读环境变量或 Airflow Connection。
 
 建议：
-- [ ] 在 `RunSpec` 或 `RunContext` 预留可选字段（不要求 Phase 1 使用，但要定好形状）：
-  - [ ] `storage_options: dict[str, object] | None`（由 adapter 注入，core 透传给执行层/duckdb 配置）
+- [x] 在 `RunSpec` 或 `RunContext` 预留可选字段（不要求 Phase 1 使用，但要定好形状）：
+  - [x] `storage_options: dict[str, object] | None`（由 adapter 注入，core 透传给执行层/duckdb 配置）
   - [ ] 或拆分为 `io_config`/`credentials_ref`（如果你们后续要做更强的 secrets 管理）
 
 验收标准：
