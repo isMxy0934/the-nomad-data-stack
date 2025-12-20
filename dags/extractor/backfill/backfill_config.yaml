@@ -8,7 +8,7 @@ backfill_extractors:
     universe:
       from_target: fund_universe_akshare
       symbol_column: symbol
-    history_fetcher: "dags.extractor.backfill.fetch_fund_price_akshare:fetch_hist_one"
+    history_fetcher: "dags.extractor.backfill.functions.fetch_fund_price_akshare:fetch_hist_one"
     # monthly/none, monthly is default
     shard_type: none
     trade_date_column: trade_date
@@ -17,4 +17,4 @@ backfill_extractors:
     pool: "akshare_pool"
     # Optional: limit to specific symbols. If null/empty, runs all.
     symbol_allowlist: ['sh513770']
-    compact_transformer: "dags.extractor.expect.expects:dedupe_trade_date_symbol"
+    compact_transformer: "dags.extractor.expect.functions.expects:dedupe_trade_date_symbol"

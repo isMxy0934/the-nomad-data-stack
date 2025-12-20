@@ -12,7 +12,7 @@ and writes completion markers next to each piece:
 To support idempotent reruns without `run_id`, a shard-level marker is stored under:
   lake/raw/backfill/<dataset>/<source>/_meta/symbol=<symbol>/shard=<PART_ID>/_SUCCESS
 
-backfill_config.yaml (per extractor):
+configs/backfill_config.yaml (per extractor):
   start_date: "2020-01-01" (required)
   end_date: "2025-12-18" (optional; defaults to partition date)
   trigger_compact: true (optional; if true, trigger compact DAG after backfill)
@@ -46,11 +46,11 @@ from airflow.operators.python import get_current_context
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from dags.extractor.backfill_specs import (
+from dags.extractor.backfill.backfill_specs import (
     backfill_spec_from_mapping,
     load_backfill_specs,
 )
-from dags.extractor.dw_extractor_dag import load_extractor_specs
+from dags.extractor.increment.dw_extractor_dag import load_extractor_specs
 from dags.utils.time_utils import get_partition_date_str
 
 logger = logging.getLogger(__name__)
@@ -203,7 +203,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
                 if not daily_prefix:
                     raise ValueError(
                         f"Unknown universe.from_target={spec_obj.universe.from_target}; "
-                        "ensure it exists in dags/extractor/config.yaml"
+                        "ensure it exists in dags/extractor/configs/config.yaml"
                     )
 
                 universe_dt = str(conf.get("universe_dt") or "latest")
@@ -266,7 +266,7 @@ def create_dw_extractor_backfill_dag() -> DAG:
 
                 if not start_date:
                     raise ValueError(
-                        "backfill_config.yaml must provide start_date for backfill extractors"
+                        "configs/backfill_config.yaml must provide start_date for backfill extractors"
                     )
 
                 if not end_date:

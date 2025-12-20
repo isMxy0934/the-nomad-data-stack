@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from dags.extractor.backfill_specs import load_backfill_specs
+from dags.extractor.backfill.backfill_specs import load_backfill_specs
 
 
 def test_load_backfill_specs_empty_ok(tmp_path: Path) -> None:

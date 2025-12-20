@@ -9,7 +9,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
-    from dags.extractor.expect.expects import dedupe_trade_date_symbol, identity
+    from dags.extractor.expect.functions.expects import dedupe_trade_date_symbol, identity
 except ImportError as exc:
     pytest.skip(
         f"expect functions imports unavailable in this environment: {exc}", allow_module_level=True
@@ -23,11 +23,13 @@ def test_identity():
 
 
 def test_dedupe_trade_date_symbol():
-    df = pd.DataFrame({
-        "trade_date": ["2024-01-01", "2024-01-01", "2024-01-01"],
-        "symbol": ["A", "A", "B"],
-        "value": [1, 2, 3]
-    })
+    df = pd.DataFrame(
+        {
+            "trade_date": ["2024-01-01", "2024-01-01", "2024-01-01"],
+            "symbol": ["A", "A", "B"],
+            "value": [1, 2, 3],
+        }
+    )
     result = dedupe_trade_date_symbol(df, trade_date="2024-01-01", spec=None)
 
     assert len(result) == 2

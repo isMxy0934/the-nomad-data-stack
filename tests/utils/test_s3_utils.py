@@ -11,9 +11,7 @@ if str(ROOT_DIR) not in sys.path:
 try:
     from dags.utils.s3_utils import S3Uploader
 except ImportError as exc:
-    pytest.skip(
-        f"s3 utils imports unavailable in this environment: {exc}", allow_module_level=True
-    )
+    pytest.skip(f"s3 utils imports unavailable in this environment: {exc}", allow_module_level=True)
 
 
 class TestS3Uploader:
@@ -42,10 +40,7 @@ class TestS3Uploader:
         result = uploader.upload_file(local_path, key=key)
 
         mock_hook_instance.load_file.assert_called_once_with(
-            filename=local_path,
-            bucket_name="stock-data",
-            key=key,
-            replace=True
+            filename=local_path, bucket_name="stock-data", key=key, replace=True
         )
         assert result == f"s3://stock-data/{key}"
 
@@ -66,10 +61,7 @@ class TestS3Uploader:
         result = uploader.upload_bytes(data, key=key)
 
         mock_hook_instance.load_bytes.assert_called_once_with(
-            bytes_data=data,
-            bucket_name="stock-data",
-            key=key,
-            replace=True
+            bytes_data=data, bucket_name="stock-data", key=key, replace=True
         )
         assert result == f"s3://stock-data/{key}"
 

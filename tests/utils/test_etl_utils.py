@@ -84,7 +84,11 @@ def test_build_s3_connection_config_missing_endpoint():
 
 def test_list_parquet_keys():
     mock_s3_hook = MagicMock()
-    mock_s3_hook.list_keys.return_value = ["table/file1.parquet", "table/file2.txt", "table/sub/file3.parquet"]
+    mock_s3_hook.list_keys.return_value = [
+        "table/file1.parquet",
+        "table/file2.txt",
+        "table/sub/file3.parquet",
+    ]
 
     keys = list_parquet_keys(mock_s3_hook, "s3://bucket/table/")
     assert keys == ["table/file1.parquet", "table/sub/file3.parquet"]
@@ -96,7 +100,9 @@ def test_delete_tmp_prefix():
     mock_s3_hook.list_keys.return_value = ["tmp/f1.pq", "tmp/f2.pq"]
 
     delete_tmp_prefix(mock_s3_hook, "s3://bucket/tmp/")
-    mock_s3_hook.delete_objects.assert_called_once_with(bucket="bucket", keys=["tmp/f1.pq", "tmp/f2.pq"])
+    mock_s3_hook.delete_objects.assert_called_once_with(
+        bucket="bucket", keys=["tmp/f1.pq", "tmp/f2.pq"]
+    )
 
 
 def test_prepare_dataset_partitioned():
@@ -105,7 +111,7 @@ def test_prepare_dataset_partitioned():
         run_id="run123",
         is_partitioned=True,
         partition_date="2024-01-01",
-        bucket_name="my-bucket"
+        bucket_name="my-bucket",
     )
     assert result["partitioned"] is True
     assert result["partition_date"] == "2024-01-01"
@@ -115,10 +121,7 @@ def test_prepare_dataset_partitioned():
 
 def test_prepare_dataset_non_partitioned():
     result = prepare_dataset(
-        base_prefix="lake/ods/table",
-        run_id="run123",
-        is_partitioned=False,
-        bucket_name="my-bucket"
+        base_prefix="lake/ods/table", run_id="run123", is_partitioned=False, bucket_name="my-bucket"
     )
     assert result["partitioned"] is False
     assert result["canonical_prefix"] == "s3://my-bucket/lake/ods/table"
