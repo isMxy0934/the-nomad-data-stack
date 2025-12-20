@@ -15,3 +15,4 @@ logs/
 .pytest_cache/
 .ruff_cache/
 .duckdb/
+local/
