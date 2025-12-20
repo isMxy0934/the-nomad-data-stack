@@ -9,7 +9,9 @@ from dags.utils.duckdb_utils import (
     create_temporary_connection,
     execute_sql,
 )
-from lakehouse_core import build_manifest, parse_s3_uri, prepare_paths
+from lakehouse_core.api import prepare_paths
+from lakehouse_core.manifest import build_manifest
+from lakehouse_core.uri import parse_s3_uri
 from dags.utils.sql_utils import load_and_render_sql
 
 ROOT_DIR = Path(__file__).resolve().parents[2]

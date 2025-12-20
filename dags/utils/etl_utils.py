@@ -17,15 +17,11 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.duckdb_utils import (
     S3ConnectionConfig,
 )
-from lakehouse_core import (
-    NonPartitionPaths,
-    PartitionPaths,
-    build_manifest,
-    cleanup_tmp as core_cleanup_tmp,
-    prepare_paths,
-    publish_output,
-    validate_output as core_validate_output,
-)
+from lakehouse_core.api import prepare_paths
+from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.pipeline import cleanup as pipeline_cleanup
+from lakehouse_core.pipeline import commit as pipeline_commit
+from lakehouse_core.pipeline import validate as pipeline_validate
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.time_utils import get_partition_date_str
 
@@ -174,7 +170,7 @@ def validate_dataset(
                 manifest_path=str(paths_dict.get("manifest_path") or ""),
                 success_flag_path=str(paths_dict.get("success_flag_path") or ""),
             )
-    return core_validate_output(store=store, paths=paths, metrics=metrics)
+    return pipeline_validate(store=store, paths=paths, metrics=metrics)
 
 
 def commit_dataset(
@@ -184,7 +180,7 @@ def commit_dataset(
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
 ) -> tuple[dict[str, str], MutableMapping[str, object]]:
-    """Commit tmp outputs into canonical and write markers (core-backed)."""
+    """Commit tmp outputs into canonical and write markers (pipeline-backed)."""
     partitioned = bool(paths_dict.get("partitioned"))
     partition_date = str(paths_dict.get("partition_date"))
 
@@ -196,44 +192,21 @@ def commit_dataset(
         paths = non_partition_paths_from_xcom(paths_dict)
         canonical_prefix = paths.canonical_prefix
 
-    if not int(metrics.get("has_data", 1)):
+    publish_result, manifest = pipeline_commit(
+        store=store,
+        paths=paths,
+        dest=dest_name,
+        run_id=run_id,
+        partition_date=partition_date,
+        metrics=metrics,
+        write_success_flag=True,
+    )
+    if publish_result.get("action") == "cleared":
         logger.info(
             "No data for %s (dt=%s); clearing partition and skipping publish.",
             dest_name,
             partition_date,
         )
-        store.delete_prefix(canonical_prefix)
-        return {"published": "0", "action": "cleared"}, {}
-
-    if partitioned:
-        # paths is already PartitionPaths from above
-        manifest = build_manifest(
-            dest=dest_name,
-            partition_date=partition_date,
-            run_id=run_id,
-            file_count=int(metrics["file_count"]),
-            row_count=int(metrics["row_count"]),
-            source_prefix=paths.tmp_partition_prefix,
-            target_prefix=paths.canonical_prefix,
-        )
-        publish_result = publish_output(
-            store=store, paths=paths, manifest=manifest, write_success_flag=True
-        )
-    else:
-        # paths is already NonPartitionPaths from above
-        manifest = build_manifest(
-            dest=dest_name,
-            partition_date=partition_date,
-            run_id=run_id,
-            file_count=int(metrics["file_count"]),
-            row_count=int(metrics["row_count"]),
-            source_prefix=paths.tmp_prefix,
-            target_prefix=paths.canonical_prefix,
-        )
-        publish_result = publish_output(
-            store=store, paths=paths, manifest=manifest, write_success_flag=True
-        )
-
     return publish_result, manifest
 
 
@@ -268,7 +241,7 @@ def cleanup_dataset(
                 success_flag_path=str(paths_dict.get("success_flag_path") or ""),
             )
 
-    core_cleanup_tmp(store=store, paths=paths)
+    pipeline_cleanup(store=store, paths=paths)
 
 
 def build_etl_task_group(

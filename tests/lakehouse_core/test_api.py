@@ -1,4 +1,4 @@
-from lakehouse_core import prepare_paths
+from lakehouse_core.api import prepare_paths
 
 
 def test_prepare_paths_partitioned_uses_store_namespace_bucket():
@@ -24,7 +24,7 @@ def test_prepare_paths_non_partitioned_uses_store_namespace_uri():
 
 
 def test_cleanup_tmp_deletes_tmp_prefix(tmp_path):
-    from lakehouse_core import cleanup_tmp
+    from lakehouse_core.api import cleanup_tmp
     from lakehouse_core.testing.local_store import LocalS3StyleStore
 
     store = LocalS3StyleStore(tmp_path)
@@ -43,7 +43,7 @@ def test_cleanup_tmp_deletes_tmp_prefix(tmp_path):
 
 
 def test_validate_output_checks_file_count(tmp_path):
-    from lakehouse_core import validate_output
+    from lakehouse_core.api import validate_output
     from lakehouse_core.testing.local_store import LocalS3StyleStore
 
     store = LocalS3StyleStore(tmp_path)

@@ -17,7 +17,7 @@ try:
         prepare_dataset,
         validate_dataset,
     )
-    from lakehouse_core import NonPartitionPaths, PartitionPaths
+    from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
         f"etl utils imports unavailable in this environment: {exc}", allow_module_level=True
@@ -135,9 +135,8 @@ def test_validate_dataset_file_count_mismatch():
         validate_dataset(paths_dict, metrics, mock_s3_hook)
 
 
-@patch("dags.utils.etl_utils.publish_output")
-@patch("dags.utils.etl_utils.build_manifest")
-def test_commit_dataset_partitioned(mock_build_manifest, mock_publish):
+@patch("dags.utils.etl_utils.pipeline_commit")
+def test_commit_dataset_partitioned(mock_pipeline_commit):
     mock_s3_hook = MagicMock()
     paths_dict = {
         "partitioned": True,
@@ -149,14 +148,13 @@ def test_commit_dataset_partitioned(mock_build_manifest, mock_publish):
         "success_flag_path": "s3://b/t/dt=2024-01-01/_S",
     }
     metrics = {"has_data": 1, "file_count": 1, "row_count": 10}
-    mock_publish.return_value = {"published": "1"}
-    mock_build_manifest.return_value = {"manifest": "data"}
+    mock_pipeline_commit.return_value = ({"published": "1"}, {"manifest": "data"})
 
     res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
 
     assert res == {"published": "1"}
     assert manifest == {"manifest": "data"}
-    mock_publish.assert_called_once()
+    mock_pipeline_commit.assert_called_once()
 
 
 def test_commit_dataset_no_data():
@@ -171,9 +169,9 @@ def test_commit_dataset_no_data():
     }
     metrics = {"has_data": 0}
 
-    with patch("dags.utils.etl_utils.AirflowS3Store") as mock_store_cls:
-        mock_store = mock_store_cls.return_value
+    with patch("dags.utils.etl_utils.pipeline_commit") as mock_pipeline_commit:
+        mock_pipeline_commit.return_value = ({"published": "0", "action": "cleared"}, {})
         res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
         assert res["action"] == "cleared"
         assert manifest == {}
-        mock_store.delete_prefix.assert_called_once_with("s3://b/t")
+        mock_pipeline_commit.assert_called_once()

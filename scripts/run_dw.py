@@ -6,23 +6,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-from lakehouse_core import (
-    Boto3S3Store,
-    DirectoryDWPlanner,
-    LocalFileStore,
-    S3ConnectionConfig,
-    attach_catalog_if_available,
-    build_manifest,
-    cleanup_tmp,
-    configure_s3_access,
-    materialize_query_to_tmp_and_measure,
-    prepare_paths,
-    publish_output,
-    validate_output,
-)
+from lakehouse_core.api import prepare_paths
+from lakehouse_core.catalog import attach_catalog_if_available
+from lakehouse_core.dw_planner import DirectoryDWPlanner
+from lakehouse_core.execution import S3ConnectionConfig, configure_s3_access
 from lakehouse_core.models import RunContext
-from lakehouse_core.ods_sources import register_ods_csv_source_view
+from lakehouse_core.inputs import OdsCsvRegistrar
 from lakehouse_core.execution import temporary_connection
+from lakehouse_core.pipeline import cleanup, commit, load, validate
+from lakehouse_core.stores import Boto3S3Store, LocalFileStore
 from lakehouse_core.time import get_default_partition_date_str
 
 logger = logging.getLogger(__name__)
@@ -145,7 +137,6 @@ def main(argv: list[str] | None = None) -> int:
             is_partitioned=spec.is_partitioned,
             store_namespace=base_uri,
         )
-        store.delete_prefix(paths.tmp_prefix)
 
         with temporary_connection() as connection:
             if args.store == "s3":
@@ -161,68 +152,33 @@ def main(argv: list[str] | None = None) -> int:
 
             attach_catalog_if_available(connection, catalog_path=args.catalog_path)
 
-            if spec.base_prefix.startswith("lake/ods/"):
-                source = (spec.inputs or {}).get("source") or {}
-                source_path = str(source.get("path") or "")
-                if not source_path:
-                    raise ValueError(f"Missing ODS source info in RunSpec for {spec.name}")
-                if not spec.partition_date:
-                    raise ValueError(f"partition_date is required for ODS table {spec.name}")
-                has_source = register_ods_csv_source_view(
-                    connection=connection,
-                    store=store,
-                    base_uri=base_uri,
-                    source_path=source_path,
-                    partition_date=spec.partition_date,
-                    view_name=f"tmp_{spec.base_prefix.split('/')[-1]}",
-                )
-                if not has_source:
-                    metrics = {"row_count": 0, "file_count": 0, "has_data": 0}
-                else:
-                    metrics = materialize_query_to_tmp_and_measure(
-                        connection=connection,
-                        store=store,
-                        query=str(spec.sql),
-                        destination_prefix=paths.tmp_prefix,
-                        partitioned=spec.is_partitioned,
-                        tmp_partition_prefix=getattr(paths, "tmp_partition_prefix", None),
-                        partition_column="dt",
-                        filename_pattern="file_{uuid}",
-                        use_tmp_file=True,
-                    )
-            else:
-                metrics = materialize_query_to_tmp_and_measure(
-                    connection=connection,
-                    store=store,
-                    query=str(spec.sql),
-                    destination_prefix=paths.tmp_prefix,
-                    partitioned=spec.is_partitioned,
-                    tmp_partition_prefix=getattr(paths, "tmp_partition_prefix", None),
-                    partition_column="dt",
-                    filename_pattern="file_{uuid}",
-                    use_tmp_file=True,
-                )
+            registrars = [OdsCsvRegistrar()] if spec.layer == "ods" else []
+            metrics = load(
+                spec=spec,
+                paths=paths,
+                partition_date=spec.partition_date,
+                store=store,
+                connection=connection,
+                base_uri=base_uri,
+                registrars=registrars,
+            )
 
-        validate_output(store=store, paths=paths, metrics=metrics)
-
-        if not int(metrics.get("has_data", 1)):
-            logger.info("No data for %s (dt=%s); clearing canonical prefix.", spec.name, spec.partition_date)
-            store.delete_prefix(paths.canonical_prefix)
-            cleanup_tmp(store=store, paths=paths)
-            continue
+        validate(store=store, paths=paths, metrics=metrics)
 
         partition_date_for_manifest = spec.partition_date or context.partition_date or ""
-        manifest = build_manifest(
-            dest=spec.name,
-            partition_date=partition_date_for_manifest,
+        publish_result, _manifest = commit(
+            store=store,
+            paths=paths,
+            dest=spec.table,
             run_id=run_id,
-            file_count=int(metrics["file_count"]),
-            row_count=int(metrics["row_count"]),
-            source_prefix=getattr(paths, "tmp_partition_prefix", paths.tmp_prefix),
-            target_prefix=paths.canonical_prefix,
+            partition_date=partition_date_for_manifest,
+            metrics=metrics,
+            write_success_flag=True,
         )
-        publish_output(store=store, paths=paths, manifest=manifest, write_success_flag=True)
-        cleanup_tmp(store=store, paths=paths)
+        if publish_result.get("action") == "cleared":
+            logger.info("No data for %s (dt=%s); cleared canonical prefix.", spec.name, spec.partition_date)
+
+        cleanup(store=store, paths=paths)
 
     return 0
 

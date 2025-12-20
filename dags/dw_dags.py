@@ -31,20 +31,15 @@ from dags.utils.etl_utils import (
     validate_dataset,
 )
 from dags.adapters.airflow_s3_store import AirflowS3Store
-from lakehouse_core import (
-    DirectoryDWPlanner,
-    DWConfig,
-    DWConfigError,
-    RunContext,
-    materialize_query_to_tmp_and_measure,
-    order_layers,
-    render_sql,
-    load_dw_config,
-    register_ods_csv_source_view,
-)
+from lakehouse_core.catalog import attach_catalog_if_available
+from lakehouse_core.dw_config import DWConfig, DWConfigError, load_dw_config, order_layers
+from lakehouse_core.dw_planner import DirectoryDWPlanner
+from lakehouse_core.inputs import OdsCsvRegistrar
+from lakehouse_core.models import RunSpec
+from lakehouse_core.models import RunContext
+from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.pipeline import load as pipeline_load
 from dags.utils.time_utils import get_partition_date_str
-
-from lakehouse_core import attach_catalog_if_available
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent
@@ -59,19 +54,12 @@ def _conf_targets(context: Mapping[str, Any]) -> list[str] | None:
     return parse_targets(conf)
 
 
-def _spec_layer_table(run_spec: Mapping[str, Any]) -> tuple[str, str]:
-    base_prefix = str(run_spec.get("base_prefix") or "")
-    parts = base_prefix.strip("/").split("/")
-    if len(parts) < 3:
-        raise ValueError(f"Invalid base_prefix: {base_prefix}")
-    return parts[1], parts[2]
-
-
 def _target_matches(run_spec: Mapping[str, Any], target: str) -> bool:
     value = (target or "").strip()
     if not value:
         return False
-    layer, table = _spec_layer_table(run_spec)
+    layer = str(run_spec.get("layer") or "")
+    table = str(run_spec.get("table") or "")
     if "." not in value:
         return value == layer
     t_layer, t_table = value.split(".", 1)
@@ -89,65 +77,61 @@ def load_table(
 ) -> dict[str, Any]:
     targets = _conf_targets(context)
     if targets is not None and not any(_target_matches(run_spec, t) for t in targets):
-        _, table_name = _spec_layer_table(run_spec)
+        table_name = str(run_spec.get("table") or "")
         logger.info("Skipping table %s (not in targets).", table_name)
         return {"row_count": 0, "file_count": 0, "has_data": 0, "skipped": 1}
 
-    partitioned = bool(paths_dict.get("partitioned"))
     partition_date = str(paths_dict.get("partition_date"))
 
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
     s3_config = build_s3_connection_config(s3_hook)
     store = AirflowS3Store(s3_hook)
 
+    spec = RunSpec(**dict(run_spec))
+    if bool(paths_dict.get("partitioned")) != bool(spec.is_partitioned):
+        raise ValueError("paths_dict.partitioned does not match RunSpec.is_partitioned")
+
+    if spec.is_partitioned:
+        paths = PartitionPaths(
+            partition_date=str(paths_dict["partition_date"]),
+            canonical_prefix=str(paths_dict["canonical_prefix"]),
+            tmp_prefix=str(paths_dict["tmp_prefix"]),
+            tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
+            manifest_path=str(paths_dict["manifest_path"]),
+            success_flag_path=str(paths_dict["success_flag_path"]),
+        )
+    else:
+        paths = NonPartitionPaths(
+            canonical_prefix=str(paths_dict["canonical_prefix"]),
+            tmp_prefix=str(paths_dict["tmp_prefix"]),
+            manifest_path=str(paths_dict["manifest_path"]),
+            success_flag_path=str(paths_dict["success_flag_path"]),
+        )
+
     with temporary_connection() as connection:
         configure_s3_access(connection, s3_config)
         _attach_catalog_if_available(connection)
 
-        layer, table_name = _spec_layer_table(run_spec)
-        if layer == "ods":
-            source = dict((run_spec.get("inputs") or {}).get("source") or {})
-            source_path = str(source.get("path") or "")
-            if not source_path:
-                raise ValueError(
-                    f"Missing ODS source path for '{table_name}'. "
-                    f"Add sources.{table_name} to {CONFIG_PATH}."
-                )
-            has_source_data = register_ods_csv_source_view(
-                connection=connection,
-                store=store,
-                base_uri=f"s3://{bucket_name}",
-                source_path=source_path,
-                partition_date=partition_date,
-                view_name=f"tmp_{table_name}",
-            )
-            if not has_source_data:
-                return {"row_count": 0, "file_count": 0, "has_data": 0}
-
-        sql_template = str(run_spec.get("sql") or "")
-        rendered_sql = render_sql(sql_template, {"PARTITION_DATE": partition_date})
-        destination_prefix = paths_dict["tmp_prefix"]
-        metrics = materialize_query_to_tmp_and_measure(
-            connection=connection,
+        registrars = [OdsCsvRegistrar()] if spec.layer == "ods" else []
+        metrics = pipeline_load(
+            spec=spec,
+            paths=paths,
+            partition_date=partition_date if spec.is_partitioned else None,
             store=store,
-            query=rendered_sql,
-            destination_prefix=destination_prefix,
-            partitioned=partitioned,
-            tmp_partition_prefix=str(paths_dict.get("tmp_partition_prefix") or ""),
-            partition_column="dt",
-            filename_pattern="file_{uuid}",
-            use_tmp_file=True,
+            connection=connection,
+            base_uri=f"s3://{bucket_name}",
+            registrars=registrars,
         )
 
-        metrics["partitioned"] = int(partitioned)
-        return metrics
+        metrics["partitioned"] = int(bool(spec.is_partitioned))
+        return dict(metrics)
 
 
 def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
     planner = DirectoryDWPlanner(dw_config_path=CONFIG_PATH, sql_base_dir=SQL_BASE_DIR)
     specs = planner.build(RunContext(run_id="plan", extra={"allow_unrendered_sql": True}))
-    layers_with_tables = {_spec_layer_table(spec.__dict__)[0] for spec in specs}
-    layer_specs = [spec for spec in specs if _spec_layer_table(spec.__dict__)[0] == layer]
+    layers_with_tables = {spec.layer for spec in specs}
+    layer_specs = [spec for spec in specs if spec.layer == layer]
     if not layer_specs:
         return None
 
@@ -192,7 +176,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
         table_last_tasks = {}
 
         for spec_dict in ordered_specs:
-            _, table_name = _spec_layer_table(spec_dict)
+            table_name = str(spec_dict.get("table") or "")
             from airflow.utils.task_group import TaskGroup
 
             with TaskGroup(group_id=table_name) as tg:

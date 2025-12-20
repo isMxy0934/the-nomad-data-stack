@@ -27,6 +27,8 @@ class RunSpec:
     A RunSpec describes "what to run" without binding to a specific orchestrator.
     """
 
+    layer: str
+    table: str
     name: str
     base_prefix: str
     is_partitioned: bool = True
@@ -35,3 +37,28 @@ class RunSpec:
     inputs: dict[str, Any] = field(default_factory=dict)
     storage_options: dict[str, Any] | None = None
 
+    def __post_init__(self) -> None:
+        layer = (self.layer or "").strip()
+        table = (self.table or "").strip()
+        name = (self.name or "").strip()
+        base_prefix = (self.base_prefix or "").strip().strip("/")
+        if not layer:
+            raise ValueError("RunSpec.layer is required")
+        if not table:
+            raise ValueError("RunSpec.table is required")
+        if not name:
+            raise ValueError("RunSpec.name is required")
+        if not base_prefix:
+            raise ValueError("RunSpec.base_prefix is required")
+
+        expected_prefix = f"lake/{layer}/{table}"
+        if base_prefix != expected_prefix:
+            raise ValueError(
+                f"RunSpec.base_prefix must be '{expected_prefix}', got '{self.base_prefix}'"
+            )
+
+        expected_name_prefix = f"{layer}.{table}"
+        if not name.startswith(expected_name_prefix):
+            raise ValueError(
+                f"RunSpec.name must start with '{expected_name_prefix}', got '{self.name}'"
+            )

@@ -120,6 +120,8 @@ class DirectoryDWPlanner(Planner):
                         sql = _render_table_sql(table, partition_date if table.is_partitioned else None)
                     run_specs.append(
                         RunSpec(
+                            layer=layer,
+                            table=table.name,
                             name=name,
                             base_prefix=f"lake/{layer}/{table.name}",
                             is_partitioned=table.is_partitioned,

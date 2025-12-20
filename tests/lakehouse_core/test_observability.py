@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 
-from lakehouse_core import build_manifest, prepare_paths
+from lakehouse_core.api import prepare_paths
 from lakehouse_core import commit as core_commit
+from lakehouse_core.manifest import build_manifest
 from lakehouse_core.testing.local_store import LocalS3StyleStore
 
 
@@ -45,4 +46,3 @@ def test_publish_partition_emits_structured_log(caplog, tmp_path) -> None:
 
     messages = [r.getMessage() for r in caplog.records]
     assert any("core.publish_partition" in m and "stage=done" in m and "dest=ods.t" in m for m in messages)
-
