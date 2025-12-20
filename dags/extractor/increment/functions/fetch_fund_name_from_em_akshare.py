@@ -25,8 +25,7 @@ def fetch_fund_name_from_em_akshare() -> CsvPayload | None:
         "pinyin_full",
         "pinyin_short",
     ]
-    
-    
+
     df = df[[col for col in target_columns if col in df.columns]]
     df["trade_date"] = get_date_str()
 
