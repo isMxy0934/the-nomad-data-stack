@@ -12,7 +12,7 @@
 - [x] Extractor DAG：`dags/extractor/*` 已存在（AkShare/TuShare → MinIO CSV）
 - [ ] Extractor Backfill/Compact：新增 `dw_extractor_backfill_dag` / `dw_extractor_compact_dag`（历史回填 pieces → 合并到 daily）
 - [x] ODS 配置与示例 SQL：`dags/dw_config.yaml` (sources)、`dags/ods/*.sql` 已存在
-- [x] 工具类：`dags/utils/s3_utils.py`、`lakehouse_core/time.py` 已存在
+- [x] 工具类：`dags/utils/s3_utils.py`、`lakehouse_core/io/time.py` 已存在
 
 > 说明：以上是“文件/结构已存在”，不等价于“已跑通验证”。跑通验证会在对应任务项里单独勾选。
 
@@ -64,7 +64,7 @@
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
 
-- [x] `lakehouse_core/sql.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
+- [x] `lakehouse_core/io/sql.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
 - [x] `tests/utils/test_sql_utils.py`：覆盖变量渲染与错误分支（缺参/空 SQL）
 
 验收：
@@ -83,9 +83,9 @@
 
 #### P3：`duckdb_utils`（DuckDB 临时计算 + S3/MinIO 读写能力）
 
-- [x] `lakehouse_core/execution.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
-- [x] `lakehouse_core/execution.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
-- [x] `lakehouse_core/execution.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
+- [x] `lakehouse_core/compute/execution.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
+- [x] `lakehouse_core/compute/execution.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
+- [x] `lakehouse_core/compute/execution.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
 
 验收：
 - [x] 至少有一个最小验证（单测或脚本）：能执行 `SELECT 1`，且 COPY 写入路径参数校验通过

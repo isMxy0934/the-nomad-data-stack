@@ -5,8 +5,11 @@ Lower-level utilities should be imported from their submodules explicitly.
 """
 
 import lakehouse_core.pipeline as pipeline
+from lakehouse_core.domain import commit_protocol as commit
+from lakehouse_core.domain import manifest
 from lakehouse_core.domain.models import RunContext, RunSpec
 from lakehouse_core.inputs import InputRegistrar, InputRegistration, OdsCsvRegistrar
+from lakehouse_core.io import paths
 from lakehouse_core.planning import (
     DirectoryDWPlanner,
     DWConfig,
@@ -28,7 +31,10 @@ __all__ = [
     "OdsCsvRegistrar",
     "RunContext",
     "RunSpec",
+    "commit",
+    "manifest",
     "load_dw_config",
     "order_layers",
+    "paths",
     "pipeline",
 ]

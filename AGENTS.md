@@ -15,7 +15,7 @@
 以下设计决策是基于业务场景（每日批处理 + 轻量级）的权衡，**在没有明确重构指令前，请勿修改**：
 
 1.  **分区时间（T-1）**：
-    *   代码逻辑：`lakehouse_core/time.py` 中的 `get_partition_date_str()` 默认取 `now() - 1 day`。
+    *   代码逻辑：`lakehouse_core/io/time.py` 中的 `get_partition_date_str()` 默认取 `now() - 1 day`。
     *   原因：简化了 DAG 的参数传递，任务总是处理“昨天的”数据。
     *   **禁止**：不要将其重构为 Airflow `{{ ds }}` 或 `{{ data_interval_start }}`，除非你准备重写所有 SQL 模板和回填逻辑。
 
@@ -48,7 +48,7 @@
 ## DuckDB 扩展与 S3 访问
 
 - 通过 `httpfs` 访问 S3/MinIO；镜像构建阶段预装扩展（见 `infra_build/dockerfiles/Dockerfile.airflow`），运行时优先 `LOAD httpfs`，必要时 fallback `INSTALL`。
-- 相关实现：`lakehouse_core/execution.py`（执行/连接/写 Parquet 的可复用逻辑）、`dags/utils/etl_utils.py`（Airflow 连接配置桥接）。
+- 相关实现：`lakehouse_core/compute/execution.py`（执行/连接/写 Parquet 的可复用逻辑）、`dags/utils/etl_utils.py`（Airflow 连接配置桥接）。
 
 ## Catalog（分析用）维护约定
 
