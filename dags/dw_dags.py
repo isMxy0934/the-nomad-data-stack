@@ -19,9 +19,6 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.dag_run_utils import parse_targets
 from dags.utils.duckdb_utils import (
     configure_s3_access,
-    execute_sql,
-    run_query_to_parquet,
-    run_query_to_partitioned_parquet,
     temporary_connection,
 )
 from dags.utils.dw_config_utils import (
@@ -39,10 +36,11 @@ from dags.utils.etl_utils import (
     build_s3_connection_config,
     cleanup_dataset,
     commit_dataset,
-    list_parquet_keys,
     prepare_dataset,
     validate_dataset,
 )
+from dags.adapters.airflow_s3_store import AirflowS3Store
+from lakehouse_core import materialize_query_to_tmp_and_measure
 from dags.utils.sql_utils import load_and_render_sql
 from dags.utils.time_utils import get_partition_date_str
 
@@ -140,6 +138,7 @@ def load_table(
 
     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
     s3_config = build_s3_connection_config(s3_hook)
+    store = AirflowS3Store(s3_hook)
 
     with temporary_connection() as connection:
         configure_s3_access(connection, s3_config)
@@ -163,45 +162,20 @@ def load_table(
             {"PARTITION_DATE": partition_date},
         )
         destination_prefix = paths_dict["tmp_prefix"]
-        if partitioned:
-            run_query_to_partitioned_parquet(
-                connection,
-                query=rendered_sql,
-                destination=destination_prefix,
-                partition_column="dt",
-                filename_pattern="file_{uuid}",
-                use_tmp_file=True,
-            )
-            file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_partition_prefix"]))
-        else:
-            run_query_to_parquet(
-                connection,
-                query=rendered_sql,
-                destination=destination_prefix,
-                filename_pattern="file_{uuid}",
-                use_tmp_file=True,
-            )
-            file_count = len(list_parquet_keys(s3_hook, destination_prefix))
-
-        if file_count == 0:
-            return {"row_count": 0, "file_count": 0, "has_data": 0}
-
-        parquet_glob = (
-            f"{paths_dict['tmp_partition_prefix']}/*.parquet"
-            if partitioned
-            else f"{destination_prefix}/*.parquet"
+        metrics = materialize_query_to_tmp_and_measure(
+            connection=connection,
+            store=store,
+            query=rendered_sql,
+            destination_prefix=destination_prefix,
+            partitioned=partitioned,
+            tmp_partition_prefix=str(paths_dict.get("tmp_partition_prefix") or ""),
+            partition_column="dt",
+            filename_pattern="file_{uuid}",
+            use_tmp_file=True,
         )
-        relation = execute_sql(
-            connection, f"SELECT COUNT(*) AS row_count FROM read_parquet('{parquet_glob}')"
-        )
-        row_count = int(relation.fetchone()[0])
 
-        return {
-            "row_count": row_count,
-            "file_count": file_count,
-            "has_data": 1,
-            "partitioned": int(partitioned),
-        }
+        metrics["partitioned"] = int(partitioned)
+        return metrics
 
 
 def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:

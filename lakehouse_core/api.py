@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from lakehouse_core import commit as core_commit
 from lakehouse_core import paths as core_paths
+from lakehouse_core.execution import execute_sql, run_query_to_parquet, run_query_to_partitioned_parquet
 from lakehouse_core.storage import ObjectStore
 
 
@@ -106,3 +107,53 @@ def cleanup_tmp(
     *, store: ObjectStore, paths: core_paths.PartitionPaths | core_paths.NonPartitionPaths
 ) -> None:
     store.delete_prefix(paths.tmp_prefix)
+
+
+def materialize_query_to_tmp_and_measure(
+    *,
+    connection,
+    store: ObjectStore,
+    query: str,
+    destination_prefix: str,
+    partitioned: bool,
+    tmp_partition_prefix: str | None = None,
+    partition_column: str = "dt",
+    filename_pattern: str = "file_{uuid}",
+    use_tmp_file: bool = False,
+) -> dict[str, int]:
+    """Execute a query and write Parquet into tmp, then compute (file_count, row_count).
+
+    This is orchestrator-agnostic and intended to be called by Airflow/Prefect/scripts.
+    """
+
+    if partitioned:
+        run_query_to_partitioned_parquet(
+            connection,
+            query=query,
+            destination=destination_prefix,
+            partition_column=partition_column,
+            filename_pattern=filename_pattern,
+            use_tmp_file=use_tmp_file,
+        )
+        count_prefix = tmp_partition_prefix or destination_prefix
+        parquet_glob = f"{count_prefix}/*.parquet"
+    else:
+        run_query_to_parquet(
+            connection,
+            query=query,
+            destination=destination_prefix,
+            filename_pattern=filename_pattern,
+            use_tmp_file=use_tmp_file,
+        )
+        count_prefix = destination_prefix
+        parquet_glob = f"{destination_prefix}/*.parquet"
+
+    file_count = len([uri for uri in store.list_keys(count_prefix) if uri.endswith(".parquet")])
+    if file_count == 0:
+        return {"row_count": 0, "file_count": 0, "has_data": 0}
+
+    relation = execute_sql(
+        connection, f"SELECT COUNT(*) AS row_count FROM read_parquet('{parquet_glob}')"
+    )
+    row_count = int(relation.fetchone()[0])
+    return {"row_count": row_count, "file_count": file_count, "has_data": 1}

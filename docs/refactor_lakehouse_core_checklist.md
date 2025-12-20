@@ -219,6 +219,9 @@ Checklist：
 验收标准：
 - [ ] Airflow 与脚本（或 Prefect）调用相同的执行用例函数，结果一致。
 
+补充（Phase 2 执行下沉进度）：
+- [x] `dags/dw_dags.py#load_table` 的 “query → parquet → (file_count,row_count)” 已收口到 `lakehouse_core.materialize_query_to_tmp_and_measure`，编排层只负责组装参数与上游 view 注册。
+
 ### 2.2 脚本入口（可选，但强烈建议）
 
 目标：提供最轻量的运行方式，为后续替换调度器铺路。

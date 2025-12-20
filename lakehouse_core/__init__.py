@@ -4,7 +4,13 @@ This package must not depend on any specific orchestrator (Airflow/Prefect) or
 storage implementation (S3/local). Integrations live in adapters.
 """
 
-from lakehouse_core.api import cleanup_tmp, prepare_paths, publish_output, validate_output
+from lakehouse_core.api import (
+    cleanup_tmp,
+    materialize_query_to_tmp_and_measure,
+    prepare_paths,
+    publish_output,
+    validate_output,
+)
 from lakehouse_core.errors import LakehouseCoreError, PlanningError, ValidationError
 from lakehouse_core.execution import (
     Executor,
@@ -37,6 +43,7 @@ __all__ = [
     "S3ConnectionConfig",
     "build_manifest",
     "cleanup_tmp",
+    "materialize_query_to_tmp_and_measure",
     "configure_s3_access",
     "copy_parquet",
     "copy_partitioned_parquet",
