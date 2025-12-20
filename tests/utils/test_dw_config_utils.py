@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from dags.utils.dw_config_utils import (  # pylint: disable=wrong-import-position
+from lakehouse_core.dw_config import (
     DWConfigError,
     SourceSpec,
     TableSpec,

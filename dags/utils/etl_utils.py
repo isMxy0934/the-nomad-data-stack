@@ -14,21 +14,14 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from dags.utils.duckdb_utils import (
-    S3ConnectionConfig,
-)
-from dags.utils.partition_utils import (
-    NonPartitionPaths,
-    PartitionPaths,
-    build_manifest,
-    build_non_partition_paths,
-    build_partition_paths,
-    delete_prefix,
-    parse_s3_uri,
-    publish_non_partition,
-    publish_partition,
-)
-from dags.utils.time_utils import get_partition_date_str
+from dags.adapters.airflow_s3_store import AirflowS3Store
+from lakehouse_core.api import prepare_paths
+from lakehouse_core.execution import S3ConnectionConfig
+from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.pipeline import cleanup as pipeline_cleanup
+from lakehouse_core.pipeline import commit as pipeline_commit
+from lakehouse_core.pipeline import validate as pipeline_validate
+from lakehouse_core.time import get_partition_date_str
 
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "stock-data")
@@ -85,21 +78,8 @@ def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
     )
 
 
-def list_parquet_keys(s3_hook: S3Hook, prefix_uri: str) -> list[str]:
-    """List parquet files under a given S3 URI prefix."""
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = key_prefix.strip("/") + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    return [key for key in keys if key.endswith(".parquet")]
-
-
-def delete_tmp_prefix(s3_hook: S3Hook, prefix_uri: str) -> None:
-    """Delete all objects under a temporary S3 URI prefix."""
-    bucket, key_prefix = parse_s3_uri(prefix_uri)
-    normalized_prefix = key_prefix.strip("/") + "/"
-    keys = s3_hook.list_keys(bucket_name=bucket, prefix=normalized_prefix) or []
-    if keys:
-        s3_hook.delete_objects(bucket=bucket, keys=keys)
+def _strip_slashes(path: str) -> str:
+    return path.strip("/")
 
 
 def prepare_dataset(
@@ -117,11 +97,12 @@ def prepare_dataset(
         partition_date = str(partition_date).strip()
 
     if is_partitioned:
-        paths = build_partition_paths(
-            base_prefix=base_prefix,
-            partition_date=partition_date,
+        paths = prepare_paths(
+            base_prefix=_strip_slashes(base_prefix),
             run_id=run_id,
-            bucket_name=bucket_name,
+            partition_date=partition_date,
+            is_partitioned=True,
+            store_namespace=bucket_name,
         )
         return {
             "partition_date": partition_date,
@@ -133,10 +114,12 @@ def prepare_dataset(
             "success_flag_path": paths.success_flag_path,
         }
 
-    paths = build_non_partition_paths(
-        base_prefix=base_prefix,
+    paths = prepare_paths(
+        base_prefix=_strip_slashes(base_prefix),
         run_id=run_id,
-        bucket_name=bucket_name,
+        partition_date=None,
+        is_partitioned=False,
+        store_namespace=bucket_name,
     )
     return {
         "partition_date": partition_date,
@@ -153,28 +136,39 @@ def validate_dataset(
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
 ) -> dict[str, int]:
-    """Core logic to validate dataset output (pure function)."""
+    """Core logic to validate dataset output (delegates to lakehouse_core API)."""
+    store = AirflowS3Store(s3_hook)
     partitioned = bool(paths_dict.get("partitioned"))
 
-    if not int(metrics.get("has_data", 1)):
-        # If no data expected, ensure no files written
-        file_count = len(list_parquet_keys(s3_hook, paths_dict["tmp_prefix"]))
-        if file_count != 0:
-            raise ValueError("Expected no parquet files in tmp prefix for empty source result")
-        return dict(metrics)
-
-    # Verify actual files on S3 match reported metrics
-    target_prefix = paths_dict["tmp_partition_prefix"] if partitioned else paths_dict["tmp_prefix"]
-    file_count = len(list_parquet_keys(s3_hook, target_prefix))
-
-    if file_count == 0:
-        raise ValueError("No parquet files were written to the tmp prefix")
-    if file_count != metrics["file_count"]:
-        raise ValueError("File count mismatch between load metrics and S3 contents")
-    if metrics["row_count"] < 0:
-        raise ValueError("Row count cannot be negative")
-
-    return dict(metrics)
+    # Backwards-compatible: some unit tests pass a partial paths_dict with only tmp_prefix.
+    if partitioned:
+        try:
+            paths = partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            tmp_prefix = str(paths_dict["tmp_prefix"])
+            partition_date = str(paths_dict.get("partition_date") or "").strip()
+            tmp_partition_prefix = str(paths_dict.get("tmp_partition_prefix") or "").strip()
+            if not tmp_partition_prefix and partition_date:
+                tmp_partition_prefix = f"{tmp_prefix}/dt={partition_date}"
+            paths = PartitionPaths(
+                partition_date=partition_date,
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=tmp_prefix,
+                tmp_partition_prefix=tmp_partition_prefix,
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+    else:
+        try:
+            paths = non_partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            paths = NonPartitionPaths(
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=str(paths_dict["tmp_prefix"]),
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+    return pipeline_validate(store=store, paths=paths, metrics=metrics)
 
 
 def commit_dataset(
@@ -184,61 +178,31 @@ def commit_dataset(
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
 ) -> tuple[dict[str, str], MutableMapping[str, object]]:
-    """Core logic to commit dataset (pure function). Returns (publish_result, manifest)."""
+    """Commit tmp outputs into canonical and write markers (pipeline-backed)."""
     partitioned = bool(paths_dict.get("partitioned"))
     partition_date = str(paths_dict.get("partition_date"))
 
+    store = AirflowS3Store(s3_hook)
     if partitioned:
         paths = partition_paths_from_xcom(paths_dict)
-        canonical_prefix = paths.canonical_prefix
     else:
         paths = non_partition_paths_from_xcom(paths_dict)
-        canonical_prefix = paths.canonical_prefix
 
-    if not int(metrics.get("has_data", 1)):
+    publish_result, manifest = pipeline_commit(
+        store=store,
+        paths=paths,
+        dest=dest_name,
+        run_id=run_id,
+        partition_date=partition_date,
+        metrics=metrics,
+        write_success_flag=True,
+    )
+    if publish_result.get("action") == "cleared":
         logger.info(
             "No data for %s (dt=%s); clearing partition and skipping publish.",
             dest_name,
             partition_date,
         )
-        delete_prefix(s3_hook, canonical_prefix)
-        return {"published": "0", "action": "cleared"}, {}
-
-    if partitioned:
-        # paths is already PartitionPaths from above
-        manifest = build_manifest(
-            dest=dest_name,
-            partition_date=partition_date,
-            run_id=run_id,
-            file_count=int(metrics["file_count"]),
-            row_count=int(metrics["row_count"]),
-            source_prefix=paths.tmp_partition_prefix,
-            target_prefix=paths.canonical_prefix,
-        )
-        publish_result = publish_partition(
-            s3_hook=s3_hook,
-            paths=paths,
-            manifest=manifest,
-            write_success_flag=True,
-        )
-    else:
-        # paths is already NonPartitionPaths from above
-        manifest = build_manifest(
-            dest=dest_name,
-            partition_date=partition_date,
-            run_id=run_id,
-            file_count=int(metrics["file_count"]),
-            row_count=int(metrics["row_count"]),
-            source_prefix=paths.tmp_prefix,
-            target_prefix=paths.canonical_prefix,
-        )
-        publish_result = publish_non_partition(
-            s3_hook=s3_hook,
-            paths=paths,
-            manifest=manifest,
-            write_success_flag=True,
-        )
-
     return publish_result, manifest
 
 
@@ -246,8 +210,34 @@ def cleanup_dataset(
     paths_dict: Mapping[str, Any],
     s3_hook: S3Hook,
 ) -> None:
-    """Clean up temporary files (pure function)."""
-    delete_tmp_prefix(s3_hook, paths_dict["tmp_prefix"])
+    """Clean up temporary files (delegates to lakehouse_core API)."""
+    store = AirflowS3Store(s3_hook)
+    tmp_prefix = str(paths_dict["tmp_prefix"])
+    partitioned = bool(paths_dict.get("partitioned"))
+    if partitioned:
+        try:
+            paths = partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            paths = PartitionPaths(
+                partition_date=str(paths_dict.get("partition_date") or ""),
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=tmp_prefix,
+                tmp_partition_prefix=str(paths_dict.get("tmp_partition_prefix") or ""),
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+    else:
+        try:
+            paths = non_partition_paths_from_xcom(paths_dict)
+        except KeyError:
+            paths = NonPartitionPaths(
+                canonical_prefix=str(paths_dict.get("canonical_prefix") or ""),
+                tmp_prefix=tmp_prefix,
+                manifest_path=str(paths_dict.get("manifest_path") or ""),
+                success_flag_path=str(paths_dict.get("success_flag_path") or ""),
+            )
+
+    pipeline_cleanup(store=store, paths=paths)
 
 
 def build_etl_task_group(

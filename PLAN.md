@@ -12,7 +12,7 @@
 - [x] Extractor DAG：`dags/extractor/*` 已存在（AkShare/TuShare → MinIO CSV）
 - [ ] Extractor Backfill/Compact：新增 `dw_extractor_backfill_dag` / `dw_extractor_compact_dag`（历史回填 pieces → 合并到 daily）
 - [x] ODS 配置与示例 SQL：`dags/dw_config.yaml` (sources)、`dags/ods/*.sql` 已存在
-- [x] 工具类：`dags/utils/s3_utils.py`、`dags/utils/time_utils.py` 已存在
+- [x] 工具类：`dags/utils/s3_utils.py`、`lakehouse_core/time.py` 已存在
 
 > 说明：以上是“文件/结构已存在”，不等价于“已跑通验证”。跑通验证会在对应任务项里单独勾选。
 
@@ -25,6 +25,7 @@
 - **M2 DW 打通（配置驱动）**：基于 `dags/dw_config.yaml` + `dags/{layer}/*.sql`（目录即配置）生成每层独立 DAG（`dw_{layer}`）；空层（无 SQL/目录不存在）跳过；任务运行时只读 attach DuckDB catalog 以支持 `SELECT * FROM ods.xxx`；像 ODS 一样执行（DuckDB 计算 → tmp 写入 → validate → publish → `_SUCCESS` → cleanup）。
 - **M2 DW 回填入口**：`dw_start_dag` 支持 `start_date/end_date/targets`，按日回放并向下游传递分区日期与目标表。
 - **M3 治理与运维**：小文件 compaction、schema 校验与演进、失败重试与回放、可观测与审计完善。
+- **M4 Core 解耦（lakehouse_core）**：将“提交协议/路径规划/校验”下沉到 core，调度（Airflow/Prefect/脚本）与存储（S3/本地）通过适配器接入（见 `docs/refactor_lakehouse_core_checklist.md`）。
 
 ---
 
@@ -63,7 +64,7 @@
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
 
-- [x] `dags/utils/sql_utils.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
+- [x] `lakehouse_core/sql.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
 - [x] `tests/utils/test_sql_utils.py`：覆盖变量渲染与错误分支（缺参/空 SQL）
 
 验收：
@@ -82,9 +83,9 @@
 
 #### P3：`duckdb_utils`（DuckDB 临时计算 + S3/MinIO 读写能力）
 
-- [x] `dags/utils/duckdb_utils.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
-- [x] `dags/utils/duckdb_utils.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
-- [x] `dags/utils/duckdb_utils.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
+- [x] `lakehouse_core/execution.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
+- [x] `lakehouse_core/execution.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
+- [x] `lakehouse_core/execution.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
 
 验收：
 - [x] 至少有一个最小验证（单测或脚本）：能执行 `SELECT 1`，且 COPY 写入路径参数校验通过

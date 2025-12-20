@@ -5,7 +5,7 @@ from typing import Any
 import duckdb
 import pytest
 
-from dags.utils.duckdb_utils import (  # pylint: disable=wrong-import-position
+from lakehouse_core.execution import (
     S3ConnectionConfig,
     configure_s3_access,
     copy_partitioned_parquet,

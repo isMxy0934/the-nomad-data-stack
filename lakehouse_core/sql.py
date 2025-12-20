@@ -1,4 +1,6 @@
-"""SQL template utilities for ODS and downstream tasks."""
+"""SQL template utilities (orchestrator-agnostic)."""
+
+from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -10,18 +12,7 @@ class MissingTemplateVariableError(ValueError):
 
 
 def load_sql(path: str | Path) -> str:
-    """Load SQL text from a file and validate that it is not empty.
-
-    Args:
-        path: File system path to a SQL file.
-
-    Returns:
-        The raw SQL content.
-
-    Raises:
-        FileNotFoundError: If the SQL file does not exist.
-        ValueError: If the SQL file is empty or contains only whitespace.
-    """
+    """Load SQL text from a file and validate that it is not empty."""
 
     file_path = Path(path)
     if not file_path.exists():
@@ -35,19 +26,7 @@ def load_sql(path: str | Path) -> str:
 
 
 def render_sql(sql: str, variables: Mapping[str, str]) -> str:
-    """Render a SQL template using `${VAR}` placeholders.
-
-    Args:
-        sql: Raw SQL template string.
-        variables: Mapping of template variable names to values.
-
-    Returns:
-        Rendered SQL string.
-
-    Raises:
-        MissingTemplateVariableError: If a required variable is missing.
-        ValueError: If the rendered SQL is empty.
-    """
+    """Render a SQL template using `${VAR}` placeholders."""
 
     if not sql.strip():
         raise ValueError("SQL template is empty")
@@ -73,3 +52,4 @@ def load_and_render_sql(path: str | Path, variables: Mapping[str, str]) -> str:
 
     raw_sql = load_sql(path)
     return render_sql(raw_sql, variables)
+

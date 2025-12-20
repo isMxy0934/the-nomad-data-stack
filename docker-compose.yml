@@ -38,6 +38,7 @@ services:
       # - AIRFLOW__WEBSERVER__WORKER_REFRESH_BATCH_SIZE=0
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./lakehouse_core:/opt/airflow/lakehouse_core
       - ./catalog:/opt/airflow/catalog
       - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
@@ -73,6 +74,7 @@ services:
       - PYTHONPATH=/opt/airflow
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./lakehouse_core:/opt/airflow/lakehouse_core
       - ./catalog:/opt/airflow/catalog
       - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
@@ -105,6 +107,7 @@ services:
       - PYTHONPATH=/opt/airflow
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./lakehouse_core:/opt/airflow/lakehouse_core
       - ./catalog:/opt/airflow/catalog
       - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs
@@ -137,6 +140,7 @@ services:
       "
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./lakehouse_core:/opt/airflow/lakehouse_core
       - ./catalog:/opt/airflow/catalog
       - ./.duckdb:/opt/airflow/.duckdb
       - ./logs:/opt/airflow/logs

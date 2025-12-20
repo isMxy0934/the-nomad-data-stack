@@ -22,7 +22,7 @@ from dags.utils.catalog_utils import (
     build_layer_view_sql,
     build_schema_sql,
 )
-from dags.utils.duckdb_utils import (
+from lakehouse_core.execution import (
     S3ConnectionConfig,
     configure_s3_access,
     temporary_connection,

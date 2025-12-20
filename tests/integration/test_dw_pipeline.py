@@ -2,14 +2,16 @@
 
 from pathlib import Path
 
-from dags.utils.duckdb_utils import (
+from lakehouse_core.api import prepare_paths
+from lakehouse_core.execution import (
     configure_s3_access,
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
 )
-from dags.utils.partition_utils import build_manifest, build_partition_paths, parse_s3_uri
-from dags.utils.sql_utils import load_and_render_sql
+from lakehouse_core.manifest import build_manifest
+from lakehouse_core.sql import load_and_render_sql
+from lakehouse_core.uri import parse_s3_uri
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -45,11 +47,12 @@ def test_dwd_pipeline_standard_flow(
 
     ods_run_id = f"test-run-ods-{test_date}"
     ods_base_prefix = f"{integration_prefix}/ods/{ods_table}"
-    ods_paths = build_partition_paths(
+    ods_paths = prepare_paths(
         base_prefix=ods_base_prefix,
-        partition_date=test_date,
         run_id=ods_run_id,
-        bucket_name=test_bucket_name,
+        partition_date=test_date,
+        is_partitioned=True,
+        store_namespace=test_bucket_name,
     )
 
     raw_s3_uri = f"s3://{test_bucket_name}/{raw_key}"
@@ -112,11 +115,12 @@ def test_dwd_pipeline_standard_flow(
 
     dwd_run_id = f"test-run-dwd-{test_date}"
     dwd_base_prefix = f"{integration_prefix}/dwd/{dwd_table}"
-    dwd_paths = build_partition_paths(
+    dwd_paths = prepare_paths(
         base_prefix=dwd_base_prefix,
-        partition_date=test_date,
         run_id=dwd_run_id,
-        bucket_name=test_bucket_name,
+        partition_date=test_date,
+        is_partitioned=True,
+        store_namespace=test_bucket_name,
     )
 
     dwd_sql_path = ROOT_DIR / "dags" / "dwd" / f"{dwd_table}.sql"

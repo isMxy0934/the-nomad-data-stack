@@ -12,14 +12,12 @@ try:
     from dags.utils.etl_utils import (
         build_s3_connection_config,
         commit_dataset,
-        delete_tmp_prefix,
-        list_parquet_keys,
         non_partition_paths_from_xcom,
         partition_paths_from_xcom,
         prepare_dataset,
         validate_dataset,
     )
-    from dags.utils.partition_utils import NonPartitionPaths, PartitionPaths
+    from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
         f"etl utils imports unavailable in this environment: {exc}", allow_module_level=True
@@ -82,29 +80,6 @@ def test_build_s3_connection_config_missing_endpoint():
         build_s3_connection_config(mock_s3_hook)
 
 
-def test_list_parquet_keys():
-    mock_s3_hook = MagicMock()
-    mock_s3_hook.list_keys.return_value = [
-        "table/file1.parquet",
-        "table/file2.txt",
-        "table/sub/file3.parquet",
-    ]
-
-    keys = list_parquet_keys(mock_s3_hook, "s3://bucket/table/")
-    assert keys == ["table/file1.parquet", "table/sub/file3.parquet"]
-    mock_s3_hook.list_keys.assert_called_once_with(bucket_name="bucket", prefix="table/")
-
-
-def test_delete_tmp_prefix():
-    mock_s3_hook = MagicMock()
-    mock_s3_hook.list_keys.return_value = ["tmp/f1.pq", "tmp/f2.pq"]
-
-    delete_tmp_prefix(mock_s3_hook, "s3://bucket/tmp/")
-    mock_s3_hook.delete_objects.assert_called_once_with(
-        bucket="bucket", keys=["tmp/f1.pq", "tmp/f2.pq"]
-    )
-
-
 def test_prepare_dataset_partitioned():
     result = prepare_dataset(
         base_prefix="lake/ods/table",
@@ -129,38 +104,39 @@ def test_prepare_dataset_non_partitioned():
 
 def test_validate_dataset_success():
     mock_s3_hook = MagicMock()
-    # Mock list_parquet_keys to return 2 files
-    with patch("dags.utils.etl_utils.list_parquet_keys", return_value=["f1.pq", "f2.pq"]):
-        paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
-        metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+    mock_s3_hook.list_keys.return_value = ["tmp/f1.parquet", "tmp/f2.parquet"]
 
-        result = validate_dataset(paths_dict, metrics, mock_s3_hook)
-        assert result == metrics
+    paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
+    metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+
+    result = validate_dataset(paths_dict, metrics, mock_s3_hook)
+    assert result == metrics
 
 
 def test_validate_dataset_no_data_expected():
     mock_s3_hook = MagicMock()
-    with patch("dags.utils.etl_utils.list_parquet_keys", return_value=[]):
-        paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
-        metrics = {"has_data": 0, "file_count": 0, "row_count": 0}
+    mock_s3_hook.list_keys.return_value = []
 
-        result = validate_dataset(paths_dict, metrics, mock_s3_hook)
-        assert result == metrics
+    paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
+    metrics = {"has_data": 0, "file_count": 0, "row_count": 0}
+
+    result = validate_dataset(paths_dict, metrics, mock_s3_hook)
+    assert result == metrics
 
 
 def test_validate_dataset_file_count_mismatch():
     mock_s3_hook = MagicMock()
-    with patch("dags.utils.etl_utils.list_parquet_keys", return_value=["f1.pq"]):
-        paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
-        metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+    mock_s3_hook.list_keys.return_value = ["tmp/f1.parquet"]
 
-        with pytest.raises(ValueError, match="File count mismatch"):
-            validate_dataset(paths_dict, metrics, mock_s3_hook)
+    paths_dict = {"partitioned": False, "tmp_prefix": "s3://b/tmp"}
+    metrics = {"has_data": 1, "file_count": 2, "row_count": 100}
+
+    with pytest.raises(ValueError, match="File count mismatch"):
+        validate_dataset(paths_dict, metrics, mock_s3_hook)
 
 
-@patch("dags.utils.etl_utils.publish_partition")
-@patch("dags.utils.etl_utils.build_manifest")
-def test_commit_dataset_partitioned(mock_build_manifest, mock_publish):
+@patch("dags.utils.etl_utils.pipeline_commit")
+def test_commit_dataset_partitioned(mock_pipeline_commit):
     mock_s3_hook = MagicMock()
     paths_dict = {
         "partitioned": True,
@@ -172,14 +148,13 @@ def test_commit_dataset_partitioned(mock_build_manifest, mock_publish):
         "success_flag_path": "s3://b/t/dt=2024-01-01/_S",
     }
     metrics = {"has_data": 1, "file_count": 1, "row_count": 10}
-    mock_publish.return_value = {"published": "1"}
-    mock_build_manifest.return_value = {"manifest": "data"}
+    mock_pipeline_commit.return_value = ({"published": "1"}, {"manifest": "data"})
 
     res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
 
     assert res == {"published": "1"}
     assert manifest == {"manifest": "data"}
-    mock_publish.assert_called_once()
+    mock_pipeline_commit.assert_called_once()
 
 
 def test_commit_dataset_no_data():
@@ -194,8 +169,9 @@ def test_commit_dataset_no_data():
     }
     metrics = {"has_data": 0}
 
-    with patch("dags.utils.etl_utils.delete_prefix") as mock_delete:
+    with patch("dags.utils.etl_utils.pipeline_commit") as mock_pipeline_commit:
+        mock_pipeline_commit.return_value = ({"published": "0", "action": "cleared"}, {})
         res, manifest = commit_dataset("table", "r1", paths_dict, metrics, mock_s3_hook)
         assert res["action"] == "cleared"
         assert manifest == {}
-        mock_delete.assert_called_once_with(mock_s3_hook, "s3://b/t")
+        mock_pipeline_commit.assert_called_once()

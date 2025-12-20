@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from dags.utils.sql_utils import (  # pylint: disable=wrong-import-position
+from lakehouse_core.sql import (
     MissingTemplateVariableError,
     load_and_render_sql,
     load_sql,

@@ -8,7 +8,7 @@ from dags.utils.catalog_utils import (
     build_layer_dt_macro_sql,
     build_layer_view_sql,
 )
-from dags.utils.duckdb_utils import create_temporary_connection
+from lakehouse_core.execution import create_temporary_connection
 
 
 def main() -> int:

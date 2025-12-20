@@ -23,10 +23,10 @@ if str(ROOT_DIR) not in sys.path:
 # Integration tests depend on core utilities that may not be importable in all
 # local environments (e.g., Python < 3.11 for datetime.UTC).
 try:
-    from dags.utils.partition_utils import parse_s3_uri as _parse_s3_uri  # noqa: F401
+    from lakehouse_core.uri import parse_s3_uri as _parse_s3_uri  # noqa: F401
 except ImportError as exc:  # pragma: no cover
     pytest.skip(
-        f"Skipping integration tests: dags.utils.partition_utils import failed: {exc}",
+        f"Skipping integration tests: lakehouse_core import failed: {exc}",
         allow_module_level=True,
     )
 
@@ -135,7 +135,7 @@ def minio_client(test_bucket_name: str) -> Generator[boto3.client, None, None]:
 @pytest.fixture(scope="session")
 def test_s3_config():
     """S3 connection configuration for DuckDB."""
-    from dags.utils.duckdb_utils import S3ConnectionConfig
+    from lakehouse_core.execution import S3ConnectionConfig
 
     endpoint_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
     access_key = os.getenv("S3_ACCESS_KEY", "minioadmin")
@@ -244,7 +244,7 @@ def s3_delete_prefix(minio_client) -> Callable[[str, str], None]:
 def s3_publish_partition(minio_client, s3_delete_prefix):
     """Publish a partition from tmp prefix into canonical prefix and write markers."""
 
-    from dags.utils.partition_utils import parse_s3_uri
+    from lakehouse_core.uri import parse_s3_uri
 
     def publish_partition(paths, manifest: dict) -> None:
         canonical_bucket, canonical_prefix_key = parse_s3_uri(paths.canonical_prefix)

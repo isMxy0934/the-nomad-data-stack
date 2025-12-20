@@ -1,4 +1,8 @@
-"""DuckDB helpers for temporary compute and S3/MinIO access."""
+"""DuckDB execution helpers (orchestrator-agnostic).
+
+Phase 2 goal: move execution semantics (connect/configure/copy) into core so
+orchestrators only assemble inputs and call a stable API.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import Protocol
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 
 import duckdb
 
@@ -51,12 +57,11 @@ def temporary_connection(
         connection.close()
 
 
-def configure_s3_access(connection: duckdb.DuckDBPyConnection, config: S3ConnectionConfig) -> None:
+def configure_s3_access(connection, config: S3ConnectionConfig) -> None:  # noqa: ANN001
     """Enable HTTPFS in DuckDB and configure S3/MinIO access settings."""
 
     # Prefer loading an already-installed extension to avoid network access in
-    # restricted environments (e.g. CI with no outbound network, offline dev).
-    # Fallback to INSTALL only when LOAD is unavailable.
+    # restricted environments. Fall back to INSTALL only when LOAD fails.
     try:
         connection.execute("LOAD httpfs;")
     except Exception:  # noqa: BLE001
@@ -88,6 +93,39 @@ def execute_sql(connection: duckdb.DuckDBPyConnection, sql: str) -> duckdb.DuckD
     return connection.execute(sql)
 
 
+def normalize_duckdb_path(path_or_uri: str) -> str:
+    """Normalize a destination path/URI for DuckDB.
+
+    DuckDB accepts S3 URIs (via httpfs) but local paths are generally best passed
+    as filesystem paths rather than ``file://`` URIs. This helper converts
+    ``file://`` URIs into OS paths and leaves other schemes untouched.
+    """
+
+    value = (path_or_uri or "").strip()
+    if not value:
+        raise ValueError("path_or_uri is required")
+    if value.startswith("s3://"):
+        return value
+    if value.startswith("file://"):
+        parsed = urlparse(value)
+        raw_path = unquote(parsed.path or "")
+        local_path = url2pathname(raw_path)
+        if local_path.startswith("/") and len(local_path) >= 3 and local_path[2] == ":":
+            # Windows drive letter: /C:/path -> C:/path
+            local_path = local_path[1:]
+        return local_path
+    return value
+
+
+def ensure_local_destination_dir(destination: str) -> None:
+    """Ensure local COPY destinations have a parent directory."""
+
+    dest = (destination or "").strip()
+    if not dest or dest.startswith("s3://") or "://" in dest:
+        return
+    Path(dest).mkdir(parents=True, exist_ok=True)
+
+
 def copy_partitioned_parquet(
     connection: duckdb.DuckDBPyConnection,
     *,
@@ -112,10 +150,16 @@ def copy_partitioned_parquet(
         f"FILENAME_PATTERN '{filename_pattern}'",
         "WRITE_PARTITION_COLUMNS false",
     ]
+    dest = normalize_duckdb_path(destination)
+    # For tmp S3 prefixes, allow overwriting to keep retries idempotent across
+    # DuckDB versions that may partially write before raising.
+    if dest.startswith("s3://") and "/_tmp/" in dest:
+        options.append("OVERWRITE_OR_IGNORE true")
     if use_tmp_file:
         options.append("USE_TMP_FILE true")
 
-    copy_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(options) + ");"
+    ensure_local_destination_dir(dest)
+    copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     try:
         connection.execute(copy_sql)
     except duckdb.NotImplementedException:
@@ -124,9 +168,7 @@ def copy_partitioned_parquet(
         if not use_tmp_file:
             raise
         fallback_options = [opt for opt in options if opt != "USE_TMP_FILE true"]
-        fallback_sql = (
-            "COPY (" + query + f") TO '{destination}' (" + ", ".join(fallback_options) + ");"
-        )
+        fallback_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(fallback_options) + ");"
         connection.execute(fallback_sql)
 
 
@@ -149,5 +191,74 @@ def copy_parquet(
     if use_tmp_file:
         options.append("USE_TMP_FILE true")
 
-    copy_sql = "COPY (" + query + f") TO '{destination}' (" + ", ".join(options) + ");"
+    dest = normalize_duckdb_path(destination)
+    ensure_local_destination_dir(dest)
+    copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     connection.execute(copy_sql)
+
+
+class Executor(Protocol):
+    """Execution interface for running SQL to Parquet outputs."""
+
+    def run_query_to_parquet(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        *,
+        query: str,
+        destination: str,
+        filename_pattern: str = "file_{uuid}",
+        use_tmp_file: bool = False,
+    ) -> None:
+        ...
+
+    def run_query_to_partitioned_parquet(
+        self,
+        connection: duckdb.DuckDBPyConnection,
+        *,
+        query: str,
+        destination: str,
+        partition_column: str = "dt",
+        filename_pattern: str = "file_{uuid}",
+        use_tmp_file: bool = False,
+    ) -> None:
+        ...
+
+
+def run_query_to_parquet(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    query: str,
+    destination: str,
+    filename_pattern: str = "file_{uuid}",
+    use_tmp_file: bool = False,
+) -> None:
+    """Stable alias for writing non-partitioned Parquet outputs."""
+
+    copy_parquet(
+        connection,
+        query=query,
+        destination=destination,
+        filename_pattern=filename_pattern,
+        use_tmp_file=use_tmp_file,
+    )
+
+
+def run_query_to_partitioned_parquet(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    query: str,
+    destination: str,
+    partition_column: str = "dt",
+    filename_pattern: str = "file_{uuid}",
+    use_tmp_file: bool = False,
+) -> None:
+    """Stable alias for writing partitioned Parquet outputs."""
+
+    copy_partitioned_parquet(
+        connection,
+        query=query,
+        destination=destination,
+        partition_column=partition_column,
+        filename_pattern=filename_pattern,
+        use_tmp_file=use_tmp_file,
+    )

@@ -1,4 +1,4 @@
-"""Utilities for parsing DW config and discovering DW tables."""
+"""DW config parsing and table discovery (orchestrator-agnostic)."""
 
 from __future__ import annotations
 
@@ -203,3 +203,4 @@ def order_tables_within_layer(
     ordered_names = _toposort(table_names, dependencies)
     table_by_name = {table.name: table for table in tables}
     return [table_by_name[name] for name in ordered_names]
+

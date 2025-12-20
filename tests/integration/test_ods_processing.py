@@ -3,14 +3,16 @@
 import json
 from pathlib import Path
 
-from dags.utils.duckdb_utils import (
+from lakehouse_core.api import prepare_paths
+from lakehouse_core.execution import (
     configure_s3_access,
     copy_partitioned_parquet,
     create_temporary_connection,
     execute_sql,
 )
-from dags.utils.partition_utils import build_manifest, build_partition_paths, parse_s3_uri
-from dags.utils.sql_utils import load_and_render_sql
+from lakehouse_core.manifest import build_manifest
+from lakehouse_core.sql import load_and_render_sql
+from lakehouse_core.uri import parse_s3_uri
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -46,11 +48,12 @@ def _run_single_partition(
     minio_client.put_object(Bucket=test_bucket_name, Key=csv_key, Body=csv_content)
 
     base_prefix = f"{integration_prefix}/ods/{table_name}"
-    paths = build_partition_paths(
+    paths = prepare_paths(
         base_prefix=base_prefix,
-        partition_date=partition_date,
         run_id=run_id,
-        bucket_name=test_bucket_name,
+        partition_date=partition_date,
+        is_partitioned=True,
+        store_namespace=test_bucket_name,
     )
 
     conn = create_temporary_connection()
