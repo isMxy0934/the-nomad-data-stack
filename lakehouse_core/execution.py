@@ -151,10 +151,14 @@ def copy_partitioned_parquet(
         f"FILENAME_PATTERN '{filename_pattern}'",
         "WRITE_PARTITION_COLUMNS false",
     ]
+    dest = normalize_duckdb_path(destination)
+    # For tmp S3 prefixes, allow overwriting to keep retries idempotent across
+    # DuckDB versions that may partially write before raising.
+    if dest.startswith("s3://") and "/_tmp/" in dest:
+        options.append("OVERWRITE_OR_IGNORE true")
     if use_tmp_file:
         options.append("USE_TMP_FILE true")
 
-    dest = normalize_duckdb_path(destination)
     ensure_local_destination_dir(dest)
     copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     try:
