@@ -14,9 +14,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from dags.utils.duckdb_utils import (
-    S3ConnectionConfig,
-)
+from lakehouse_core.execution import S3ConnectionConfig
 from lakehouse_core.api import prepare_paths
 from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.pipeline import cleanup as pipeline_cleanup

@@ -135,7 +135,7 @@ def minio_client(test_bucket_name: str) -> Generator[boto3.client, None, None]:
 @pytest.fixture(scope="session")
 def test_s3_config():
     """S3 connection configuration for DuckDB."""
-    from dags.utils.duckdb_utils import S3ConnectionConfig
+    from lakehouse_core.execution import S3ConnectionConfig
 
     endpoint_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
     access_key = os.getenv("S3_ACCESS_KEY", "minioadmin")

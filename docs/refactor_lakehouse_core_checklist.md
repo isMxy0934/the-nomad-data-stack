@@ -49,7 +49,7 @@
   - `dags/dw_dags.py`（DW 分层 DAG 动态生成）
   - `lakehouse_core/commit.py` + `dags/adapters/airflow_s3_store.py` + `dags/utils/etl_utils.py`（commit protocol）
   - `dags/utils/etl_utils.py`（prepare/validate/commit/cleanup）
-  - `dags/utils/s3_utils.py`、`dags/utils/duckdb_utils.py`
+  - `dags/utils/s3_utils.py`、`lakehouse_core/execution.py`
 
 验收标准：
 - [x] 重构开始前测试全绿（否则先修复/隔离失败用例，避免把问题带入重构）。
@@ -172,7 +172,7 @@ Checklist：
 
 ### 1.5.1 默认 Planner（可选：Phase 1 先“保留现状”，Phase 2 再迁）
 
-第一阶段建议不动“表发现/依赖解析”的位置（继续在 `dags/utils/dw_config_utils.py` + `dags/dw_dags.py`），但先把接口写清楚，避免未来迁 Prefect/脚本时无从下手：
+第一阶段建议不动“表发现/依赖解析”的位置（继续在 `lakehouse_core/dw_config.py` + `dags/dw_dags.py`），但先把接口写清楚，避免未来迁 Prefect/脚本时无从下手：
 
 - [x] 新增 `lakehouse_core/planning.py`，定义：
   - [x] `class Planner(Protocol): def build(self, context: RunContext) -> list[RunSpec]: ...`
@@ -215,7 +215,7 @@ Checklist：
 - [x] 定义 `lakehouse_core/execution.py`（或 `lakehouse_core/duckdb/` 子包）：
   - [x] `Executor` 抽象：`run_query_to_parquet(...)`、`run_query_to_partitioned_parquet(...)`
   - [x] 连接生命周期由 core 管理，但 S3 配置由 adapter 注入（避免 core 读 Airflow Connection）
-- [x] 将 `dags/utils/duckdb_utils.py` 的可复用执行逻辑迁到 core（保留 Airflow 侧的配置获取）
+- [x] 将 DuckDB 的可复用执行逻辑迁到 core：`lakehouse_core/execution.py`（Airflow 侧的连接配置获取保留在 `dags/utils/etl_utils.py`）
 
 验收标准：
 - [x] Airflow 与脚本（或 Prefect）调用相同的执行用例函数，结果一致。

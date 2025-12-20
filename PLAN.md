@@ -64,7 +64,7 @@
 
 #### P1：`sql_utils`（最小工具 + 单元测试）
 
-- [x] `dags/utils/sql_utils.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
+- [x] `lakehouse_core/sql.py`：读取 `.sql`、变量替换（`${PARTITION_DATE}`）、基础校验（例如禁止空 SQL、缺参报错）
 - [x] `tests/utils/test_sql_utils.py`：覆盖变量渲染与错误分支（缺参/空 SQL）
 
 验收：
@@ -83,9 +83,9 @@
 
 #### P3：`duckdb_utils`（DuckDB 临时计算 + S3/MinIO 读写能力）
 
-- [x] `dags/utils/duckdb_utils.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
-- [x] `dags/utils/duckdb_utils.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
-- [x] `dags/utils/duckdb_utils.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
+- [x] `lakehouse_core/execution.py`：创建临时 DuckDB 连接（禁止持久化共享 DB）
+- [x] `lakehouse_core/execution.py`：启用 `httpfs` 并配置 MinIO/S3（endpoint、AK/SK、path style）
+- [x] `lakehouse_core/execution.py`：执行 SQL、`COPY ... PARTITION_BY (dt)` 写 Parquet 到 tmp 前缀
 
 验收：
 - [x] 至少有一个最小验证（单测或脚本）：能执行 `SELECT 1`，且 COPY 写入路径参数校验通过

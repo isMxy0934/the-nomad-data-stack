@@ -48,7 +48,7 @@
 ## DuckDB 扩展与 S3 访问
 
 - 通过 `httpfs` 访问 S3/MinIO；镜像构建阶段预装扩展（见 `infra_build/dockerfiles/Dockerfile.airflow`），运行时优先 `LOAD httpfs`，必要时 fallback `INSTALL`。
-- 相关实现：`dags/utils/duckdb_utils.py`。
+- 相关实现：`lakehouse_core/execution.py`（执行/连接/写 Parquet 的可复用逻辑）、`dags/utils/etl_utils.py`（Airflow 连接配置桥接）。
 
 ## Catalog（分析用）维护约定
 
@@ -75,7 +75,7 @@
 
 ## 工具与代码规范
 
-- 优先复用 `dags/utils/*.py`，新功能尽量抽象为可复用工具。
+- 优先复用 `lakehouse_core/*`（可复用逻辑）；`dags/utils/*` 只保留 Airflow 专属桥接与 `dag_run.conf` 解析等编排层逻辑。
 - SQL 模板必须参数化，至少支持 `${PARTITION_DATE}`。
 - 非 SQL 模板（如 extractor 的 `destination_key_template`）使用 `{PARTITION_DATE}`（Python `str.format`）。
 - 类型注解完整、错误处理充分、日志记录清晰。

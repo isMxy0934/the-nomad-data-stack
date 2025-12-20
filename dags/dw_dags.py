@@ -17,7 +17,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.trigger_rule import TriggerRule
 
 from dags.utils.dag_run_utils import parse_targets
-from dags.utils.duckdb_utils import (
+from lakehouse_core.execution import (
     configure_s3_access,
     temporary_connection,
 )

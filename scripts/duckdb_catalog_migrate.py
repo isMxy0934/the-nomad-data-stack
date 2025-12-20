@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 from dags.utils.catalog_migrations import apply_migrations
-from dags.utils.duckdb_utils import create_temporary_connection
+from lakehouse_core.execution import create_temporary_connection
 
 logger = logging.getLogger(__name__)
 
