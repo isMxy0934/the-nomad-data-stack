@@ -78,6 +78,7 @@ class DirectoryDWPlanner(Planner):
 
         partition_dates = _context_partition_dates(context)
         multi_date = len([d for d in partition_dates if d is not None]) > 1
+        allow_unrendered = bool(context.extra.get("allow_unrendered_sql"))
 
         run_specs: list[RunSpec] = []
         for layer in layers:
@@ -107,23 +108,26 @@ class DirectoryDWPlanner(Planner):
                     ods_inputs = {}
 
                 for partition_date in partition_dates:
-                    if table.is_partitioned and not partition_date:
+                    if table.is_partitioned and not partition_date and not allow_unrendered:
                         raise ValueError(
                             f"partition_date is required for partitioned table {layer}.{table.name}"
                         )
                     base_name = f"{layer}.{table.name}"
                     name = f"{base_name}:{partition_date}" if multi_date and partition_date else base_name
+                    if table.is_partitioned and not partition_date and allow_unrendered:
+                        sql = load_sql(table.sql_path)
+                    else:
+                        sql = _render_table_sql(table, partition_date if table.is_partitioned else None)
                     run_specs.append(
                         RunSpec(
                             name=name,
                             base_prefix=f"lake/{layer}/{table.name}",
                             is_partitioned=table.is_partitioned,
                             partition_date=partition_date if table.is_partitioned else None,
-                            sql=_render_table_sql(table, partition_date if table.is_partitioned else None),
+                            sql=sql,
                             inputs=ods_inputs,
                             storage_options=context.extra.get("storage_options"),
                         )
                     )
 
         return run_specs
-

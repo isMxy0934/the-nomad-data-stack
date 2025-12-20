@@ -118,6 +118,15 @@ def normalize_duckdb_path(path_or_uri: str) -> str:
     return value
 
 
+def ensure_local_destination_dir(destination: str) -> None:
+    """Ensure local COPY destinations have a parent directory."""
+
+    dest = (destination or "").strip()
+    if not dest or dest.startswith("s3://") or "://" in dest:
+        return
+    Path(dest).mkdir(parents=True, exist_ok=True)
+
+
 def copy_partitioned_parquet(
     connection: duckdb.DuckDBPyConnection,
     *,
@@ -146,6 +155,7 @@ def copy_partitioned_parquet(
         options.append("USE_TMP_FILE true")
 
     dest = normalize_duckdb_path(destination)
+    ensure_local_destination_dir(dest)
     copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     try:
         connection.execute(copy_sql)
@@ -179,6 +189,7 @@ def copy_parquet(
         options.append("USE_TMP_FILE true")
 
     dest = normalize_duckdb_path(destination)
+    ensure_local_destination_dir(dest)
     copy_sql = "COPY (" + query + f") TO '{dest}' (" + ", ".join(options) + ");"
     connection.execute(copy_sql)
 

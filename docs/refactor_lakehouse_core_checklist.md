@@ -232,10 +232,10 @@ Checklist：
   - [x] `--layer/--table/--dt/--start-date/--end-date/--targets`
   - [x] `--store=local|s3`（选择对应 adapter）
   - [x] 复用 `lakehouse_core.DirectoryDWPlanner` + `lakehouse_core.api`（prepare/validate/publish/cleanup）+ `lakehouse_core.execution`
-- [ ] 编写最小 end-to-end 验证脚本（或复用现有 integration）
+- [x] 编写最小 end-to-end 验证（pytest smoke）：`tests/scripts/test_run_dw_smoke.py`
 
 验收标准：
-- [ ] 无 Airflow 的情况下可跑通最小链路（至少 1 张表 1 个 dt）。
+- [x] 无 Airflow 的情况下可跑通最小链路（至少 1 张表 1 个 dt；本地 store smoke 覆盖）。
 
 ---
 

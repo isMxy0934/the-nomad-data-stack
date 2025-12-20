@@ -16,7 +16,7 @@ def _normalize_prefix_uri(prefix_uri: str) -> str:
     value = (prefix_uri or "").strip()
     if not value:
         raise ValueError("prefix_uri is required")
-    return value.rstrip("/") + "/"
+    return unquote(value.rstrip("/")) + "/"
 
 
 def _file_uri_to_path(uri: str) -> Path:
@@ -66,13 +66,13 @@ class LocalFileStore(ObjectStore):
             return []
 
         if prefix_path.is_file():
-            uri = prefix_path.resolve().as_uri()
+            uri = unquote(prefix_path.resolve().as_uri())
             return [uri] if uri.startswith(normalized_prefix) else []
 
         keys: list[str] = []
         for file_path in prefix_path.rglob("*"):
             if file_path.is_file():
-                uri = file_path.resolve().as_uri()
+                uri = unquote(file_path.resolve().as_uri())
                 if uri.startswith(normalized_prefix):
                     keys.append(uri)
         return sorted(keys)

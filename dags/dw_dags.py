@@ -21,15 +21,6 @@ from dags.utils.duckdb_utils import (
     configure_s3_access,
     temporary_connection,
 )
-from dags.utils.dw_config_utils import (
-    DWConfig,
-    DWConfigError,
-    TableSpec,
-    discover_tables_for_layer,
-    load_dw_config,
-    order_layers,
-    order_tables_within_layer,
-)
 from dags.utils.etl_utils import (
     DEFAULT_AWS_CONN_ID,
     DEFAULT_BUCKET_NAME,
@@ -40,11 +31,20 @@ from dags.utils.etl_utils import (
     validate_dataset,
 )
 from dags.adapters.airflow_s3_store import AirflowS3Store
-from lakehouse_core import materialize_query_to_tmp_and_measure
-from dags.utils.sql_utils import load_and_render_sql
+from lakehouse_core import (
+    DirectoryDWPlanner,
+    DWConfig,
+    DWConfigError,
+    RunContext,
+    materialize_query_to_tmp_and_measure,
+    order_layers,
+    render_sql,
+    load_dw_config,
+    register_ods_csv_source_view,
+)
 from dags.utils.time_utils import get_partition_date_str
 
-from lakehouse_core import attach_catalog_if_available, has_csv_under_prefix, register_csv_glob_as_temp_view
+from lakehouse_core import attach_catalog_if_available
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent
@@ -59,65 +59,38 @@ def _conf_targets(context: Mapping[str, Any]) -> list[str] | None:
     return parse_targets(conf)
 
 
-def _target_matches(table_spec: TableSpec, target: str) -> bool:
-    target = target.strip()
-    if not target or "." not in target:
+def _spec_layer_table(run_spec: Mapping[str, Any]) -> tuple[str, str]:
+    base_prefix = str(run_spec.get("base_prefix") or "")
+    parts = base_prefix.strip("/").split("/")
+    if len(parts) < 3:
+        raise ValueError(f"Invalid base_prefix: {base_prefix}")
+    return parts[1], parts[2]
+
+
+def _target_matches(run_spec: Mapping[str, Any], target: str) -> bool:
+    value = (target or "").strip()
+    if not value:
         return False
-    layer, name = target.split(".", 1)
-    return layer == table_spec.layer and name == table_spec.name
+    layer, table = _spec_layer_table(run_spec)
+    if "." not in value:
+        return value == layer
+    t_layer, t_table = value.split(".", 1)
+    return t_layer == layer and t_table == table
 
 
 def _attach_catalog_if_available(connection) -> None:
     attach_catalog_if_available(connection, catalog_path=CATALOG_PATH)
 
-
-def _register_ods_raw_view(
-    *,
-    connection,
-    s3_hook: S3Hook,
-    config: DWConfig,
-    table_name: str,
-    bucket_name: str,
-    partition_date: str,
-) -> bool:
-    source = config.sources.get(table_name)
-    if not source:
-        raise ValueError(
-            f"Missing sources entry for ODS table '{table_name}'. "
-            f"Add sources.{table_name} to {CONFIG_PATH}."
-        )
-
-    if source.format.lower() != "csv":
-        raise ValueError(
-            f"Unsupported ODS source format for '{table_name}': '{source.format}' (only csv supported)"
-        )
-
-    source_path = source.path.strip("/")
-    prefix_uri = f"s3://{bucket_name}/{source_path}/dt={partition_date}/"
-    store = AirflowS3Store(s3_hook)
-    if not has_csv_under_prefix(store, prefix_uri=prefix_uri):
-        logger.info(
-            "No source CSV found under %s (partition_date=%s, table=%s); no-op.",
-            prefix_uri,
-            partition_date,
-            table_name,
-        )
-        return False
-
-    source_uri = f"s3://{bucket_name}/{source_path}/dt={partition_date}/*.csv"
-    register_csv_glob_as_temp_view(connection, view_name=f"tmp_{table_name}", csv_glob_uri=source_uri)
-    return True
-
-
 def load_table(
     paths_dict: dict[str, Any],
-    table_spec: TableSpec,
+    run_spec: Mapping[str, Any],
     bucket_name: str = DEFAULT_BUCKET_NAME,
     **context: Any,
 ) -> dict[str, Any]:
     targets = _conf_targets(context)
-    if targets is not None and not any(_target_matches(table_spec, t) for t in targets):
-        logger.info("Skipping table %s (not in targets).", table_spec.name)
+    if targets is not None and not any(_target_matches(run_spec, t) for t in targets):
+        _, table_name = _spec_layer_table(run_spec)
+        logger.info("Skipping table %s (not in targets).", table_name)
         return {"row_count": 0, "file_count": 0, "has_data": 0, "skipped": 1}
 
     partitioned = bool(paths_dict.get("partitioned"))
@@ -131,23 +104,28 @@ def load_table(
         configure_s3_access(connection, s3_config)
         _attach_catalog_if_available(connection)
 
-        if table_spec.layer == "ods":
-            config = load_dw_config(CONFIG_PATH)
-            has_source_data = _register_ods_raw_view(
+        layer, table_name = _spec_layer_table(run_spec)
+        if layer == "ods":
+            source = dict((run_spec.get("inputs") or {}).get("source") or {})
+            source_path = str(source.get("path") or "")
+            if not source_path:
+                raise ValueError(
+                    f"Missing ODS source path for '{table_name}'. "
+                    f"Add sources.{table_name} to {CONFIG_PATH}."
+                )
+            has_source_data = register_ods_csv_source_view(
                 connection=connection,
-                s3_hook=s3_hook,
-                config=config,
-                table_name=table_spec.name,
-                bucket_name=bucket_name,
+                store=store,
+                base_uri=f"s3://{bucket_name}",
+                source_path=source_path,
                 partition_date=partition_date,
+                view_name=f"tmp_{table_name}",
             )
             if not has_source_data:
                 return {"row_count": 0, "file_count": 0, "has_data": 0}
 
-        rendered_sql = load_and_render_sql(
-            table_spec.sql_path,
-            {"PARTITION_DATE": partition_date},
-        )
+        sql_template = str(run_spec.get("sql") or "")
+        rendered_sql = render_sql(sql_template, {"PARTITION_DATE": partition_date})
         destination_prefix = paths_dict["tmp_prefix"]
         metrics = materialize_query_to_tmp_and_measure(
             connection=connection,
@@ -166,12 +144,15 @@ def load_table(
 
 
 def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
-    tables = discover_tables_for_layer(layer, SQL_BASE_DIR)
-    if not tables:
+    planner = DirectoryDWPlanner(dw_config_path=CONFIG_PATH, sql_base_dir=SQL_BASE_DIR)
+    specs = planner.build(RunContext(run_id="plan", extra={"allow_unrendered_sql": True}))
+    layers_with_tables = {_spec_layer_table(spec.__dict__)[0] for spec in specs}
+    layer_specs = [spec for spec in specs if _spec_layer_table(spec.__dict__)[0] == layer]
+    if not layer_specs:
         return None
 
     dependencies = config.table_dependencies.get(layer, {})
-    ordered_tables = order_tables_within_layer(tables, dependencies)
+    ordered_specs = [spec.__dict__ for spec in layer_specs]
 
     default_args = {"owner": "airflow", "depends_on_past": False, "retries": 1}
     dag = DAG(
@@ -210,10 +191,11 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
         date_list = get_date_list()
         table_last_tasks = {}
 
-        for table in ordered_tables:
+        for spec_dict in ordered_specs:
+            _, table_name = _spec_layer_table(spec_dict)
             from airflow.utils.task_group import TaskGroup
 
-            with TaskGroup(group_id=table.name) as tg:
+            with TaskGroup(group_id=table_name) as tg:
                 # 1. Prepare
                 def _prepare_adapter(base_prefix, is_partitioned, partition_date, **context):
                     # Inject partition_date into run_id to avoid parallel conflict in DuckDB COPY
@@ -230,9 +212,9 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     python_callable=_prepare_adapter,
                 ).expand(
                     op_kwargs=date_list.map(
-                        lambda d, table=table: {
-                            "base_prefix": f"lake/{table.layer}/{table.name}",
-                            "is_partitioned": table.is_partitioned,
+                        lambda d, spec=spec_dict: {
+                            "base_prefix": str(spec["base_prefix"]),
+                            "is_partitioned": bool(spec.get("is_partitioned", True)),
                             "partition_date": d,
                         }
                     )
@@ -244,10 +226,10 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     python_callable=load_table,
                 ).expand(
                     op_kwargs=prepare.output.map(
-                        lambda p, table=table: {
-                            "table_spec": table,
+                        lambda p, spec=spec_dict, table_name=table_name: {
+                            "run_spec": spec,
                             "bucket_name": DEFAULT_BUCKET_NAME,
-                            "task_group_id": table.name,
+                            "task_group_id": table_name,
                             "paths_dict": p,
                         }
                     )
@@ -281,10 +263,10 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     python_callable=_commit_adapter,
                 ).expand(
                     op_kwargs=prepare.output.zip(validate.output).map(
-                        lambda x, table=table: {
+                        lambda x, table_name=table_name: {
                             "paths_dict": x[0],
                             "metrics": x[1],
-                            "dest_name": table.name,
+                            "dest_name": table_name,
                         }
                     )
                 )
@@ -302,7 +284,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
 
                 prepare >> load >> validate >> commit >> cleanup
 
-            table_last_tasks[table.name] = tg
+            table_last_tasks[table_name] = tg
 
         for table_name, deps in dependencies.items():
             if table_name in table_last_tasks:
@@ -311,9 +293,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                         table_last_tasks[dep] >> table_last_tasks[table_name]
 
         potential_downstream = [ds for ds, dps in config.layer_dependencies.items() if layer in dps]
-        valid_ds = [
-            ds for ds in potential_downstream if discover_tables_for_layer(ds, SQL_BASE_DIR)
-        ]
+        valid_ds = [ds for ds in potential_downstream if ds in layers_with_tables]
 
         if valid_ds:
             for ds in valid_ds:
