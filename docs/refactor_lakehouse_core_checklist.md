@@ -211,10 +211,10 @@ Phase 1 总验收（必须全部满足）：
 目标：core 可复用地完成 “读上游 → DuckDB SQL → 写 parquet 到 tmp”。
 
 Checklist：
-- [ ] 定义 `lakehouse_core/execution.py`（或 `lakehouse_core/duckdb/` 子包）：
-  - [ ] `Executor` 抽象：`run_query_to_parquet(...)`、`run_query_to_partitioned_parquet(...)`
-  - [ ] 连接生命周期由 core 管理，但 S3 配置由 adapter 注入（避免 core 读 Airflow Connection）
-- [ ] 将 `dags/utils/duckdb_utils.py` 的可复用执行逻辑迁到 core（保留 Airflow 侧的配置获取）
+- [x] 定义 `lakehouse_core/execution.py`（或 `lakehouse_core/duckdb/` 子包）：
+  - [x] `Executor` 抽象：`run_query_to_parquet(...)`、`run_query_to_partitioned_parquet(...)`
+  - [x] 连接生命周期由 core 管理，但 S3 配置由 adapter 注入（避免 core 读 Airflow Connection）
+- [x] 将 `dags/utils/duckdb_utils.py` 的可复用执行逻辑迁到 core（保留 Airflow 侧的配置获取）
 
 验收标准：
 - [ ] Airflow 与脚本（或 Prefect）调用相同的执行用例函数，结果一致。
