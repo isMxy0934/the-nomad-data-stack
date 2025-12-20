@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from lakehouse_core.sql import (
+from lakehouse_core.io.sql import (
     MissingTemplateVariableError,
     load_and_render_sql,
     load_sql,

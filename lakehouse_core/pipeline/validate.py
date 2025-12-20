@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from lakehouse_core.api import validate_output
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.store.object_store import ObjectStore
 
 
 def validate(

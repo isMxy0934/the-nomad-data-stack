@@ -3,7 +3,7 @@
 目标：建立一个稳定的 `lakehouse_core` 核心层，使 **调度层（Airflow/Prefect/脚本）** 与 **存储层（S3/本地/其他）** 都通过适配器接入，核心逻辑不再与任何具体调度器/存储协议绑定。
 
 本仓库强约束（重构期间必须保持不变）：
-- 分区时间默认 T-1：`lakehouse_core/time.py#get_partition_date_str()` 不重构为 Airflow `{{ ds }}`。
+- 分区时间默认 T-1：`lakehouse_core/io/time.py#get_partition_date_str()` 不重构为 Airflow `{{ ds }}`。
 - Commit Protocol（非原子）：`delete_prefix -> copy_prefix` 顺序不变（见 `docs/commit-protocol.md`）。
 - 分区命名：`dt=YYYY-MM-DD` 不变，完成标记 `manifest.json` + `_SUCCESS` 语义不变。
 - Catalog：`.duckdb/catalog.duckdb` 为 metadata-only，单写者约束保留（并发控制属于调度层职责）。
@@ -49,7 +49,7 @@
   - `dags/dw_dags.py`（DW 分层 DAG 动态生成）
   - `lakehouse_core/commit.py` + `dags/adapters/airflow_s3_store.py` + `dags/utils/etl_utils.py`（commit protocol）
   - `dags/utils/etl_utils.py`（prepare/validate/commit/cleanup）
-  - `dags/utils/s3_utils.py`、`lakehouse_core/execution.py`
+  - `dags/utils/s3_utils.py`、`lakehouse_core/compute/execution.py`
 
 验收标准：
 - [x] 重构开始前测试全绿（否则先修复/隔离失败用例，避免把问题带入重构）。
@@ -62,15 +62,15 @@
 
 - [x] 新增包：`lakehouse_core/`
   - [x] `lakehouse_core/__init__.py`
-  - [x] `lakehouse_core/models.py`：`RunContext`、`RunSpec` 等核心数据结构（建议 dataclass）
-  - [x] `lakehouse_core/planning.py`：`Planner` 协议（可选，但建议先定接口，避免后续反复改）
-  - [x] `lakehouse_core/storage.py`：定义 `ObjectStore`（Protocol/ABC）
-  - [x] `lakehouse_core/paths.py`：路径规划（canonical/tmp/manifest/_SUCCESS）
-  - [x] `lakehouse_core/manifest.py`：manifest 结构与构建
-  - [x] `lakehouse_core/commit.py`：publish（delete+copy）与完成标记
-  - [x] `lakehouse_core/validate.py`：校验（file_count/row_count/存在性）
+  - [x] `lakehouse_core/domain/models.py`：`RunContext`、`RunSpec` 等核心数据结构（建议 dataclass）
+  - [x] `lakehouse_core/planning/base.py`：`Planner` 协议（可选，但建议先定接口，避免后续反复改）
+  - [x] `lakehouse_core/store/object_store.py`：定义 `ObjectStore`（Protocol/ABC）
+  - [x] `lakehouse_core/io/paths.py`：路径规划（canonical/tmp/manifest/_SUCCESS）
+  - [x] `lakehouse_core/domain/manifest.py`：manifest 结构与构建
+  - [x] `lakehouse_core/domain/commit_protocol.py`：publish（delete+copy）与完成标记
+  - [x] `lakehouse_core/domain/validate.py`：校验（file_count/row_count/存在性）
   - [x] `lakehouse_core/api.py`：统一入口（prepare/validate/publish/cleanup）
-  - [x] `lakehouse_core/errors.py`：统一异常类型（可选，但建议）
+  - [x] `lakehouse_core/domain/errors.py`：统一异常类型（可选，但建议）
 
 验收标准：
 - [x] 在 `lakehouse_core/` 目录执行 `rg -n \"\\bairflow\\b|S3Hook|dag_run|xcom\" lakehouse_core` 无命中。
@@ -133,7 +133,7 @@ Checklist：
 目标：将与存储提交相关的“规则”迁到 `lakehouse_core`，并在 Airflow 层通过 `AirflowS3Store` 直接调用 core（不再保留 `dags/utils/partition_utils.py`）。
 
 Checklist（按顺序做，避免大爆炸）：
-- [x] 在 `lakehouse_core/paths.py` 复刻并稳定化以下概念：
+- [x] 在 `lakehouse_core/io/paths.py` 复刻并稳定化以下概念：
   - [x] canonical 前缀：`lake/{layer}/{table}/dt=.../`（分区表）或 `lake/{layer}/{table}/`（非分区）
   - [x] tmp 前缀：`.../_tmp/run_{run_id}/...`
   - [x] `manifest.json` 与 `_SUCCESS` 的位置规则
@@ -160,7 +160,7 @@ Airflow 层改造（最小侵入策略）：
 
 Checklist：
 - [x] 将以下“纯逻辑”迁到 core：
-  - [x] `prepare_dataset` 的路径规划（调用 `lakehouse_core/paths.py`）
+  - [x] `prepare_dataset` 的路径规划（调用 `lakehouse_core/io/paths.py`）
   - [x] `validate_dataset`（调用 `lakehouse_core/validate.py`）
   - [x] `commit_dataset`（调用 `lakehouse_core/commit.py`）
   - [x] `cleanup_dataset`（调用 `ObjectStore.delete_prefix`）
@@ -172,14 +172,14 @@ Checklist：
 
 ### 1.5.1 默认 Planner（可选：Phase 1 先“保留现状”，Phase 2 再迁）
 
-第一阶段建议不动“表发现/依赖解析”的位置（继续在 `lakehouse_core/dw_config.py` + `dags/dw_dags.py`），但先把接口写清楚，避免未来迁 Prefect/脚本时无从下手：
+第一阶段建议不动“表发现/依赖解析”的位置（继续在 `lakehouse_core/planning/dw_config.py` + `dags/dw_dags.py`），但先把接口写清楚，避免未来迁 Prefect/脚本时无从下手：
 
 - [x] 新增 `lakehouse_core/planning.py`，定义：
   - [x] `class Planner(Protocol): def build(self, context: RunContext) -> list[RunSpec]: ...`
 - [x] 新增一个默认实现（位置二选一）：
   - [ ] **方案 A**：默认 planner 仍留在 `dags/`（Airflow scope 内），只负责把现有扫描结果转换成 `RunSpec`（不引入 core 对 dags 的依赖）。
   - [x] **方案 B**：把“目录即配置”的 planner 下沉到 `lakehouse_core`（依赖纯文件系统读取，不依赖 Airflow）。
-    - [x] `lakehouse_core/dw_planner.py`：`DirectoryDWPlanner`
+    - [x] `lakehouse_core/planning/dw_planner.py`：`DirectoryDWPlanner`
 
 验收标准：
 - [x] orchestrator 只依赖 `Planner`/`RunSpec`（默认实现可替换）；`dags/` 与 `scripts/` 都可复用同一套 planner 输出。
@@ -212,10 +212,10 @@ Phase 1 总验收（必须全部满足）：
 目标：core 可复用地完成 “读上游 → DuckDB SQL → 写 parquet 到 tmp”。
 
 Checklist：
-- [x] 定义 `lakehouse_core/execution.py`（或 `lakehouse_core/duckdb/` 子包）：
+- [x] 定义 `lakehouse_core/compute/execution.py`（或 `lakehouse_core/duckdb/` 子包）：
   - [x] `Executor` 抽象：`run_query_to_parquet(...)`、`run_query_to_partitioned_parquet(...)`
   - [x] 连接生命周期由 core 管理，但 S3 配置由 adapter 注入（避免 core 读 Airflow Connection）
-- [x] 将 DuckDB 的可复用执行逻辑迁到 core：`lakehouse_core/execution.py`（Airflow 侧的连接配置获取保留在 `dags/utils/etl_utils.py`）
+- [x] 将 DuckDB 的可复用执行逻辑迁到 core：`lakehouse_core/compute/execution.py`（Airflow 侧的连接配置获取保留在 `dags/utils/etl_utils.py`）
 
 验收标准：
 - [x] Airflow 与脚本（或 Prefect）调用相同的执行用例函数，结果一致。
@@ -231,7 +231,7 @@ Checklist：
 - [x] 新增 `scripts/run_dw.py`：
   - [x] `--layer/--table/--dt/--start-date/--end-date/--targets`
   - [x] `--store=local|s3`（选择对应 adapter）
-  - [x] 复用 `lakehouse_core.DirectoryDWPlanner` + `lakehouse_core.api`（prepare/validate/publish/cleanup）+ `lakehouse_core.execution`
+  - [x] 复用 `lakehouse_core.DirectoryDWPlanner` + `lakehouse_core.api`（prepare/validate/publish/cleanup）+ `lakehouse_core.compute`
 - [x] 编写最小 end-to-end 验证（pytest smoke）：`tests/scripts/test_run_dw_smoke.py`
 
 验收标准：

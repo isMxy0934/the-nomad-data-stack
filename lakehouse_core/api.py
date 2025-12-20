@@ -3,16 +3,16 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 
-from lakehouse_core import commit as core_commit
-from lakehouse_core import paths as core_paths
-from lakehouse_core.execution import (
+from lakehouse_core.compute.execution import (
     execute_sql,
     normalize_duckdb_path,
     run_query_to_parquet,
     run_query_to_partitioned_parquet,
 )
-from lakehouse_core.observability import log_event
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.domain import commit_protocol as core_commit
+from lakehouse_core.domain.observability import log_event
+from lakehouse_core.io import paths as core_paths
+from lakehouse_core.store.object_store import ObjectStore
 
 logger = logging.getLogger(__name__)
 

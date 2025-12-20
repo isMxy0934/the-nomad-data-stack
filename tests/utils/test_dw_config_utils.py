@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from lakehouse_core.dw_config import (
+from lakehouse_core.planning.dw_config import (
     DWConfigError,
     SourceSpec,
     TableSpec,

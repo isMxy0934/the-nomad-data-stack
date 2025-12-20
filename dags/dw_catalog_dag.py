@@ -16,9 +16,9 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from dags.utils.catalog_migrations import apply_migrations
 from dags.utils.etl_utils import build_s3_connection_config
-from lakehouse_core.execution import configure_s3_access, create_temporary_connection
+from lakehouse_core.catalog import apply_migrations
+from lakehouse_core.compute import configure_s3_access, create_temporary_connection
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DEFAULT_AWS_CONN_ID = "MINIO_S3"

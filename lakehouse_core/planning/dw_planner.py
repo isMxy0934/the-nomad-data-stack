@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-from lakehouse_core.dw_config import (
+from lakehouse_core.domain.models import RunContext, RunSpec
+from lakehouse_core.io.sql import load_sql, render_sql
+from lakehouse_core.planning.base import Planner
+from lakehouse_core.planning.dw_config import (
     DWConfig,
     TableSpec,
     discover_tables_for_layer,
@@ -12,9 +15,6 @@ from lakehouse_core.dw_config import (
     order_layers,
     order_tables_within_layer,
 )
-from lakehouse_core.models import RunContext, RunSpec
-from lakehouse_core.planning import Planner
-from lakehouse_core.sql import load_sql, render_sql
 
 
 def _iter_dates_inclusive(start_date: str, end_date: str) -> list[str]:

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from lakehouse_core.dw_planner import DirectoryDWPlanner
-from lakehouse_core.models import RunContext
+from lakehouse_core.domain.models import RunContext
+from lakehouse_core.planning import DirectoryDWPlanner
 
 
 def _write(path: Path, text: str) -> None:

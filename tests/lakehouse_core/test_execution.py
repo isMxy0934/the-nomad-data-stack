@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import duckdb
 import pytest
 
-from lakehouse_core.execution import copy_partitioned_parquet, normalize_duckdb_path
+from lakehouse_core.compute.execution import copy_partitioned_parquet, normalize_duckdb_path
 
 
 def test_copy_partitioned_parquet_falls_back_when_use_tmp_file_not_supported():

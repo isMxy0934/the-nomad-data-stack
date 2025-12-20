@@ -28,7 +28,7 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.utils.dag_run_utils import parse_targets
 from dags.utils.extractor_utils import CsvPayload, ExtractorSpec
 from dags.utils.s3_utils import S3Uploader
-from lakehouse_core.time import get_partition_date_str
+from lakehouse_core.io.time import get_partition_date_str
 
 logger = logging.getLogger(__name__)
 

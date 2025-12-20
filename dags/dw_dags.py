@@ -28,14 +28,19 @@ from dags.utils.etl_utils import (
     validate_dataset,
 )
 from lakehouse_core.catalog import attach_catalog_if_available
-from lakehouse_core.dw_config import DWConfig, DWConfigError, load_dw_config, order_layers
-from lakehouse_core.dw_planner import DirectoryDWPlanner
-from lakehouse_core.execution import configure_s3_access, temporary_connection
+from lakehouse_core.compute import configure_s3_access, temporary_connection
+from lakehouse_core.domain.models import RunContext, RunSpec
 from lakehouse_core.inputs import OdsCsvRegistrar
-from lakehouse_core.models import RunContext, RunSpec
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import load as pipeline_load
-from lakehouse_core.time import get_partition_date_str
+from lakehouse_core.planning import (
+    DirectoryDWPlanner,
+    DWConfig,
+    DWConfigError,
+    load_dw_config,
+    order_layers,
+)
 
 CONFIG_PATH = Path(__file__).parent / "dw_config.yaml"
 SQL_BASE_DIR = Path(__file__).parent

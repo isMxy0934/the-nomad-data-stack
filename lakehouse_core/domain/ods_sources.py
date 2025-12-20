@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from lakehouse_core.input_views import has_csv_under_prefix, register_csv_glob_as_temp_view
-from lakehouse_core.storage import ObjectStore
-from lakehouse_core.uri import join_uri, strip_slashes
+from lakehouse_core.domain.input_views import has_csv_under_prefix, register_csv_glob_as_temp_view
+from lakehouse_core.io.uri import join_uri, strip_slashes
+from lakehouse_core.store.object_store import ObjectStore
 
 
 def register_ods_csv_source_view(

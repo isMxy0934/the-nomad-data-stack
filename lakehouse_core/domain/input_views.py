@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lakehouse_core.storage import ObjectStore
+from lakehouse_core.store.object_store import ObjectStore
 
 
 def has_csv_under_prefix(store: ObjectStore, *, prefix_uri: str) -> bool:

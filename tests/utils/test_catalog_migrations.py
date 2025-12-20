@@ -5,7 +5,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from dags.utils.catalog_migrations import (
+from lakehouse_core.catalog import (
     CATALOG_META_SCHEMA,
     CATALOG_MIGRATIONS_TABLE,
     apply_migrations,

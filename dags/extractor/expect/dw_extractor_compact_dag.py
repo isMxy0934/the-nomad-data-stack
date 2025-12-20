@@ -32,7 +32,7 @@ from dags.extractor.backfill.backfill_specs import (
 )
 from dags.utils.etl_utils import cleanup_dataset, commit_dataset
 from lakehouse_core.api import prepare_paths
-from lakehouse_core.uri import parse_s3_uri
+from lakehouse_core.io.uri import parse_s3_uri
 
 
 def _resolve_callable(ref: str) -> Callable[..., object]:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import duckdb
 import pytest
 
-from dags.utils.catalog_utils import (
+from lakehouse_core.catalog import (
     LayerSpec,
     build_layer_dt_macro_sql,
     build_layer_view_sql,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from lakehouse_core.storage import ObjectStore
-from lakehouse_core.uri import normalize_s3_key_prefix, parse_s3_uri
+from lakehouse_core.io.uri import normalize_s3_key_prefix, parse_s3_uri
+from lakehouse_core.store import ObjectStore
 
 
 class AirflowS3Store(ObjectStore):

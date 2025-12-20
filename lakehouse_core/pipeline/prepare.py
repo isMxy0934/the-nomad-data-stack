@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from lakehouse_core.api import prepare_paths
-from lakehouse_core.models import RunSpec
-from lakehouse_core.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.domain.models import RunSpec
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
 
 
 def prepare(
