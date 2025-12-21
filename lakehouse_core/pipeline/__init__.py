@@ -7,4 +7,3 @@ from lakehouse_core.pipeline.prepare import prepare
 from lakehouse_core.pipeline.validate import validate
 
 __all__ = ["cleanup", "commit", "load", "prepare", "validate"]
-

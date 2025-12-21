@@ -30,7 +30,9 @@ class OdsCsvRegistrar(InputRegistrar):
         source_path = str(source.get("path") or "")
         fmt = str(source.get("format") or "").lower()
         if not source_path:
-            raise ValueError(f"Missing ODS source path in RunSpec.inputs for {spec.layer}.{spec.table}")
+            raise ValueError(
+                f"Missing ODS source path in RunSpec.inputs for {spec.layer}.{spec.table}"
+            )
         if fmt and fmt != "csv":
             raise ValueError(
                 f"Unsupported ODS source format for {spec.layer}.{spec.table}: '{fmt}'"
@@ -61,4 +63,3 @@ class OdsCsvRegistrar(InputRegistrar):
             has_data=bool(has_source_data),
             details={"view_name": view_name, "source_path": source_path, "format": "csv"},
         )
-

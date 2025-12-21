@@ -81,4 +81,3 @@ def test_publish_non_partition_local_store_writes_markers_and_copies_files(tmp_p
     assert store.exists(f"{paths.canonical_prefix}/file_2.parquet")
     assert store.exists(paths.manifest_path)
     assert store.exists(paths.success_flag_path)
-

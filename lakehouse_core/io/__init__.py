@@ -53,4 +53,3 @@ __all__ = [
     "render_sql",
     "strip_slashes",
 ]
-

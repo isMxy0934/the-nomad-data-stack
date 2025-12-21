@@ -8,16 +8,19 @@ import duckdb
 # Try to import project modules (if available)
 try:
     import sys
-    sys.path.insert(0, '/home/jovyan/lakehouse_core')
+
+    sys.path.insert(0, "/home/jovyan/lakehouse_core")
     from lakehouse_core.catalog import attach_catalog_if_available
     from lakehouse_core.compute import (
         S3ConnectionConfig,
         configure_s3_access,
     )
+
     USE_PROJECT_MODULES = True
 except ImportError:
     USE_PROJECT_MODULES = False
     print("Project modules not found, using basic DuckDB setup")
+
 
 def _strip_quotes(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
@@ -61,6 +64,7 @@ def _duckdb_endpoint(endpoint_url: str) -> str:
         return parsed.netloc
     return value
 
+
 # Create DuckDB connection
 print("🔧 Configuring DuckDB connection...")
 conn = duckdb.connect()
@@ -73,7 +77,7 @@ if USE_PROJECT_MODULES:
         secret_key=S3_SECRET_KEY,
         region=S3_REGION,
         use_ssl=False,
-        url_style='path',
+        url_style="path",
     )
     configure_s3_access(conn, s3_config)
     print(f"S3 configured: {S3_ENDPOINT} (bucket: {S3_BUCKET})")
@@ -93,7 +97,7 @@ else:
         raise
 
     # Parse endpoint (remove http:// prefix if present)
-    endpoint = S3_ENDPOINT.replace('http://', '').replace('https://', '')
+    endpoint = S3_ENDPOINT.replace("http://", "").replace("https://", "")
     conn.execute(f"SET s3_endpoint='{endpoint}';")
     conn.execute(f"SET s3_access_key_id='{S3_ACCESS_KEY}';")
     conn.execute(f"SET s3_secret_access_key='{S3_SECRET_KEY}';")

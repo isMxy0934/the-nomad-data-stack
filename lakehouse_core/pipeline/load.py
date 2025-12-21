@@ -27,7 +27,9 @@ def load(
     """Register inputs, render SQL, materialize to tmp, and return metrics."""
 
     if spec.is_partitioned and not partition_date:
-        raise ValueError(f"partition_date is required for partitioned spec {spec.layer}.{spec.table}")
+        raise ValueError(
+            f"partition_date is required for partitioned spec {spec.layer}.{spec.table}"
+        )
 
     # Ensure idempotency on retries: clear tmp prefix before writing.
     store.delete_prefix(paths.tmp_prefix)

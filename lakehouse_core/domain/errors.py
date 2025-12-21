@@ -11,4 +11,3 @@ class ValidationError(LakehouseCoreError):
 
 class PlanningError(LakehouseCoreError):
     """Raised when planning (RunSpec generation) fails."""
-

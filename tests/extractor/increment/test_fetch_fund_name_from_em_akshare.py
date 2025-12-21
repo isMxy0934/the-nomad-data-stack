@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from dags.extractor.increment.functions.fetch_fund_name_from_em_akshare import (
+from dags.extractor.increment.functions.base.fetch_fund_name_from_em_akshare import (
     fetch_fund_name_from_em_akshare,
 )
 
@@ -31,7 +31,7 @@ def test_fetch_fund_name_from_em_akshare_success():
     with (
         patch.dict("sys.modules", {"akshare": mock_ak}),
         patch(
-            "dags.extractor.increment.functions.fetch_fund_name_from_em_akshare.get_date_str",
+            "dags.extractor.increment.functions.base.fetch_fund_name_from_em_akshare.get_date_str",
             return_value="20241219",
         ),
     ):

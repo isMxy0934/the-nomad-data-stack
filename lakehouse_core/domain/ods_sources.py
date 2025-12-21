@@ -28,4 +28,3 @@ def register_ods_csv_source_view(
     glob_uri = join_uri(base_uri, f"{source_prefix}/dt={partition_date}/*.csv")
     register_csv_glob_as_temp_view(connection, view_name=view_name, csv_glob_uri=glob_uri)
     return True
-

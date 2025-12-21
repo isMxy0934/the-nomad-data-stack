@@ -75,7 +75,9 @@ def _context_from_args(args: argparse.Namespace) -> RunContext:
         args.partition_date = get_default_partition_date_str()
 
     if not args.run_id:
-        args.run_id = f"manual_{args.partition_date.replace('-', '')}" if args.partition_date else "manual"
+        args.run_id = (
+            f"manual_{args.partition_date.replace('-', '')}" if args.partition_date else "manual"
+        )
     return RunContext(
         run_id=str(args.run_id),
         partition_date=args.partition_date,
@@ -175,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
             write_success_flag=True,
         )
         if publish_result.get("action") == "cleared":
-            logger.info("No data for %s (dt=%s); cleared canonical prefix.", spec.name, spec.partition_date)
+            logger.info(
+                "No data for %s (dt=%s); cleared canonical prefix.", spec.name, spec.partition_date
+            )
 
         cleanup(store=store, paths=paths)
 

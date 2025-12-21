@@ -18,7 +18,9 @@ def test_prepare_paths_emits_structured_log(caplog) -> None:
         store_namespace="bucket",
     )
     messages = [r.getMessage() for r in caplog.records]
-    assert any("core.prepare_paths" in m and "dt=2024-01-01" in m and "run_id=r1" in m for m in messages)
+    assert any(
+        "core.prepare_paths" in m and "dt=2024-01-01" in m and "run_id=r1" in m for m in messages
+    )
 
 
 def test_publish_partition_emits_structured_log(caplog, tmp_path) -> None:
@@ -45,4 +47,6 @@ def test_publish_partition_emits_structured_log(caplog, tmp_path) -> None:
     core_commit.publish_partition(store=store, paths=paths, manifest=manifest)
 
     messages = [r.getMessage() for r in caplog.records]
-    assert any("core.publish_partition" in m and "stage=done" in m and "dest=ods.t" in m for m in messages)
+    assert any(
+        "core.publish_partition" in m and "stage=done" in m and "dest=ods.t" in m for m in messages
+    )

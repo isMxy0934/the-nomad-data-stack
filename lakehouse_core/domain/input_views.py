@@ -11,7 +11,10 @@ def has_csv_under_prefix(store: ObjectStore, *, prefix_uri: str) -> bool:
 
 
 def register_csv_glob_as_temp_view(
-    connection, *, view_name: str, csv_glob_uri: str  # noqa: ANN001
+    connection,
+    *,
+    view_name: str,
+    csv_glob_uri: str,  # noqa: ANN001
 ) -> None:
     """Create or replace a DuckDB TEMP VIEW from a CSV glob URI."""
 
@@ -26,4 +29,3 @@ def register_csv_glob_as_temp_view(
         SELECT * FROM read_csv_auto('{csv_glob_uri}', hive_partitioning=false);
         """
     )
-

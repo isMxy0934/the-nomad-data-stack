@@ -27,4 +27,3 @@ __all__ = [
     "run_query_to_partitioned_parquet",
     "temporary_connection",
 ]
-
