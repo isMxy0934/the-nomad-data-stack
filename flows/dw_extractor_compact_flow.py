@@ -121,8 +121,8 @@ def _stream_merge_csv_to_tmp(
     return wrote_header
 
 
-@task
-def list_days(spec_payload: Mapping[str, object]) -> list[str]:
+@task(task_run_name="list-days-{target}")
+def list_days(spec_payload: Mapping[str, object], target: str) -> list[str]:
     spec_obj = backfill_spec_from_mapping(spec_payload)
     if not spec_obj.trigger_compact:
         return []
@@ -138,8 +138,12 @@ def list_days(spec_payload: Mapping[str, object]) -> list[str]:
     return sorted(set(dts))
 
 
-@task
-def compact_by_day(trade_date: str, spec_payload: Mapping[str, object]) -> Mapping[str, object]:
+@task(task_run_name="compact-{target}-{trade_date}")
+def compact_by_day(
+    trade_date: str,
+    spec_payload: Mapping[str, object],
+    target: str,
+) -> Mapping[str, object]:
     spec_obj = backfill_spec_from_mapping(spec_payload)
     client = get_boto3_client()
 
@@ -211,7 +215,15 @@ def compact_by_day(trade_date: str, spec_payload: Mapping[str, object]) -> Mappi
     return publish_result
 
 
-@flow(name="dw_extractor_compact_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
+def _flow_run_name() -> str:
+    return "dw-compact"
+
+
+@flow(
+    name="dw_extractor_compact_flow",
+    flow_run_name=_flow_run_name,
+    task_runner=ConcurrentTaskRunner(max_workers=4),
+)
 def dw_extractor_compact_flow(run_conf: dict[str, Any] | None = None) -> None:  # noqa: ARG001
     specs = load_backfill_specs()
     flow_logger = get_run_logger()
@@ -219,10 +231,14 @@ def dw_extractor_compact_flow(run_conf: dict[str, Any] | None = None) -> None:  
 
     for spec in specs:
         spec_dict = spec.__dict__ | {"universe": spec.universe.__dict__}
-        days = list_days.submit(spec_dict).result()
+        days = list_days.submit(spec_dict, spec.target).result()
         if days:
             flow_logger.info("Compacting target=%s dates=%d", spec.target, len(days))
-        futures = compact_by_day.map(days, spec_payload=unmapped(spec_dict))
+        futures = compact_by_day.map(
+            days,
+            spec_payload=unmapped(spec_dict),
+            target=unmapped(spec.target),
+        )
         all_compact_futures.extend(futures)
 
     for future in all_compact_futures:

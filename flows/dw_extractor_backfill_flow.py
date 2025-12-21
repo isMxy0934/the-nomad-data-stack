@@ -18,9 +18,9 @@ from prefect.task_runners import ConcurrentTaskRunner
 from prefect.utilities.annotations import unmapped
 
 from dags.extractor.backfill.backfill_specs import backfill_spec_from_mapping, load_backfill_specs
-from flows.dw_extractor_compact_flow import dw_extractor_compact_flow
 from flows.extractor.increment.specs import load_extractor_specs
 from flows.utils.config import get_s3_bucket_name
+from flows.utils.runtime import run_deployment_sync
 from flows.utils.s3_utils import get_boto3_client
 from lakehouse_core.io.time import get_partition_date_str
 
@@ -140,11 +140,12 @@ def _normalize_trade_date(series: pd.Series) -> pd.Series:
     return parsed.dt.date.astype("string")
 
 
-@task
+@task(task_run_name="resolve-universe-{target}")
 def resolve_universe(
     spec_payload: Mapping[str, object],
     run_conf: Mapping[str, object],
     daily_target_to_prefix: Mapping[str, str],
+    target: str,
 ) -> list[str]:
     spec_obj = backfill_spec_from_mapping(spec_payload)
     targets = _conf_targets(run_conf)
@@ -210,8 +211,12 @@ def resolve_universe(
     return _iter_unique(symbols)
 
 
-@task
-def make_shards(spec_payload: Mapping[str, object], run_conf: Mapping[str, object]) -> list[dict[str, str]]:
+@task(task_run_name="make-shards-{target}")
+def make_shards(
+    spec_payload: Mapping[str, object],
+    run_conf: Mapping[str, object],
+    target: str,
+) -> list[dict[str, str]]:
     spec_obj = backfill_spec_from_mapping(spec_payload)
     targets = _conf_targets(run_conf)
     if targets is not None and spec_obj.target not in targets:
@@ -232,9 +237,12 @@ def make_shards(spec_payload: Mapping[str, object], run_conf: Mapping[str, objec
     return _month_shards(start_date=start_date, end_date=end_date)
 
 
-@task
+@task(task_run_name="build-jobs-{target}")
 def build_jobs(
-    symbols: list[str], shards: list[dict[str, str]], spec_payload: Mapping[str, object]
+    symbols: list[str],
+    shards: list[dict[str, str]],
+    spec_payload: Mapping[str, object],
+    target: str,
 ) -> list[dict[str, str]]:
     if not symbols or not shards:
         return []
@@ -252,8 +260,15 @@ def build_jobs(
     return jobs
 
 
-@task
-def fetch_to_pieces(job: Mapping[str, str], spec_payload: Mapping[str, object], run_conf: Mapping[str, object]) -> Mapping[str, object]:
+@task(task_run_name="backfill-{target}-{symbol}-{part_id}")
+def fetch_to_pieces(
+    job: Mapping[str, str],
+    spec_payload: Mapping[str, object],
+    run_conf: Mapping[str, object],
+    target: str,
+    symbol: str,
+    part_id: str,
+) -> Mapping[str, object]:
     spec_obj = backfill_spec_from_mapping(spec_payload)
     force = bool(run_conf.get("force") or False)
 
@@ -433,7 +448,23 @@ def fetch_to_pieces(job: Mapping[str, str], spec_payload: Mapping[str, object], 
     return {"skipped": 0, "symbol": symbol, "part_id": part_id, "row_count": wrote_rows, "day_count": wrote_days}
 
 
-@flow(name="dw_extractor_backfill_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
+def _flow_run_name() -> str:
+    from prefect.runtime import flow_run
+
+    params = flow_run.parameters
+    conf = params.get("run_conf") or {}
+    start_date = conf.get("start_date") or ""
+    end_date = conf.get("end_date") or ""
+    if start_date and end_date:
+        return f"dw-backfill {start_date}~{end_date}"
+    return "dw-backfill"
+
+
+@flow(
+    name="dw_extractor_backfill_flow",
+    flow_run_name=_flow_run_name,
+    task_runner=ConcurrentTaskRunner(max_workers=4),
+)
 def dw_extractor_backfill_flow(run_conf: dict[str, Any] | None = None) -> None:
     run_conf = run_conf or {}
     specs = load_backfill_specs()
@@ -443,9 +474,14 @@ def dw_extractor_backfill_flow(run_conf: dict[str, Any] | None = None) -> None:
 
     for spec in specs:
         spec_dict = asdict(spec)
-        symbols = resolve_universe.submit(spec_dict, run_conf, daily_target_to_prefix).result()
-        shards = make_shards.submit(spec_dict, run_conf).result()
-        jobs = build_jobs.submit(symbols, shards, spec_dict).result()
+        symbols = resolve_universe.submit(
+            spec_dict,
+            run_conf,
+            daily_target_to_prefix,
+            spec.target,
+        ).result()
+        shards = make_shards.submit(spec_dict, run_conf, spec.target).result()
+        jobs = build_jobs.submit(symbols, shards, spec_dict, spec.target).result()
 
         if jobs:
             flow_logger.info(
@@ -453,14 +489,20 @@ def dw_extractor_backfill_flow(run_conf: dict[str, Any] | None = None) -> None:
                 spec.target,
                 len(jobs),
             )
+        symbols_list = [job["symbol"] for job in jobs]
+        part_ids_list = [job["part_id"] for job in jobs]
+
         fetch_task = fetch_to_pieces
         if spec.pool:
             fetch_task = fetch_task.with_options(tags=[f"pool:{spec.pool}"])
 
         futures = fetch_task.map(
-            jobs,
+            job=jobs,
             spec_payload=unmapped(spec_dict),
             run_conf=unmapped(run_conf),
+            target=unmapped(spec.target),
+            symbol=symbols_list,
+            part_id=part_ids_list,
         )
         all_fetch_futures.extend(futures)
 
@@ -468,7 +510,11 @@ def dw_extractor_backfill_flow(run_conf: dict[str, Any] | None = None) -> None:
         future.result()
 
     if any(spec.trigger_compact for spec in specs):
-        dw_extractor_compact_flow(run_conf=run_conf)
+        run_deployment_sync(
+            "dw_extractor_compact_flow/dw-extractor-compact",
+            parameters={"run_conf": run_conf},
+            flow_run_name="dw-compact",
+        )
 
 
 if __name__ == "__main__":

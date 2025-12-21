@@ -6,7 +6,18 @@ from typing import Any
 from prefect import flow, get_run_logger
 
 
-@flow(name="dw_finish_flow")
+def _flow_run_name() -> str:
+    from prefect.runtime import flow_run
+
+    params = flow_run.parameters
+    conf = params.get("run_conf") or {}
+    partition_date = conf.get("partition_date") or ""
+    if partition_date:
+        return f"dw-finish dt={partition_date}"
+    return "dw-finish"
+
+
+@flow(name="dw_finish_flow", flow_run_name=_flow_run_name)
 def dw_finish_flow(run_conf: dict[str, Any] | None = None) -> None:
     conf = run_conf or {}
     mode = "init" if bool(conf.get("init")) else "daily"

@@ -5,6 +5,24 @@ from __future__ import annotations
 from uuid import uuid4
 
 
+def run_deployment_sync(
+    name: str,
+    *,
+    parameters: dict[str, object] | None = None,
+    flow_run_name: str | None = None,
+) -> object:
+    from prefect.deployments import run_deployment
+    from prefect.utilities.asyncutils import run_coro_as_sync
+
+    return run_coro_as_sync(
+        run_deployment(
+            name=name,
+            parameters=parameters or {},
+            flow_run_name=flow_run_name,
+        )
+    )
+
+
 def get_flow_run_id() -> str:
     try:
         from prefect.runtime import flow_run

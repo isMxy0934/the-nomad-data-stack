@@ -4,7 +4,7 @@ from typing import Any
 
 from prefect import flow, task
 
-from flows.dw_extractor_flow import dw_extractor_flow
+from flows.utils.runtime import run_deployment_sync
 from lakehouse_core.io.time import get_partition_date_str
 
 
@@ -20,10 +20,19 @@ def build_run_conf() -> dict[str, object]:
     }
 
 
-@flow(name="dw_start_flow")
+def _flow_run_name() -> str:
+    partition_date = get_partition_date_str()
+    return f"dw-start dt={partition_date}"
+
+
+@flow(name="dw_start_flow", flow_run_name=_flow_run_name)
 def dw_start_flow(**kwargs: Any) -> None:
     conf = build_run_conf.submit().result()
-    dw_extractor_flow(run_conf=conf)
+    run_deployment_sync(
+        "dw_extractor_flow/dw-extractor",
+        parameters={"run_conf": conf},
+        flow_run_name=f"dw-extractor dt={conf.get('partition_date')}",
+    )
 
 
 if __name__ == "__main__":

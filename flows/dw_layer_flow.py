@@ -12,7 +12,6 @@ from typing import Any
 from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
 
-from flows.dw_finish_flow import dw_finish_flow
 from flows.utils.dag_run_utils import parse_targets
 from flows.utils.etl_utils import (
     cleanup_dataset,
@@ -21,7 +20,7 @@ from flows.utils.etl_utils import (
     prepare_dataset,
     validate_dataset,
 )
-from flows.utils.runtime import get_flow_run_id
+from flows.utils.runtime import get_flow_run_id, run_deployment_sync
 from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.compute import configure_s3_access, temporary_connection
 from lakehouse_core.domain.models import RunContext, RunSpec
@@ -70,8 +69,9 @@ def _attach_catalog_if_available(connection) -> None:  # noqa: ANN001
     attach_catalog_if_available(connection, catalog_path=CATALOG_PATH)
 
 
-@task(retries=1, retry_delay_seconds=300)
+@task(retries=1, retry_delay_seconds=300, task_run_name="prepare-{table_name}-{partition_date}")
 def prepare_task(
+    table_name: str,
     base_prefix: str,
     run_id: str,
     is_partitioned: bool,
@@ -87,7 +87,7 @@ def prepare_task(
     )
 
 
-@task(retries=1, retry_delay_seconds=300)
+@task(retries=1, retry_delay_seconds=300, task_run_name="build-dates")
 def build_date_list(run_conf: dict[str, Any]) -> list[str]:
     start_date = run_conf.get("start_date")
     end_date = run_conf.get("end_date")
@@ -107,8 +107,10 @@ def build_date_list(run_conf: dict[str, Any]) -> list[str]:
     return sorted(set(dates))
 
 
-@task(retries=1, retry_delay_seconds=300)
+@task(retries=1, retry_delay_seconds=300, task_run_name="load-{table_name}-{partition_date}")
 def load_table(
+    table_name: str,
+    partition_date: str,
     paths_dict: dict[str, Any],
     run_spec: Mapping[str, Any],
     run_conf: dict[str, Any],
@@ -165,16 +167,26 @@ def load_table(
         return dict(metrics)
 
 
-@task(retries=1, retry_delay_seconds=300)
-def validate_task(paths_dict: dict[str, Any], metrics: Mapping[str, int]) -> dict[str, int]:
+@task(retries=1, retry_delay_seconds=300, task_run_name="validate-{table_name}-{partition_date}")
+def validate_task(
+    table_name: str,
+    partition_date: str,
+    paths_dict: dict[str, Any],
+    metrics: Mapping[str, int],
+) -> dict[str, int]:
     if metrics.get("skipped"):
         return dict(metrics)
     return validate_dataset(paths_dict, metrics)
 
 
-@task(retries=1, retry_delay_seconds=300)
+@task(retries=1, retry_delay_seconds=300, task_run_name="commit-{table_name}-{partition_date}")
 def commit_task(
-    dest_name: str, run_id: str, paths_dict: dict[str, Any], metrics: Mapping[str, int]
+    table_name: str,
+    partition_date: str,
+    dest_name: str,
+    run_id: str,
+    paths_dict: dict[str, Any],
+    metrics: Mapping[str, int],
 ) -> dict[str, str]:
     if metrics.get("skipped"):
         logger.info("Skipping publish for %s (marked skipped).", dest_name)
@@ -183,12 +195,16 @@ def commit_task(
     return res
 
 
-@task(retries=1, retry_delay_seconds=300)
-def cleanup_task(paths_dict: dict[str, Any]) -> None:
+@task(retries=1, retry_delay_seconds=300, task_run_name="cleanup-{table_name}-{partition_date}")
+def cleanup_task(
+    table_name: str,
+    partition_date: str,
+    paths_dict: dict[str, Any],
+) -> None:
     cleanup_dataset(paths_dict)
 
 
-@task(retries=1, retry_delay_seconds=300)
+@task(retries=1, retry_delay_seconds=300, task_run_name="done-{table_name}")
 def mark_table_done(table_name: str) -> str:
     return table_name
 
@@ -204,7 +220,23 @@ def _load_layer_specs(layer: str, config: DWConfig) -> tuple[list[Mapping[str, A
     return ordered_specs, layers_with_tables
 
 
-@flow(name="dw_layer_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
+def _flow_run_name() -> str:
+    from prefect.runtime import flow_run
+
+    params = flow_run.parameters
+    layer = params.get("layer") or "unknown"
+    conf = params.get("run_conf") or {}
+    partition_date = conf.get("partition_date") or ""
+    if partition_date:
+        return f"dw-layer {layer} dt={partition_date}"
+    return f"dw-layer {layer}"
+
+
+@flow(
+    name="dw_layer_flow",
+    flow_run_name=_flow_run_name,
+    task_runner=ConcurrentTaskRunner(max_workers=4),
+)
 def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
     run_conf = run_conf or {}
     config = load_dw_config(CONFIG_PATH)
@@ -237,6 +269,7 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
             unique_run_id = f"{run_id}_{partition_date.replace('-', '')}"
             flow_logger.info("Running table %s for dt=%s", table_name, partition_date)
             paths_future = prepare_task.submit(
+                table_name=table_name,
                 base_prefix=str(spec_dict["base_prefix"]),
                 run_id=unique_run_id,
                 is_partitioned=bool(spec_dict.get("is_partitioned", True)),
@@ -244,6 +277,8 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
                 bucket_name=bucket_name,
             )
             load_future = load_table.submit(
+                table_name=table_name,
+                partition_date=partition_date,
                 paths_dict=paths_future,
                 run_spec=spec_dict,
                 run_conf=run_conf,
@@ -251,11 +286,15 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
                 wait_for=[paths_future],
             )
             validate_future = validate_task.submit(
+                table_name=table_name,
+                partition_date=partition_date,
                 paths_dict=paths_future,
                 metrics=load_future,
                 wait_for=[load_future],
             )
             commit_future = commit_task.submit(
+                table_name=table_name,
+                partition_date=partition_date,
                 dest_name=table_name,
                 run_id=unique_run_id,
                 paths_dict=paths_future,
@@ -263,6 +302,8 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
                 wait_for=[validate_future],
             )
             cleanup_future = cleanup_task.submit(
+                table_name=table_name,
+                partition_date=partition_date,
                 paths_dict=paths_future,
                 wait_for=[commit_future],
             )
@@ -278,9 +319,17 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
 
     if valid_ds:
         for ds in valid_ds:
-            dw_layer_flow(layer=ds, run_conf=run_conf)
+            run_deployment_sync(
+                "dw_layer_flow/dw-layer",
+                parameters={"layer": ds, "run_conf": run_conf},
+                flow_run_name=f"dw-layer {ds} dt={run_conf.get('partition_date') if run_conf else ''}",
+            )
     else:
-        dw_finish_flow(run_conf=run_conf)
+        run_deployment_sync(
+            "dw_finish_flow/dw-finish",
+            parameters={"run_conf": run_conf},
+            flow_run_name=f"dw-finish dt={run_conf.get('partition_date') if run_conf else ''}",
+        )
 
 
 def build_dw_flows() -> dict[str, Any]:

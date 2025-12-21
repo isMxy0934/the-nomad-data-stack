@@ -15,10 +15,9 @@ from prefect.task_runners import ConcurrentTaskRunner
 from prefect.utilities.annotations import unmapped
 
 from dags.utils.extractor_utils import CsvPayload
-from flows.dw_catalog_flow import dw_catalog_flow
 from flows.extractor.increment.specs import load_extractor_specs
 from flows.utils.dag_run_utils import parse_targets
-from flows.utils.runtime import get_flow_run_id
+from flows.utils.runtime import get_flow_run_id, run_deployment_sync
 from flows.utils.s3_utils import PrefectS3Uploader
 from lakehouse_core.io.time import get_partition_date_str
 
@@ -40,7 +39,7 @@ def _resolve_fetcher(fetcher_ref: str) -> Callable[[], CsvPayload | None]:
     return fetcher
 
 
-@task(retries=3, retry_delay_seconds=60)
+@task(retries=3, retry_delay_seconds=60, task_run_name="fetch-{target}")
 def fetch_to_tmp(target: str, fetcher: str, run_id: str) -> dict[str, object]:
     fetcher_callable = _resolve_fetcher(fetcher)
     payload = fetcher_callable()
@@ -59,7 +58,7 @@ def fetch_to_tmp(target: str, fetcher: str, run_id: str) -> dict[str, object]:
     return {"has_data": 1, "record_count": payload.record_count, "tmp_file": str(tmp_file)}
 
 
-@task(retries=3, retry_delay_seconds=60)
+@task(retries=3, retry_delay_seconds=60, task_run_name="write-{target}")
 def write_raw(
     target: str,
     destination_key_template: str,
@@ -86,7 +85,20 @@ def write_raw(
     return s3_path
 
 
-@flow(name="dw_extractor_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
+def _flow_run_name() -> str:
+    from prefect.runtime import flow_run
+
+    params = flow_run.parameters
+    conf = params.get("run_conf") or {}
+    partition_date = conf.get("partition_date") or get_partition_date_str()
+    return f"dw-extractor dt={partition_date}"
+
+
+@flow(
+    name="dw_extractor_flow",
+    flow_run_name=_flow_run_name,
+    task_runner=ConcurrentTaskRunner(max_workers=4),
+)
 def dw_extractor_flow(run_conf: dict[str, Any] | None = None) -> None:
     run_conf = run_conf or {}
     if bool(run_conf.get("init")):
@@ -123,7 +135,11 @@ def dw_extractor_flow(run_conf: dict[str, Any] | None = None) -> None:
     for future in write_futures:
         future.result()
 
-    dw_catalog_flow(run_conf=run_conf)
+    run_deployment_sync(
+        "dw_catalog_flow/dw-catalog",
+        parameters={"run_conf": run_conf},
+        flow_run_name=f"dw-catalog dt={partition_date}",
+    )
 
 
 if __name__ == "__main__":
