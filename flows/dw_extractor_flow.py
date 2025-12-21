@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from prefect import flow, get_run_logger, task
+from prefect.task_runners import ConcurrentTaskRunner
+from prefect.utilities.annotations import unmapped
 
 from dags.utils.extractor_utils import CsvPayload
 from flows.dw_catalog_flow import dw_catalog_flow
@@ -84,7 +86,7 @@ def write_raw(
     return s3_path
 
 
-@flow(name="dw_extractor_flow")
+@flow(name="dw_extractor_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
 def dw_extractor_flow(run_conf: dict[str, Any] | None = None) -> None:
     run_conf = run_conf or {}
     if bool(run_conf.get("init")):
@@ -100,15 +102,26 @@ def dw_extractor_flow(run_conf: dict[str, Any] | None = None) -> None:
     partition_date = str(run_conf.get("partition_date") or "").strip() or get_partition_date_str()
     flow_logger = get_run_logger()
 
-    for spec in specs:
-        flow_logger.info("Running extractor target=%s", spec.target)
-        fetched = fetch_to_tmp.submit(spec.target, spec.fetcher, run_id).result()
-        _ = write_raw.submit(
-            spec.target,
-            spec.destination_key_template,
-            fetched,
-            partition_date,
-        ).result()
+    targets = [spec.target for spec in specs]
+    fetchers = [spec.fetcher for spec in specs]
+    templates = [spec.destination_key_template for spec in specs]
+
+    for target in targets:
+        flow_logger.info("Running extractor target=%s", target)
+
+    fetched = fetch_to_tmp.map(
+        target=targets,
+        fetcher=fetchers,
+        run_id=unmapped(run_id),
+    )
+    write_futures = write_raw.map(
+        target=targets,
+        destination_key_template=templates,
+        fetched=fetched,
+        partition_date=unmapped(partition_date),
+    )
+    for future in write_futures:
+        future.result()
 
     dw_catalog_flow(run_conf=run_conf)
 

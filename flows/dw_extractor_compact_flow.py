@@ -15,6 +15,8 @@ from typing import Any
 
 import pandas as pd
 from prefect import flow, get_run_logger, task
+from prefect.task_runners import ConcurrentTaskRunner
+from prefect.utilities.annotations import unmapped
 
 from dags.extractor.backfill.backfill_specs import backfill_spec_from_mapping, load_backfill_specs
 from flows.utils.config import get_s3_bucket_name
@@ -209,17 +211,22 @@ def compact_by_day(trade_date: str, spec_payload: Mapping[str, object]) -> Mappi
     return publish_result
 
 
-@flow(name="dw_extractor_compact_flow")
+@flow(name="dw_extractor_compact_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
 def dw_extractor_compact_flow(run_conf: dict[str, Any] | None = None) -> None:  # noqa: ARG001
     specs = load_backfill_specs()
     flow_logger = get_run_logger()
+    all_compact_futures = []
 
     for spec in specs:
         spec_dict = spec.__dict__ | {"universe": spec.universe.__dict__}
         days = list_days.submit(spec_dict).result()
-        for trade_date in days:
-            flow_logger.info("Compacting target=%s date=%s", spec.target, trade_date)
-            compact_by_day.submit(trade_date, spec_dict).result()
+        if days:
+            flow_logger.info("Compacting target=%s dates=%d", spec.target, len(days))
+        futures = compact_by_day.map(days, spec_payload=unmapped(spec_dict))
+        all_compact_futures.extend(futures)
+
+    for future in all_compact_futures:
+        future.result()
 
 
 if __name__ == "__main__":

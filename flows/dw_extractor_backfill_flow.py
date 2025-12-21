@@ -14,6 +14,8 @@ from typing import Any
 
 import pandas as pd
 from prefect import flow, get_run_logger, task
+from prefect.task_runners import ConcurrentTaskRunner
+from prefect.utilities.annotations import unmapped
 
 from dags.extractor.backfill.backfill_specs import backfill_spec_from_mapping, load_backfill_specs
 from flows.dw_extractor_compact_flow import dw_extractor_compact_flow
@@ -431,12 +433,13 @@ def fetch_to_pieces(job: Mapping[str, str], spec_payload: Mapping[str, object], 
     return {"skipped": 0, "symbol": symbol, "part_id": part_id, "row_count": wrote_rows, "day_count": wrote_days}
 
 
-@flow(name="dw_extractor_backfill_flow")
+@flow(name="dw_extractor_backfill_flow", task_runner=ConcurrentTaskRunner(max_workers=4))
 def dw_extractor_backfill_flow(run_conf: dict[str, Any] | None = None) -> None:
     run_conf = run_conf or {}
     specs = load_backfill_specs()
     daily_target_to_prefix = _daily_target_to_prefix()
     flow_logger = get_run_logger()
+    all_fetch_futures = []
 
     for spec in specs:
         spec_dict = asdict(spec)
@@ -444,9 +447,25 @@ def dw_extractor_backfill_flow(run_conf: dict[str, Any] | None = None) -> None:
         shards = make_shards.submit(spec_dict, run_conf).result()
         jobs = build_jobs.submit(symbols, shards, spec_dict).result()
 
-        for job in jobs:
-            flow_logger.info("Backfill job target=%s symbol=%s part_id=%s", spec.target, job["symbol"], job["part_id"])
-            fetch_to_pieces.submit(job, spec_dict, run_conf).result()
+        if jobs:
+            flow_logger.info(
+                "Backfill jobs target=%s count=%d",
+                spec.target,
+                len(jobs),
+            )
+        fetch_task = fetch_to_pieces
+        if spec.pool:
+            fetch_task = fetch_task.with_options(tags=[f"pool:{spec.pool}"])
+
+        futures = fetch_task.map(
+            jobs,
+            spec_payload=unmapped(spec_dict),
+            run_conf=unmapped(run_conf),
+        )
+        all_fetch_futures.extend(futures)
+
+    for future in all_fetch_futures:
+        future.result()
 
     if any(spec.trigger_compact for spec in specs):
         dw_extractor_compact_flow(run_conf=run_conf)
