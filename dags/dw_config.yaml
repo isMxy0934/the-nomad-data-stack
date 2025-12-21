@@ -12,10 +12,10 @@ layer_dependencies:
     - "dws"
 
 sources:
-  ods_daily_fund_price_akshare:
-    path: "lake/raw/daily/fund_price/akshare"
+  ods_fund_names_em_akshare:
+    path: "lake/raw/daily/fund_name/akshare/em"
     format: "csv"
 
-table_dependencies:
-  dwd:
-    dwd_daily_stock_price: []
+# table_dependencies:
+#   dwd:
+#     dwd_daily_stock_price: []
