@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from uuid import uuid4
 
 
@@ -14,13 +15,14 @@ def run_deployment_sync(
     from prefect.deployments import run_deployment
     from prefect.utilities.asyncutils import run_coro_as_sync
 
-    return run_coro_as_sync(
-        run_deployment(
-            name=name,
-            parameters=parameters or {},
-            flow_run_name=flow_run_name,
-        )
+    result = run_deployment(
+        name=name,
+        parameters=parameters or {},
+        flow_run_name=flow_run_name,
     )
+    if inspect.iscoroutine(result):
+        return run_coro_as_sync(result)
+    return result
 
 
 def get_flow_run_id() -> str:
