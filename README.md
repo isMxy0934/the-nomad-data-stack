@@ -12,6 +12,7 @@
 
 *   **调度与编排 (Orchestration)**: **Apache Airflow**
     *   系统的“大脑”。自动根据配置生成 DAG，管理任务依赖、重试和并发。
+    *   Prefect (self-hosted) flows live under `flows/` for parallel adoption; logic stays compatible with Airflow DAGs.
 *   **计算引擎 (Compute)**: **DuckDB**
     *   系统的“肌肉”。作为易逝计算资源 (Ephemeral Compute) 运行在 Worker 中，负责执行高性能 SQL 转换。无状态，随用随走。
 *   **存储层 (Storage)**: **MinIO (S3)**
