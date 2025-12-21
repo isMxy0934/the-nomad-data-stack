@@ -1,0 +1,35 @@
+version: 2
+
+deployments:
+  - name: dw-start
+    entrypoint: dw_start_flow.py:dw_start_flow
+    work_pool:
+      name: default
+  - name: dw-init
+    entrypoint: dw_init_flow.py:dw_init_flow
+    work_pool:
+      name: default
+  - name: dw-extractor
+    entrypoint: dw_extractor_flow.py:dw_extractor_flow
+    work_pool:
+      name: default
+  - name: dw-catalog
+    entrypoint: dw_catalog_flow.py:dw_catalog_flow
+    work_pool:
+      name: default
+  - name: dw-layer
+    entrypoint: dw_layer_flow.py:dw_layer_flow
+    work_pool:
+      name: default
+  - name: dw-finish
+    entrypoint: dw_finish_flow.py:dw_finish_flow
+    work_pool:
+      name: default
+  - name: dw-extractor-backfill
+    entrypoint: dw_extractor_backfill_flow.py:dw_extractor_backfill_flow
+    work_pool:
+      name: default
+  - name: dw-extractor-compact
+    entrypoint: dw_extractor_compact_flow.py:dw_extractor_compact_flow
+    work_pool:
+      name: default

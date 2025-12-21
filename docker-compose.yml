@@ -212,11 +212,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    command: >
-      bash -c "
-      /opt/prefect/scripts/prefect_deploy.sh &&
-      prefect worker start --pool default
-      "
+    command: prefect worker start --pool default
 
   # jupyter:
   #   build:
