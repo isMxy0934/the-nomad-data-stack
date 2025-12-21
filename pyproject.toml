@@ -25,6 +25,10 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+exclude = [
+    "*.ipynb",
+    ".ipynb_checkpoints",
+]
 
 [tool.ruff.lint]
 select = [

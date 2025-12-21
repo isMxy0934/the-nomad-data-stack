@@ -9,8 +9,11 @@ import duckdb
 try:
     import sys
     sys.path.insert(0, '/home/jovyan/lakehouse_core')
-    from lakehouse_core.compute import S3ConnectionConfig, configure_s3_access, create_temporary_connection
     from lakehouse_core.catalog import attach_catalog_if_available
+    from lakehouse_core.compute import (
+        S3ConnectionConfig,
+        configure_s3_access,
+    )
     USE_PROJECT_MODULES = True
 except ImportError:
     USE_PROJECT_MODULES = False
@@ -74,7 +77,7 @@ if USE_PROJECT_MODULES:
     )
     configure_s3_access(conn, s3_config)
     print(f"S3 configured: {S3_ENDPOINT} (bucket: {S3_BUCKET})")
-    
+
     # Attach catalog if available
     if attach_catalog_if_available(conn, catalog_path=CATALOG_PATH):
         print(f"Catalog attached: {CATALOG_PATH}")
@@ -88,7 +91,7 @@ else:
     except Exception:  # noqa: BLE001
         print("httpfs extension not available. Rebuild the image to preinstall it.")
         raise
-    
+
     # Parse endpoint (remove http:// prefix if present)
     endpoint = S3_ENDPOINT.replace('http://', '').replace('https://', '')
     conn.execute(f"SET s3_endpoint='{endpoint}';")
@@ -98,7 +101,7 @@ else:
     conn.execute("SET s3_use_ssl=false;")
     conn.execute("SET s3_url_style='path';")
     print(f"S3 configured: {S3_ENDPOINT}")
-    
+
     # Try to attach catalog manually
     if CATALOG_PATH.exists():
         conn.execute(f"ATTACH '{CATALOG_PATH}' AS catalog (READ_ONLY);")
