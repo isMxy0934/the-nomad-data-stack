@@ -9,7 +9,6 @@ from typing import Any
 from prefect import flow, task
 
 from flows.utils.etl_utils import build_s3_connection_config
-from flows.utils.runtime import run_deployment_sync
 from lakehouse_core.catalog import apply_migrations
 from lakehouse_core.compute import configure_s3_access, create_temporary_connection
 
@@ -49,16 +48,26 @@ def _flow_run_name() -> str:
 
 
 @flow(name="dw_catalog_flow", flow_run_name=_flow_run_name)
-def dw_catalog_flow(run_conf: dict[str, Any] | None = None) -> None:
+def dw_catalog_flow(
+    run_conf: dict[str, Any] | None = None,
+    skip_downstream: bool = False,
+) -> None:
+    """Catalog 迁移 Flow.
+
+    Args:
+        run_conf: 运行配置
+        skip_downstream: 是否跳过触发下游（作为 subflow 调用时设为 True）
+    """
     migrate_catalog.submit(
         catalog_path=str(DEFAULT_CATALOG_PATH),
         migrations_dir=str(DEFAULT_MIGRATIONS_DIR),
     ).result()
-    run_deployment_sync(
-        "dw_layer_flow/dw-layer-ods",
-        parameters={"layer": "ods", "run_conf": run_conf or {}},
-        flow_run_name=f"dw-layer ods dt={run_conf.get('partition_date') if run_conf else ''}",
-    )
+
+    if not skip_downstream:
+        # 单独运行时触发下游
+        from flows.dw_layer_flow import dw_layer_flow
+
+        dw_layer_flow(layer="ods", run_conf=run_conf or {})
 
 
 if __name__ == "__main__":

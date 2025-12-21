@@ -17,7 +17,7 @@ from prefect.utilities.annotations import unmapped
 from dags.utils.extractor_utils import CsvPayload
 from flows.extractor.increment.specs import load_extractor_specs
 from flows.utils.dag_run_utils import parse_targets
-from flows.utils.runtime import get_flow_run_id, run_deployment_sync
+from flows.utils.runtime import get_flow_run_id
 from flows.utils.s3_utils import PrefectS3Uploader
 from lakehouse_core.io.time import get_partition_date_str
 
@@ -99,13 +99,22 @@ def _flow_run_name() -> str:
     flow_run_name=_flow_run_name,
     task_runner=ConcurrentTaskRunner(max_workers=4),
 )
-def dw_extractor_flow(run_conf: dict[str, Any] | None = None) -> None:
+def dw_extractor_flow(
+    run_conf: dict[str, Any] | None = None,
+    skip_downstream: bool = False,
+) -> None:
+    """Extractor Flow - 抽取外部数据.
+
+    Args:
+        run_conf: 运行配置
+        skip_downstream: 是否跳过触发下游（作为 subflow 调用时设为 True）
+    """
     run_conf = run_conf or {}
     if bool(run_conf.get("init")):
         return
 
-    targets = parse_targets(run_conf)
-    if targets is not None:
+    targets_filter = parse_targets(run_conf)
+    if targets_filter is not None:
         # extractor targets are not supported; keep Airflow behavior
         return
 
@@ -135,11 +144,11 @@ def dw_extractor_flow(run_conf: dict[str, Any] | None = None) -> None:
     for future in write_futures:
         future.result()
 
-    run_deployment_sync(
-        "dw_catalog_flow/dw-catalog",
-        parameters={"run_conf": run_conf},
-        flow_run_name=f"dw-catalog dt={partition_date}",
-    )
+    # 如果 skip_downstream=True，不触发下游
+    if not skip_downstream:
+        from flows.dw_catalog_flow import dw_catalog_flow
+
+        dw_catalog_flow(run_conf=run_conf)
 
 
 if __name__ == "__main__":

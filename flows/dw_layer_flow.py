@@ -23,7 +23,7 @@ from flows.utils.etl_utils import (
     prepare_dataset,
     validate_dataset,
 )
-from flows.utils.runtime import get_flow_run_id, run_deployment_sync
+from flows.utils.runtime import get_flow_run_id
 from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.compute import configure_s3_access, temporary_connection
 from lakehouse_core.domain.models import RunContext, RunSpec
@@ -237,7 +237,18 @@ def _flow_run_name() -> str:
     flow_run_name=_flow_run_name,
     task_runner=ConcurrentTaskRunner(max_workers=4),
 )
-def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
+def dw_layer_flow(
+    layer: str,
+    run_conf: dict[str, Any] | None = None,
+    skip_downstream: bool = False,
+) -> None:
+    """执行单个 DW 层.
+
+    Args:
+        layer: 层名称 (ods/dwd/dim/ads)
+        run_conf: 运行配置
+        skip_downstream: 是否跳过触发下游（作为 subflow 调用时设为 True）
+    """
     run_conf = run_conf or {}
     config = load_dw_config(CONFIG_PATH)
 
@@ -319,22 +330,23 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
     for done_future in table_done.values():
         done_future.result()
 
+    # 如果 skip_downstream=True，不触发下游（由上层 pipeline 控制）
+    if skip_downstream:
+        return
+
+    # 单独运行时，继续触发下游层
     potential_downstream = [ds for ds, dps in config.layer_dependencies.items() if layer in dps]
     valid_ds = [ds for ds in potential_downstream if ds in layers_with_tables]
 
     if valid_ds:
         for ds in valid_ds:
-            run_deployment_sync(
-                f"dw_layer_flow/dw-layer-{ds}",
-                parameters={"layer": ds, "run_conf": run_conf},
-                flow_run_name=f"dw-layer {ds} dt={run_conf.get('partition_date') if run_conf else ''}",
-            )
+            # 使用 subflow 直接调用
+            dw_layer_flow(layer=ds, run_conf=run_conf, skip_downstream=False)
     else:
-        run_deployment_sync(
-            "dw_finish_flow/dw-finish",
-            parameters={"run_conf": run_conf},
-            flow_run_name=f"dw-finish dt={run_conf.get('partition_date') if run_conf else ''}",
-        )
+        # 最后一层，调用 finish
+        from flows.dw_finish_flow import dw_finish_flow
+
+        dw_finish_flow(run_conf=run_conf)
 
 
 def build_dw_flows() -> dict[str, Any]:
