@@ -213,6 +213,29 @@ services:
         condition: service_healthy
     command: prefect worker start --pool default
 
+  prefect-deploy:
+    build:
+      context: .
+      dockerfile: ./infra_build/dockerfiles/Dockerfile.prefect
+    container_name: prefect-deploy
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PYTHONPATH=/opt/prefect
+    volumes:
+      - ./flows:/opt/prefect/flows
+      - ./lakehouse_core:/opt/prefect/lakehouse_core
+      - ./dags:/opt/prefect/dags
+      - ./catalog:/opt/prefect/catalog
+      - ./.duckdb:/opt/prefect/.duckdb
+      - ./logs:/opt/prefect/logs
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    command: >
+      bash -c "cd /opt/prefect/flows && prefect deploy --all"
+
   # jupyter:
   #   build:
   #     context: .
