@@ -13,6 +13,7 @@
 - [ ] Extractor Backfill/Compact：新增 `dw_extractor_backfill_dag` / `dw_extractor_compact_dag`（历史回填 pieces → 合并到 daily）
 - [x] ODS 配置与示例 SQL：`dags/dw_config.yaml` (sources)、`dags/ods/*.sql` 已存在
 - [x] 工具类：`dags/utils/s3_utils.py`、`lakehouse_core/io/time.py` 已存在
+- [ ] Prefect flows: mirror Airflow DAGs under `flows/` (start/init/catalog/dw/extractor/backfill/compact)
 - [x] Prefect compat layer: `flows/` package scaffold + env/S3 utils (parallel with Airflow)
 
 > 说明：以上是“文件/结构已存在”，不等价于“已跑通验证”。跑通验证会在对应任务项里单独勾选。
