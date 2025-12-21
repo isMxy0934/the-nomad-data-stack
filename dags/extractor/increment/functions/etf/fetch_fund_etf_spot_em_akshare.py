@@ -12,12 +12,14 @@ def fetch_fund_etf_spot_em_akshare() -> CsvPayload | None:
     rename_map = {
         "代码": "symbol",
         "名称": "name",
+        "成交额": "amount",
     }
 
     df = df.rename(columns=rename_map)
     target_columns = [
         "symbol",
         "name",
+        "amount",
     ]
 
     df = df[[col for col in target_columns if col in df.columns]]
