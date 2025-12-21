@@ -11,7 +11,7 @@ from lakehouse_core.catalog import apply_migrations
 from lakehouse_core.compute import configure_s3_access, create_temporary_connection
 from prefect import flow, task
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CATALOG_PATH = Path(
     os.getenv("DUCKDB_CATALOG_PATH", str(REPO_ROOT / ".duckdb" / "catalog.duckdb"))
 )

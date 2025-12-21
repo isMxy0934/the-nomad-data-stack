@@ -13,7 +13,7 @@ from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.planning import load_dw_config, order_layers
 from prefect import flow, get_run_logger
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "dags" / "dw_config.yaml"
 
 

@@ -7,7 +7,7 @@ import yaml
 
 from dags.utils.extractor_utils import ExtractorSpec
 
-CONFIG_PATH = Path(__file__).resolve().parents[3] / "dags" / "extractor" / "increment" / "config.yaml"
+CONFIG_PATH = Path(__file__).resolve().parents[4] / "dags" / "extractor" / "increment" / "config.yaml"
 
 
 def _derive_target(entry: Mapping[str, object]) -> str:

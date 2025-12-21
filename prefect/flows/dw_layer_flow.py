@@ -39,7 +39,7 @@ from lakehouse_core.planning import (
 )
 from prefect import flow, get_run_logger, task
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "dags" / "dw_config.yaml"
 SQL_BASE_DIR = REPO_ROOT / "dags"
 CATALOG_PATH = Path(

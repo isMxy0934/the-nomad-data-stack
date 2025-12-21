@@ -234,7 +234,7 @@ services:
       prefect-server:
         condition: service_healthy
     command: >
-      bash -c "cd /opt/prefect/prefect && prefect deploy --all && python /opt/prefect/prefect/flows/register_dw_layer_deployments.py"
+      bash -c "cd /opt/prefect/prefect && prefect deploy --all"
 
   # jupyter:
   #   build:
