@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import duckdb
 
@@ -46,6 +47,16 @@ S3_SECRET_KEY = os.getenv("S3_SECRET_ACCESS_KEY") or airflow_s3.get("secret_key"
 S3_REGION = os.getenv("S3_REGION", "us-east-1")
 S3_BUCKET = os.getenv("S3_BUCKET_NAME", "stock-data")
 CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", "/home/jovyan/.duckdb/catalog.duckdb"))
+
+
+def _duckdb_endpoint(endpoint_url: str) -> str:
+    value = (endpoint_url or "").strip()
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.netloc:
+        return parsed.netloc
+    return value
 
 # Create DuckDB connection
 print("🔧 Configuring DuckDB connection...")
@@ -99,3 +110,41 @@ else:
 # Make connection available globally
 print("\nReady! Use `conn` to query data.\n")
 print("   Example: conn.execute('SELECT * FROM ods.fund_names_em_akshare LIMIT 10').df()")
+
+# Optional: enable %%sql magic with a preconfigured DuckDB connection.
+try:
+    from IPython import get_ipython
+
+    ip = get_ipython()
+    if ip is not None:
+        ip.run_line_magic("load_ext", "sql")
+        ip.run_line_magic("config", "SqlMagic.style = 'PLAIN_COLUMNS'")
+        ip.run_line_magic("sql", "duckdb:///:memory:")
+
+        endpoint = _duckdb_endpoint(S3_ENDPOINT)
+        ip.run_cell_magic(
+            "sql",
+            "",
+            f"""
+            LOAD httpfs;
+            SET s3_region='{S3_REGION}';
+            SET s3_endpoint='{endpoint}';
+            SET s3_access_key_id='{S3_ACCESS_KEY}';
+            SET s3_secret_access_key='{S3_SECRET_KEY}';
+            SET s3_url_style='path';
+            SET s3_use_ssl=false;
+            """,
+        )
+
+        if CATALOG_PATH.exists():
+            ip.run_cell_magic(
+                "sql",
+                "",
+                f"""
+                ATTACH '{CATALOG_PATH}' AS catalog (READ_ONLY);
+                SET search_path='temp, catalog, main';
+                """,
+            )
+        print("SQL magic ready. Use `%%sql` in cells.")
+except Exception as exc:  # noqa: BLE001
+    print(f"SQL magic not available: {exc}")
