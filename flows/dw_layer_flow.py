@@ -11,6 +11,7 @@ from typing import Any
 
 from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
+from prefect.utilities.annotations import allow_failure
 
 from flows.adapters.prefect_s3_store import PrefectS3Store
 from flows.utils.dag_run_utils import parse_targets
@@ -264,6 +265,7 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
                 table_done[dep].result()
 
         table_runs = []
+        table_checks = []
         for partition_date in date_list:
             unique_run_id = f"{run_id}_{partition_date.replace('-', '')}"
             flow_logger.info("Running table %s for dt=%s", table_name, partition_date)
@@ -304,9 +306,13 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
                 table_name=table_name,
                 partition_date=partition_date,
                 paths_dict=paths_future,
-                wait_for=[commit_future],
+                wait_for=[allow_failure(commit_future)],
             )
             table_runs.append(cleanup_future)
+            table_checks.append(commit_future)
+
+        for check in table_checks:
+            check.result()
 
         table_done[table_name] = mark_table_done.submit(table_name, wait_for=table_runs)
 

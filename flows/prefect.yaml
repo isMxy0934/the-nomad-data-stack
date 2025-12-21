@@ -17,10 +17,6 @@ deployments:
     entrypoint: dw_catalog_flow.py:dw_catalog_flow
     work_pool:
       name: default
-  - name: dw-layer
-    entrypoint: dw_layer_flow.py:dw_layer_flow
-    work_pool:
-      name: default
   - name: dw-finish
     entrypoint: dw_finish_flow.py:dw_finish_flow
     work_pool:
