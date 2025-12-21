@@ -5,14 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, get_run_logger
-
 from flows.dw_catalog_flow import dw_catalog_flow
 from flows.dw_extractor_flow import dw_extractor_flow
 from flows.dw_finish_flow import dw_finish_flow
 from flows.dw_layer_flow import dw_layer_flow
 from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.planning import load_dw_config, order_layers
+from prefect import flow, get_run_logger
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "dags" / "dw_config.yaml"

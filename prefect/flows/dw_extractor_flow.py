@@ -10,7 +10,6 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
 from prefect.utilities.annotations import unmapped
 
@@ -20,6 +19,7 @@ from flows.utils.dag_run_utils import parse_targets
 from flows.utils.runtime import get_flow_run_id
 from flows.utils.s3_utils import PrefectS3Uploader
 from lakehouse_core.io.time import get_partition_date_str
+from prefect import flow, get_run_logger, task
 
 logger = logging.getLogger(__name__)
 

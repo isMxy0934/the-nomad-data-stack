@@ -9,7 +9,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
 from prefect.utilities.annotations import allow_failure
 
@@ -38,6 +37,7 @@ from lakehouse_core.planning import (
     load_dw_config,
     order_layers,
 )
+from prefect import flow, get_run_logger, task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "dags" / "dw_config.yaml"

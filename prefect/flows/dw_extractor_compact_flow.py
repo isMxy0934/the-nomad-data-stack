@@ -14,7 +14,6 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 import pandas as pd
-from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
 from prefect.utilities.annotations import unmapped
 
@@ -24,6 +23,7 @@ from flows.utils.etl_utils import cleanup_dataset, commit_dataset
 from flows.utils.s3_utils import get_boto3_client
 from lakehouse_core.api import prepare_paths
 from lakehouse_core.io.uri import parse_s3_uri
+from prefect import flow, get_run_logger, task
 
 logger = logging.getLogger(__name__)
 

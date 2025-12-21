@@ -6,11 +6,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, task
-
 from flows.utils.etl_utils import build_s3_connection_config
 from lakehouse_core.catalog import apply_migrations
 from lakehouse_core.compute import configure_s3_access, create_temporary_connection
+from prefect import flow, task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CATALOG_PATH = Path(

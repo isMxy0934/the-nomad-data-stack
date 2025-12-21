@@ -13,7 +13,6 @@ from io import BytesIO
 from typing import Any
 
 import pandas as pd
-from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
 from prefect.utilities.annotations import unmapped
 
@@ -23,6 +22,7 @@ from flows.utils.config import get_s3_bucket_name
 from flows.utils.runtime import run_deployment_sync
 from flows.utils.s3_utils import get_boto3_client
 from lakehouse_core.io.time import get_partition_date_str
+from prefect import flow, get_run_logger, task
 
 logger = logging.getLogger(__name__)
 

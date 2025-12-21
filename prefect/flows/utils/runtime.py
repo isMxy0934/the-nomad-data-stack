@@ -12,8 +12,9 @@ def run_deployment_sync(
     parameters: dict[str, object] | None = None,
     flow_run_name: str | None = None,
 ) -> object:
-    from prefect.deployments import run_deployment
     from prefect.utilities.asyncutils import run_coro_as_sync
+
+    from prefect.deployments import run_deployment
 
     result = run_deployment(
         name=name,
