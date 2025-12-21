@@ -3,19 +3,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
-import pytest
+
+from dags.extractor.increment.functions.fetch_fund_name_from_em_akshare import (
+    fetch_fund_name_from_em_akshare,
+)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
-
-try:
-    from dags.extractor.increment.functions.fetch_fund_name_from_em_akshare import fetch_fund_name_from_em_akshare
-except ImportError as exc:
-    pytest.skip(
-        f"extractor functions imports unavailable in this environment: {exc}",
-        allow_module_level=True,
-    )
 
 
 def test_fetch_fund_name_from_em_akshare_success():

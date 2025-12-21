@@ -28,7 +28,7 @@ def test_dwd_pipeline_standard_flow(
     """Test standard DW flow: RAW (CSV) -> ODS (Parquet) -> DWD (Parquet)."""
 
     ods_table = "ods_fund_names_em_akshare"
-    dwd_table = "dwd_daily_stock_price"
+    # dwd_table = "dwd_daily_stock_price"
 
     # ---------------------------------------------------------
     # 1. Prepare RAW data in standard location
