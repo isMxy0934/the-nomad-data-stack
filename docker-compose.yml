@@ -206,7 +206,6 @@ services:
       - ./catalog:/opt/prefect/catalog
       - ./.duckdb:/opt/prefect/.duckdb
       - ./logs:/opt/prefect/logs
-      - ./scripts:/opt/prefect/scripts
     depends_on:
       prefect-server:
         condition: service_healthy

@@ -38,6 +38,9 @@ docker compose up -d
 
 # 3. Prefect work pool (first time only)
 docker compose exec prefect-server prefect work-pool create default
+
+# 4. Register Prefect deployments (uses flows/prefect.yaml)
+docker compose exec prefect-worker bash -c "cd /opt/prefect/flows && prefect deploy --all"
 ```
 
 ### 2. 访问控制台
