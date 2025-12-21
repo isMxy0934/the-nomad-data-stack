@@ -37,7 +37,9 @@ table_dependencies:
 """.lstrip(),
     )
     _write(sql_base / "ods" / "ods_foo.sql", "SELECT 1 AS x, '${PARTITION_DATE}' AS dt;")
-    _write(sql_base / "dwd" / "dwd_bar.sql", "SELECT * FROM ods.ods_foo WHERE dt='${PARTITION_DATE}';")
+    _write(
+        sql_base / "dwd" / "dwd_bar.sql", "SELECT * FROM ods.ods_foo WHERE dt='${PARTITION_DATE}';"
+    )
 
     planner = DirectoryDWPlanner(dw_config_path=dw_config, sql_base_dir=sql_base)
     context = RunContext(run_id="r1", partition_date="2025-01-02")
@@ -103,14 +105,18 @@ table_dependencies:
 
     planner = DirectoryDWPlanner(dw_config_path=dw_config, sql_base_dir=sql_base)
 
-    specs = planner.build(RunContext(run_id="r1", partition_date="2025-01-01", targets=["dwd.dwd_bar"]))
+    specs = planner.build(
+        RunContext(run_id="r1", partition_date="2025-01-01", targets=["dwd.dwd_bar"])
+    )
     assert [spec.name for spec in specs] == ["dwd.dwd_bar"]
 
     specs = planner.build(RunContext(run_id="r1", partition_date="2025-01-01", targets=["ods"]))
     assert [spec.name for spec in specs] == ["ods.ods_foo"]
 
 
-def test_directory_dw_planner_requires_partition_date_for_partitioned_tables(tmp_path: Path) -> None:
+def test_directory_dw_planner_requires_partition_date_for_partitioned_tables(
+    tmp_path: Path,
+) -> None:
     dw_config = tmp_path / "dw_config.yaml"
     sql_base = tmp_path / "dags"
 
@@ -130,4 +136,3 @@ table_dependencies:
     planner = DirectoryDWPlanner(dw_config_path=dw_config, sql_base_dir=sql_base)
     with pytest.raises(ValueError, match="partition_date is required"):
         planner.build(RunContext(run_id="r1"))
-

@@ -47,4 +47,3 @@ def prepare(
             "success_flag_path": paths.success_flag_path,
         }
     raise TypeError(f"Unexpected paths type: {type(paths)}")
-

@@ -113,11 +113,17 @@ class DirectoryDWPlanner(Planner):
                             f"partition_date is required for partitioned table {layer}.{table.name}"
                         )
                     base_name = f"{layer}.{table.name}"
-                    name = f"{base_name}:{partition_date}" if multi_date and partition_date else base_name
+                    name = (
+                        f"{base_name}:{partition_date}"
+                        if multi_date and partition_date
+                        else base_name
+                    )
                     if table.is_partitioned and not partition_date and allow_unrendered:
                         sql = load_sql(table.sql_path)
                     else:
-                        sql = _render_table_sql(table, partition_date if table.is_partitioned else None)
+                        sql = _render_table_sql(
+                            table, partition_date if table.is_partitioned else None
+                        )
                     run_specs.append(
                         RunSpec(
                             layer=layer,

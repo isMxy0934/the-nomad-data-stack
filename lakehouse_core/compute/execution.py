@@ -208,8 +208,7 @@ class Executor(Protocol):
         destination: str,
         filename_pattern: str = "file_{uuid}",
         use_tmp_file: bool = False,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def run_query_to_partitioned_parquet(
         self,
@@ -220,8 +219,7 @@ class Executor(Protocol):
         partition_column: str = "dt",
         filename_pattern: str = "file_{uuid}",
         use_tmp_file: bool = False,
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 def run_query_to_parquet(

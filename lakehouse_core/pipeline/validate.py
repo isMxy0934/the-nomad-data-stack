@@ -14,4 +14,3 @@ def validate(
     metrics: Mapping[str, int],
 ) -> dict[str, int]:
     return validate_output(store=store, paths=paths, metrics=metrics)
-

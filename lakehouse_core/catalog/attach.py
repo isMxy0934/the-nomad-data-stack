@@ -25,4 +25,3 @@ def attach_catalog_if_available(connection, *, catalog_path: str | Path) -> bool
     except Exception:  # noqa: BLE001
         connection.execute("USE catalog;")
     return True
-

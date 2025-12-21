@@ -98,4 +98,3 @@ def build_schema_sql(schema: str) -> str:
     """Create schema statement."""
 
     return f"CREATE SCHEMA IF NOT EXISTS {quote_ident(schema)};"
-

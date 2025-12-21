@@ -72,4 +72,3 @@ def build_non_partition_paths(*, base_uri: str, base_prefix: str, run_id: str) -
         manifest_path=manifest_path,
         success_flag_path=success_flag_path,
     )
-

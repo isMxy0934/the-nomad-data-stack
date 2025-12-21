@@ -37,4 +37,3 @@ __all__ = [
     "normalize_prefix",
     "quote_ident",
 ]
-

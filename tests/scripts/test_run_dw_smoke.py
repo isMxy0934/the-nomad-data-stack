@@ -57,4 +57,3 @@ table_dependencies:
     assert (canonical_dir / "manifest.json").exists()
     assert (canonical_dir / "_SUCCESS").exists()
     assert any(p.suffix == ".parquet" for p in canonical_dir.rglob("*.parquet"))
-

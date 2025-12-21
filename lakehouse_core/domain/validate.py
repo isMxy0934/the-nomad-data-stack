@@ -38,4 +38,3 @@ def validate_dataset(
         raise ValueError("Row count cannot be negative")
 
     return dict(metrics)
-

@@ -8,6 +8,4 @@ from lakehouse_core.domain.models import RunContext, RunSpec
 class Planner(Protocol):
     """Planner protocol: translate user table definitions into executable RunSpecs."""
 
-    def build(self, context: RunContext) -> list[RunSpec]:
-        ...
-
+    def build(self, context: RunContext) -> list[RunSpec]: ...

@@ -43,4 +43,3 @@ def manifest_log_fields(manifest: Mapping[str, object]) -> dict[str, object]:
         "row_count": _get("row_count"),
         "status": _get("status"),
     }
-

@@ -70,6 +70,7 @@ def _target_matches(run_spec: Mapping[str, Any], target: str) -> bool:
 def _attach_catalog_if_available(connection) -> None:
     attach_catalog_if_available(connection, catalog_path=CATALOG_PATH)
 
+
 def load_table(
     paths_dict: dict[str, Any],
     run_spec: Mapping[str, Any],

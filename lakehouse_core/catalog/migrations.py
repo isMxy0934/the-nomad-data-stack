@@ -103,4 +103,3 @@ def apply_migrations(
         applied_now.append(filename)
 
     return applied_now
-

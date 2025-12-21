@@ -79,4 +79,3 @@ def test_list_keys_exact_key_prefix_includes_object(tmp_path, prefix_uri: str) -
 
     keys = store.list_keys(prefix_uri)
     assert keys == ["s3://bucket/lake/a/file1.parquet"]
-

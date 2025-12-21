@@ -62,4 +62,3 @@ def commit(
         published=publish_result.get("manifest_path", ""),
     )
     return dict(publish_result), manifest
-

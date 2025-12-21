@@ -52,4 +52,3 @@ def load_and_render_sql(path: str | Path, variables: Mapping[str, str]) -> str:
 
     raw_sql = load_sql(path)
     return render_sql(raw_sql, variables)
-

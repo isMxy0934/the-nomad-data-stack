@@ -37,7 +37,9 @@ def test_copy_partitioned_parquet_falls_back_when_use_tmp_file_not_supported():
         ("SELECT 1", "s3://bucket/path", ""),
     ],
 )
-def test_copy_partitioned_parquet_validates_inputs(query: str, destination: str, partition_column: str):
+def test_copy_partitioned_parquet_validates_inputs(
+    query: str, destination: str, partition_column: str
+):
     conn = MagicMock()
     with pytest.raises(ValueError):
         copy_partitioned_parquet(

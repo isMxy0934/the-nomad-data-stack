@@ -33,4 +33,3 @@ def build_manifest(
         "target_prefix": target_prefix,
         "generated_at": timestamp,
     }
-

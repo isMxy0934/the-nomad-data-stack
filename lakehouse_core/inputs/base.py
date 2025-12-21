@@ -24,4 +24,3 @@ class InputRegistrar(Protocol):
         partition_date: str,
     ) -> InputRegistration:
         """Register inputs for a RunSpec, returning whether source data exists."""
-
