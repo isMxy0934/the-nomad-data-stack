@@ -6,3 +6,5 @@ yfinance
 tushare
 akshare
 duckdb
+prefect
+boto3

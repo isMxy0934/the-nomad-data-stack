@@ -21,7 +21,7 @@ def build_run_conf() -> dict[str, object]:
 
 
 @flow(name="dw_start_flow")
-def dw_start_flow(**_: Any) -> None:
+def dw_start_flow(**kwargs: Any) -> None:
     conf = build_run_conf.submit().result()
     dw_extractor_flow(run_conf=conf)
 

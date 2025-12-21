@@ -23,7 +23,7 @@ DEFAULT_MIGRATIONS_DIR = Path(
 
 
 @task
-def migrate_catalog(*, catalog_path: str, migrations_dir: str, **_: Any) -> list[str]:
+def migrate_catalog(*, catalog_path: str, migrations_dir: str, **kwargs: Any) -> list[str]:
     catalog = Path(catalog_path)
     catalog.parent.mkdir(parents=True, exist_ok=True)
 

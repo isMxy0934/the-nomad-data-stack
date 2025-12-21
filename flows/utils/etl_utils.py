@@ -61,7 +61,7 @@ def prepare_dataset(
     is_partitioned: bool = True,
     bucket_name: str | None = None,
     partition_date: str | None = None,
-    **_: Any,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """Prepare generic paths for a dataset write operation."""
 

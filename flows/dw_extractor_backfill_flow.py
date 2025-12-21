@@ -232,7 +232,7 @@ def make_shards(spec_payload: Mapping[str, object], run_conf: Mapping[str, objec
 
 @task
 def build_jobs(
-    symbols: list[str], shards: list[dict[str, str]], _: Mapping[str, object]
+    symbols: list[str], shards: list[dict[str, str]], spec_payload: Mapping[str, object]
 ) -> list[dict[str, str]]:
     if not symbols or not shards:
         return []
