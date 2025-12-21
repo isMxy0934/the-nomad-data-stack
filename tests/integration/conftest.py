@@ -62,8 +62,7 @@ def _load_ods_sources() -> dict[str, dict]:
 
 def _ods_cases() -> list[OdsTableCase]:
     fixture_map = {
-        "ods_daily_stock_price_akshare": "stock_price_akshare.csv",
-        "ods_daily_fund_price_akshare": "fund_price_akshare.csv",
+        "ods_fund_names_em_akshare": "fund_names_em_akshare.csv",
     }
 
     cases: list[OdsTableCase] = []
