@@ -55,7 +55,7 @@ def dw_catalog_flow(run_conf: dict[str, Any] | None = None) -> None:
         migrations_dir=str(DEFAULT_MIGRATIONS_DIR),
     ).result()
     run_deployment_sync(
-        "dw_layer_flow/dw-layer",
+        "dw_layer_flow/dw-layer-ods",
         parameters={"layer": "ods", "run_conf": run_conf or {}},
         flow_run_name=f"dw-layer ods dt={run_conf.get('partition_date') if run_conf else ''}",
     )

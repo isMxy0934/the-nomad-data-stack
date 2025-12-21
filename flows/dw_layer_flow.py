@@ -319,7 +319,7 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
     if valid_ds:
         for ds in valid_ds:
             run_deployment_sync(
-                "dw_layer_flow/dw-layer",
+                f"dw_layer_flow/dw-layer-{ds}",
                 parameters={"layer": ds, "run_conf": run_conf},
                 flow_run_name=f"dw-layer {ds} dt={run_conf.get('partition_date') if run_conf else ''}",
             )
