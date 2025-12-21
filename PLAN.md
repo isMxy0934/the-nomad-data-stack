@@ -34,6 +34,7 @@
 ## M0：基础可运行
 
 - [x] 本地启动：`docker compose up -d` 可启动 Airflow/MinIO/Postgres（完成健康检查）
+- [ ] Prefect self-hosted services added to `docker-compose.yml` (server + worker)
 - [x] Airflow 连接：Web UI 可访问（`localhost:8080`），scheduler 正常心跳
 - [x] MinIO 可用：控制台可访问（`localhost:9001`），bucket/凭证可用
 - [x] Airflow 连接串：`AIRFLOW_CONN_MINIO_S3` 可用（能 list/read/write）

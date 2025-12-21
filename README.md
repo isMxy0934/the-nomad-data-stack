@@ -35,12 +35,16 @@ cp env.example .env
 
 # 2. 启动容器 (Airflow + MinIO + Postgres)
 docker compose up -d
+
+# 3. Prefect work pool (first time only)
+docker compose exec prefect-server prefect work-pool create default
 ```
 
 ### 2. 访问控制台
 
 *   **Airflow**: [http://localhost:8080](http://localhost:8080) (账号/密码见 `.env`，默认 `admin`/`admin`)
 *   **MinIO**: [http://localhost:9001](http://localhost:9001) (默认 `minioadmin`/`minioadmin`)
+*   **Prefect**: [http://localhost:4200](http://localhost:4200)
 
 ### 3. 运行任务
 

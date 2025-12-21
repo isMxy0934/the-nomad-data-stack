@@ -166,6 +166,50 @@ services:
       postgres:
         condition: service_healthy
 
+  prefect-server:
+    build:
+      context: .
+      dockerfile: ./infra_build/dockerfiles/Dockerfile.prefect
+    container_name: prefect-server
+    restart: always
+    environment:
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db
+    volumes:
+      - prefect-data:/root/.prefect
+    ports:
+      - "4200:4200"
+    command: prefect server start
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: ./infra_build/dockerfiles/Dockerfile.prefect
+    container_name: prefect-worker
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PYTHONPATH=/opt/prefect
+    volumes:
+      - ./flows:/opt/prefect/flows
+      - ./lakehouse_core:/opt/prefect/lakehouse_core
+      - ./dags:/opt/prefect/dags
+      - ./catalog:/opt/prefect/catalog
+      - ./.duckdb:/opt/prefect/.duckdb
+      - ./logs:/opt/prefect/logs
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    command: prefect worker start --pool default
+
   # jupyter:
   #   build:
   #     context: .
@@ -184,3 +228,4 @@ services:
 
 volumes:
   postgres-db-volume:
+  prefect-data:

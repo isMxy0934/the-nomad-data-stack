@@ -1,0 +1,8 @@
+FROM prefecthq/prefect:3-python3.12
+
+WORKDIR /opt/prefect
+
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv && uv sync --no-dev
+
+ENV PYTHONPATH=/opt/prefect
