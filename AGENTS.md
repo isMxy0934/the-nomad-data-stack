@@ -99,3 +99,70 @@ uv run ruff format .
 ## 质量保障（CI）
 
 - GitHub Actions 会运行单元测试/集成测试与 ruff 检查；如需手动触发集成测试，可用 workflow dispatch 选择 `target_table`。
+
+## 新增 Extractor 完整检查清单
+
+添加一个新的增量 Extractor（`dags/extractor/increment`）时，必须完成以下 5 个步骤，缺一不可：
+
+### 1. Extractor 函数
+- **位置**：`dags/extractor/increment/functions/fetch_{target}.py`
+- **要求**：
+  - 函数签名：`def fetch_{target}() -> CsvPayload | None`
+  - 返回 `CsvPayload(csv_bytes=..., record_count=...)` 或 `None`（无数据时）
+  - 列名标准化：确保输出列名符合目标表规范
+  - 日期格式：如果包含日期列，确认 CSV 输出格式（pandas `date` 类型默认输出 `YYYY-MM-DD`）
+
+### 2. Extractor 配置
+- **位置**：`dags/extractor/increment/config.yaml`
+- **要求**：
+  - 添加 `target`、`tags`、`destination_key_template`、`fetcher` 配置
+  - `destination_key_template` 路径格式：`lake/raw/daily/{domain}/{source}/dt={PARTITION_DATE}/data.csv`
+  - `fetcher` 格式：`dags.extractor.increment.functions.fetch_{target}:fetch_{target}`
+
+### 3. ODS SQL 文件
+- **位置**：`dags/ods/ods_{target}.sql`
+- **要求**：
+  - 从临时视图 `tmp_ods_{target}` 读取数据
+  - 必须包含 `'${PARTITION_DATE}' AS dt` 分区列
+  - 日期列解析：根据 CSV 中的实际格式使用 `STRPTIME`（例如 `STRPTIME(CAST(trade_date AS VARCHAR), '%Y-%m-%d')`）
+  - 列名与类型与目标表 schema 一致
+
+### 4. Source 配置
+- **位置**：`dags/dw_config.yaml` 的 `sources:` 部分
+- **要求**：
+  - 添加 `ods_{target}:` 配置项
+  - `path` 必须匹配 extractor 的 `destination_key_template`（去掉 `dt={PARTITION_DATE}/data.csv` 部分）
+  - `format: "csv"`
+
+### 5. Catalog Migration
+- **位置**：`catalog/migrations/XXXX_{target}_table.sql`
+- **要求**：
+  - 创建 schema macro：`ods._schema_{target}()`
+  - 创建 seed parquet：`lake/ods/ods_{target}/dt=1900-01-01/__seed__.parquet`
+  - 创建视图：`ods.ods_{target}`（读取 `lake/ods/ods_{target}/dt=*/**/*.parquet`）
+  - 创建日期宏：`ods.ods_{target}_dt(p_date)`
+
+### 命名一致性规则
+
+所有组件必须遵循统一的命名约定：
+- **Extractor target**：`{source}_{provider}`（例如 `tool_trade_date_hist_sina_akshare`）
+- **ODS 表名**：`ods_{target}`（例如 `ods_tool_trade_date_hist_sina_akshare`）
+- **SQL 文件名**：`ods_{target}.sql`
+- **Migration 表名**：`ods_{target}`（与 SQL 文件名一致）
+- **Source 配置名**：`ods_{target}`（与表名一致）
+
+### 路径匹配验证
+
+确保以下路径一致：
+- Extractor 写入：`lake/raw/daily/{domain}/{source}/dt={PARTITION_DATE}/data.csv`
+- Source path：`lake/raw/daily/{domain}/{source}`（去掉 `dt={PARTITION_DATE}/data.csv`）
+- ODS 输出：`lake/ods/ods_{target}/dt={PARTITION_DATE}/*.parquet`
+
+### 示例：完整实现参考
+
+参考 `tool_trade_date_hist_sina_akshare` 的完整实现：
+- 函数：`dags/extractor/increment/functions/fetch_tool_trade_date_hist_sina_akshare.py`
+- 配置：`dags/extractor/increment/config.yaml`（`tool_trade_date_hist_sina_akshare` 条目）
+- SQL：`dags/ods/ods_tool_trade_date_hist_sina_akshare.sql`
+- Source：`dags/dw_config.yaml`（`ods_tool_trade_date_hist_sina_akshare` 条目）
+- Migration：`catalog/migrations/0003_tool_trade_date_hist_sina_akshare_table.sql`
