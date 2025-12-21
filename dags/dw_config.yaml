@@ -15,6 +15,9 @@ sources:
   ods_fund_names_em_akshare:
     path: "lake/raw/daily/fund_name/akshare/em"
     format: "csv"
+  ods_tool_trade_date_hist_sina_akshare:
+    path: "lake/raw/daily/tool_trade_date_hist/sina/akshare"
+    format: "csv"
 
 # table_dependencies:
 #   dwd:
