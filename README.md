@@ -12,7 +12,7 @@
 
 *   **调度与编排 (Orchestration)**: **Apache Airflow**
     *   系统的“大脑”。自动根据配置生成 DAG，管理任务依赖、重试和并发。
-    *   Prefect (self-hosted) flows live under `flows/` for parallel adoption; logic stays compatible with Airflow DAGs.
+    *   Prefect (self-hosted) flows live under `prefect/flows/` for parallel adoption; logic stays compatible with Airflow DAGs.
 *   **计算引擎 (Compute)**: **DuckDB**
     *   系统的“肌肉”。作为易逝计算资源 (Ephemeral Compute) 运行在 Worker 中，负责执行高性能 SQL 转换。无状态，随用随走。
 *   **存储层 (Storage)**: **MinIO (S3)**
@@ -39,8 +39,8 @@ docker compose up -d
 # 3. Prefect work pool (first time only)
 docker compose exec prefect-server prefect work-pool create default
 
-# 4. Register Prefect deployments (uses flows/prefect.yaml + per-layer deployments)
-docker compose exec prefect-worker bash -c "cd /opt/prefect/flows && prefect deploy --all && python /opt/prefect/flows/register_dw_layer_deployments.py"
+# 4. Register Prefect deployments (uses prefect/prefect.yaml + per-layer deployments)
+docker compose exec prefect-worker bash -c "cd /opt/prefect/prefect && prefect deploy --all && python /opt/prefect/prefect/flows/register_dw_layer_deployments.py"
 ```
 
 ### 2. 访问控制台

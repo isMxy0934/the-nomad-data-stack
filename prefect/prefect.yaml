@@ -3,7 +3,7 @@ version: 2
 deployments:
   # 每日运行入口
   - name: dw-daily
-    entrypoint: dw_pipeline_flow.py:dw_pipeline_flow
+    entrypoint: flows/dw_pipeline_flow.py:dw_pipeline_flow
     work_pool:
       name: default
     parameters:
@@ -11,7 +11,7 @@ deployments:
 
   # 初始化入口（回填历史数据）
   - name: dw-init
-    entrypoint: dw_pipeline_flow.py:dw_pipeline_flow
+    entrypoint: flows/dw_pipeline_flow.py:dw_pipeline_flow
     work_pool:
       name: default
     parameters:
@@ -19,12 +19,12 @@ deployments:
 
   # Extractor 回填（独立工具）
   - name: dw-extractor-backfill
-    entrypoint: dw_extractor_backfill_flow.py:dw_extractor_backfill_flow
+    entrypoint: flows/dw_extractor_backfill_flow.py:dw_extractor_backfill_flow
     work_pool:
       name: default
 
   # Extractor 压缩（独立工具）
   - name: dw-extractor-compact
-    entrypoint: dw_extractor_compact_flow.py:dw_extractor_compact_flow
+    entrypoint: flows/dw_extractor_compact_flow.py:dw_extractor_compact_flow
     work_pool:
       name: default

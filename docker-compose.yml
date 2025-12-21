@@ -198,9 +198,9 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
-      - PYTHONPATH=/opt/prefect
+      - PYTHONPATH=/opt/prefect:/opt/prefect/prefect
     volumes:
-      - ./flows:/opt/prefect/flows
+      - ./prefect:/opt/prefect/prefect
       - ./lakehouse_core:/opt/prefect/lakehouse_core
       - ./dags:/opt/prefect/dags
       - ./catalog:/opt/prefect/catalog
@@ -222,9 +222,9 @@ services:
       - .env
     environment:
       - PREFECT_API_URL=http://prefect-server:4200/api
-      - PYTHONPATH=/opt/prefect
+      - PYTHONPATH=/opt/prefect:/opt/prefect/prefect
     volumes:
-      - ./flows:/opt/prefect/flows
+      - ./prefect:/opt/prefect/prefect
       - ./lakehouse_core:/opt/prefect/lakehouse_core
       - ./dags:/opt/prefect/dags
       - ./catalog:/opt/prefect/catalog
@@ -234,7 +234,7 @@ services:
       prefect-server:
         condition: service_healthy
     command: >
-      bash -c "cd /opt/prefect/flows && prefect deploy --all && python /opt/prefect/flows/register_dw_layer_deployments.py"
+      bash -c "cd /opt/prefect/prefect && prefect deploy --all && python /opt/prefect/prefect/flows/register_dw_layer_deployments.py"
 
   # jupyter:
   #   build:
