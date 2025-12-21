@@ -55,7 +55,7 @@ docker compose exec prefect-worker bash -c "cd /opt/prefect/flows && prefect dep
 
 *   **日常跑批 (Daily Run)**: 
     *   手动触发 **`dw_start_dag`**。
-    *   它会自动计算“昨天”的日期，并依次执行：数据采集 -> Catalog 刷新 -> ODS 加载 -> 数仓分层计算。
+    *   它会自动计算“昨天”的日期，并依次执行：数据采集 -> Catalog 迁移 -> ODS 加载 -> 数仓分层计算。
 *   **历史初始化 (History Init)**: 
     *   点击 **`dw_init_dag`** -> Trigger DAG w/ config。
     *   在表单中填写 `start_date` (开始日期) 和 `end_date` (结束日期)。

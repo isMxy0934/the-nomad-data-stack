@@ -21,7 +21,6 @@ from flows.utils.etl_utils import (
     validate_dataset,
 )
 from flows.utils.runtime import get_flow_run_id
-from flows.utils.catalog_utils import discover_tables, refresh_catalog
 from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.compute import configure_s3_access, temporary_connection
 from lakehouse_core.domain.models import RunContext, RunSpec
@@ -43,7 +42,9 @@ from flows.utils.etl_utils import build_s3_connection_config
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "dags" / "dw_config.yaml"
 SQL_BASE_DIR = REPO_ROOT / "dags"
-CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
+CATALOG_PATH = Path(
+    os.getenv("DUCKDB_CATALOG_PATH", str(REPO_ROOT / ".duckdb" / "catalog.duckdb"))
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def _attach_catalog_if_available(connection) -> None:  # noqa: ANN001
     attach_catalog_if_available(connection, catalog_path=CATALOG_PATH)
 
 
-@task
+@task(retries=1, retry_delay_seconds=300)
 def build_date_list(run_conf: dict[str, Any]) -> list[str]:
     start_date = run_conf.get("start_date")
     end_date = run_conf.get("end_date")
@@ -88,7 +89,7 @@ def build_date_list(run_conf: dict[str, Any]) -> list[str]:
     return sorted(set(dates))
 
 
-@task
+@task(retries=1, retry_delay_seconds=300)
 def load_table(
     paths_dict: dict[str, Any],
     run_spec: Mapping[str, Any],
@@ -146,12 +147,12 @@ def load_table(
         return dict(metrics)
 
 
-@task
+@task(retries=1, retry_delay_seconds=300)
 def validate_task(paths_dict: dict[str, Any], metrics: Mapping[str, int]) -> dict[str, int]:
     return validate_dataset(paths_dict, metrics)
 
 
-@task
+@task(retries=1, retry_delay_seconds=300)
 def commit_task(
     dest_name: str, run_id: str, paths_dict: dict[str, Any], metrics: Mapping[str, int]
 ) -> dict[str, str]:
@@ -159,12 +160,12 @@ def commit_task(
     return res
 
 
-@task
+@task(retries=1, retry_delay_seconds=300)
 def cleanup_task(paths_dict: dict[str, Any]) -> None:
     cleanup_dataset(paths_dict)
 
 
-@task
+@task(retries=1, retry_delay_seconds=300)
 def mark_table_done(table_name: str) -> str:
     return table_name
 
@@ -239,18 +240,6 @@ def dw_layer_flow(layer: str, run_conf: dict[str, Any] | None = None) -> None:
 
     potential_downstream = [ds for ds, dps in config.layer_dependencies.items() if layer in dps]
     valid_ds = [ds for ds in potential_downstream if ds in layers_with_tables]
-
-    if layer == "ods":
-        tables = discover_tables(bucket=bucket_name, base_prefix="lake/ods")
-        if tables:
-            refresh_catalog(
-                catalog_path=CATALOG_PATH,
-                base_prefix="lake/ods",
-                schema="ods",
-                tables=tables,
-            )
-        else:
-            flow_logger.info("Catalog refresh skipped: no ODS tables discovered.")
 
     if valid_ds:
         for ds in valid_ds:

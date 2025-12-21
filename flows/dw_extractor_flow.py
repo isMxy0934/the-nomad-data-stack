@@ -38,7 +38,7 @@ def _resolve_fetcher(fetcher_ref: str) -> Callable[[], CsvPayload | None]:
     return fetcher
 
 
-@task
+@task(retries=3, retry_delay_seconds=60)
 def fetch_to_tmp(target: str, fetcher: str, run_id: str) -> dict[str, object]:
     fetcher_callable = _resolve_fetcher(fetcher)
     payload = fetcher_callable()
@@ -57,7 +57,7 @@ def fetch_to_tmp(target: str, fetcher: str, run_id: str) -> dict[str, object]:
     return {"has_data": 1, "record_count": payload.record_count, "tmp_file": str(tmp_file)}
 
 
-@task
+@task(retries=3, retry_delay_seconds=60)
 def write_raw(
     target: str,
     destination_key_template: str,
