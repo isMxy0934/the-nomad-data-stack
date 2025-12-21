@@ -8,9 +8,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
     matplotlib \
     seaborn \
     plotly \
-    ipywidgets \
-    ipython-sql \
-    duckdb-engine && \
+    ipywidgets && \
     mkdir -p /home/jovyan/.ipython/profile_default/startup && \
     python - <<'PY'
 import duckdb
