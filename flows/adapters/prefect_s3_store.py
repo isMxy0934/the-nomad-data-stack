@@ -3,10 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from flows.utils.config import build_s3_connection_config_from_env
 from lakehouse_core.io.uri import normalize_s3_key_prefix, parse_s3_uri
 from lakehouse_core.store import ObjectStore
-
-from flows.utils.config import build_s3_connection_config_from_env
 
 
 def _get_boto3_client():  # noqa: ANN001

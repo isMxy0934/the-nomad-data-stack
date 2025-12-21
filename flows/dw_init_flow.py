@@ -4,8 +4,8 @@ from typing import Any
 
 from prefect import flow, task
 
-from flows.utils.runtime import run_deployment_sync
 from flows.utils.dag_run_utils import parse_targets
+from flows.utils.runtime import run_deployment_sync
 from lakehouse_core.io.time import get_partition_date_str
 
 

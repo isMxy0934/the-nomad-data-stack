@@ -12,8 +12,10 @@ from typing import Any
 from prefect import flow, get_run_logger, task
 from prefect.task_runners import ConcurrentTaskRunner
 
+from flows.adapters.prefect_s3_store import PrefectS3Store
 from flows.utils.dag_run_utils import parse_targets
 from flows.utils.etl_utils import (
+    build_s3_connection_config,
     cleanup_dataset,
     commit_dataset,
     get_default_bucket_name,
@@ -35,9 +37,6 @@ from lakehouse_core.planning import (
     load_dw_config,
     order_layers,
 )
-
-from flows.adapters.prefect_s3_store import PrefectS3Store
-from flows.utils.etl_utils import build_s3_connection_config
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "dags" / "dw_config.yaml"
