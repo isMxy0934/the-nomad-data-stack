@@ -2,6 +2,23 @@ FROM quay.io/jupyter/scipy-notebook:latest
 
 COPY ./infra_build/requirements.txt /tmp/requirements.txt
 
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
+    pip install --no-cache-dir \
+    pandas \
+    matplotlib \
+    seaborn \
+    plotly \
+    ipywidgets && \
+    mkdir -p /home/jovyan/.ipython/profile_default/startup && \
+    python - <<'PY'
+import duckdb
+
+conn = duckdb.connect()
+conn.execute("INSTALL httpfs;")
+conn.execute("LOAD httpfs;")
+conn.close()
+PY
+
+COPY ./infra_build/dockerfiles/jupyter_startup.py /home/jovyan/.ipython/profile_default/startup/00-jupyter-config.py
 
 WORKDIR /home/jovyan
