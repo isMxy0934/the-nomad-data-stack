@@ -22,7 +22,7 @@ compactor:
   kwargs:
     bucket: "stock-data"
     # Note: We align the path with the legacy ODS structure
-    prefix_template: "lake/raw/daily/etf_universe_whitelist/local/dt={date}"
+    prefix_template: "lake/raw/daily/etf_universe_whitelist/local"
     file_format: "csv"
     # Whitelist is small, usually no need for complex dedup, but let's keep it clean
     dedup_cols: ["symbol"]

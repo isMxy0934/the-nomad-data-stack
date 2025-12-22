@@ -34,7 +34,7 @@ compactor:
   class: "dags.ingestion.standard.compactors.StandardS3Compactor"
   kwargs:
     bucket: "stock-data" # Or use env var in code
-    prefix_template: "lake/raw/daily/fund_etf_history/dt={date}"
+    prefix_template: "lake/raw/daily/fund_etf_history"
     file_format: "csv"
     dedup_cols: ["trade_date", "symbol"]
     partition_column: "trade_date" # Enable data-driven partitioning
