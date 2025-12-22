@@ -1,5 +1,7 @@
 import os
+
 import pandas as pd
+
 from lakehouse_core.io.time import get_date_str
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,7 +14,7 @@ def fetch_etf_universe_whitelist(**kwargs) -> pd.DataFrame | None:
     """
     if not os.path.exists(WHITELIST_FILE):
         raise FileNotFoundError(f"Whitelist file not found: {WHITELIST_FILE}")
-        
+
     df = pd.read_csv(WHITELIST_FILE, encoding="utf-8")
     if df is None or df.empty:
         return None

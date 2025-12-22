@@ -1,14 +1,15 @@
 import importlib
-from typing import Any, Type
+from typing import Any
 
-def load_class(class_path: str) -> Type[Any]:
+
+def load_class(class_path: str) -> type[Any]:
     """
     Dynamically loads a class from a string path.
     e.g., "dags.ingestion.standard.partitioners.SqlPartitioner"
     """
     if "." not in class_path:
         raise ValueError(f"Invalid class path: {class_path}")
-    
+
     module_name, class_name = class_path.rsplit(".", 1)
     try:
         module = importlib.import_module(module_name)
@@ -25,10 +26,10 @@ def instantiate_component(config: dict) -> Any:
     cls_path = config.get("class")
     if not cls_path:
         raise ValueError("Component config missing 'class' field")
-    
+
     cls = load_class(cls_path)
     kwargs = config.get("kwargs", {})
-    
+
     # Recursively instantiate nested components (e.g. for CompositePartitioner)
     # If a kwarg value is a list of dicts with 'class', instantiate them too.
     if "strategies" in kwargs and isinstance(kwargs["strategies"], list):

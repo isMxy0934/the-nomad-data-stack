@@ -1,9 +1,10 @@
-from typing import Any, Dict, Iterator, List, Optional
-import pandas as pd
-import duckdb
-from pathlib import Path
 import itertools
 import logging
+from collections.abc import Iterator
+from pathlib import Path
+
+import duckdb
+import pandas as pd
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.ingestion.core.interfaces import BasePartitioner, IngestionJob
@@ -19,9 +20,9 @@ class SqlPartitioner(BasePartitioner):
     Useful for getting a list of symbols (whitelist).
     """
     def __init__(
-        self, 
-        query: str, 
-        item_key: str = "symbol", 
+        self,
+        query: str,
+        item_key: str = "symbol",
         catalog_path: str = ".duckdb/catalog.duckdb",
         aws_conn_id: str = "MINIO_S3"
     ):
@@ -31,12 +32,12 @@ class SqlPartitioner(BasePartitioner):
         self.aws_conn_id = aws_conn_id
 
     def generate_jobs(
-        self, 
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
         **kwargs
     ) -> Iterator[IngestionJob]:
-        
+
         db_path = Path(self.catalog_path)
         if not db_path.exists():
             # Fallback or error? For now, empty list to avoid crashing during initial setup
@@ -62,15 +63,15 @@ class SqlPartitioner(BasePartitioner):
         if df.empty:
             log_event(logger, "Partitioning query returned empty result", query=self.query)
             return iter([])
-        
-        # Assume the query returns the item in the first column if not specified, 
+
+        # Assume the query returns the item in the first column if not specified,
         # or we look for item_key if it exists in columns.
         target_col = df.columns[0]
         if self.item_key in df.columns:
             target_col = self.item_key
-            
+
         items = df[target_col].dropna().unique().tolist()
-        
+
         log_event(logger, "Partitioning via SQL success", item_count=len(items), strategy="SqlPartitioner")
 
         for item in items:
@@ -89,16 +90,16 @@ class TimePartitioner(BasePartitioner):
         self.freq = freq
 
     def generate_jobs(
-        self, 
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
         **kwargs
     ) -> Iterator[IngestionJob]:
-        
+
         if not start_date:
-            # If no start date provided (e.g. ad-hoc run without params), 
+            # If no start date provided (e.g. ad-hoc run without params),
             # we might rely on default behavior or return empty.
-            # Assuming 'today' if not provided is dangerous in library code, 
+            # Assuming 'today' if not provided is dangerous in library code,
             # let's assume the caller handles defaults or we pass None.
             # But for jobs requiring dates, we yield one empty-date job if mode is range?
             # Better: if missing, just return a job with None to let Extractor handle defaults.
@@ -122,18 +123,18 @@ class TimePartitioner(BasePartitioner):
 
             # This simple logic needs refinement for precise day-to-day chunking
             # But for now, basic implementation:
-            # We create periods. 
+            # We create periods.
             # Actually, pd.period_range or simply iterating is safer.
-            
+
             # Simplified chunking logic:
             cursor = pd.Timestamp(start_date)
             final_end = pd.Timestamp(end_date)
-            
+
             while cursor <= final_end:
                 next_cursor = cursor + pd.tseries.frequencies.to_offset(self.freq)
                 # chunk end is next_cursor - 1 day, or final_end
                 chunk_end = min(next_cursor - pd.Timedelta(days=1), final_end)
-                
+
                 yield IngestionJob(
                     params={
                         "start_date": cursor.strftime("%Y-%m-%d"),
@@ -148,16 +149,16 @@ class CompositePartitioner(BasePartitioner):
     """
     Combines multiple partitioners using Cartesian Product.
     """
-    def __init__(self, strategies: List[BasePartitioner]):
+    def __init__(self, strategies: list[BasePartitioner]):
         self.strategies = strategies
 
     def generate_jobs(
-        self, 
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
         **kwargs
     ) -> Iterator[IngestionJob]:
-        
+
         # 1. Generate lists of jobs from each strategy
         job_lists = []
         for strategy in self.strategies:
@@ -168,11 +169,11 @@ class CompositePartitioner(BasePartitioner):
         for combination in itertools.product(*job_lists):
             merged_params = {}
             merged_meta = {}
-            
+
             for job in combination:
                 merged_params.update(job.params)
                 merged_meta.update(job.meta)
-            
+
             yield IngestionJob(params=merged_params, meta=merged_meta)
 
 class SingleJobPartitioner(BasePartitioner):
@@ -184,12 +185,12 @@ class SingleJobPartitioner(BasePartitioner):
     - Tasks where partitioning is handled internally by the extractor.
     """
     def generate_jobs(
-        self, 
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
         **kwargs
     ) -> Iterator[IngestionJob]:
         # Yield one empty job. The Extractor will receive empty params.
-        # The storage partition date will be handled by the DAG/Compactor context, 
+        # The storage partition date will be handled by the DAG/Compactor context,
         # not by the job params.
         yield IngestionJob(params={})

@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def fetch_fund_etf_history(**kwargs) -> pd.DataFrame | None:
     """
     Fetches ETF history data (Mock implementation for now).
@@ -22,5 +23,5 @@ def fetch_fund_etf_history(**kwargs) -> pd.DataFrame | None:
 
     if symbol is not None:
         df = df[df["symbol"] == str(symbol).strip()]
-        
+
     return df

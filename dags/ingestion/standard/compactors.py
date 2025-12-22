@@ -1,10 +1,11 @@
-from typing import Any, Dict, List, Optional
-import pandas as pd
 import json
-import os
 import logging
-from datetime import datetime, date
+from datetime import datetime
+from typing import Any
+
+import pandas as pd
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
 from dags.ingestion.core.interfaces import BaseCompactor
 from lakehouse_core.domain.observability import log_event
 
@@ -16,12 +17,12 @@ class StandardS3Compactor(BaseCompactor):
     Handles partitioning (by DAG date or data column) and atomic writes.
     """
     def __init__(
-        self, 
-        bucket: str, 
-        prefix_template: str, 
+        self,
+        bucket: str,
+        prefix_template: str,
         file_format: str = "csv",
-        dedup_cols: Optional[List[str]] = None,
-        partition_column: Optional[str] = None
+        dedup_cols: list[str] | None = None,
+        partition_column: str | None = None
     ):
         """
         Args:
@@ -45,20 +46,20 @@ class StandardS3Compactor(BaseCompactor):
         """Helper to write one dataframe to one partition path."""
         prefix = self.prefix_template.format(target=target, date=partition_val)
         prefix = prefix.strip("/")
-        
+
         data_key = f"{prefix}/data.{self.file_format}"
         success_key = f"{prefix}/_SUCCESS"
         manifest_key = f"{prefix}/manifest.json"
-        
+
         if self.file_format == "csv":
             out_bytes = df.to_csv(index=False).encode("utf-8")
         elif self.file_format == "parquet":
             out_bytes = df.to_parquet(index=False)
         else:
             raise ValueError(f"Unsupported format: {self.file_format}")
-            
+
         self.s3_hook.load_bytes(out_bytes, key=data_key, bucket_name=self.bucket, replace=True)
-        
+
         manifest = {
             "target": target,
             "partition_date": partition_val,
@@ -68,25 +69,25 @@ class StandardS3Compactor(BaseCompactor):
         }
         self.s3_hook.load_string(json.dumps(manifest), key=manifest_key, bucket_name=self.bucket, replace=True)
         self.s3_hook.load_string("", key=success_key, bucket_name=self.bucket, replace=True)
-        
+
         return f"s3://{self.bucket}/{data_key}"
 
     def compact(
-        self, 
-        results: List[pd.DataFrame], 
-        target: str, 
-        partition_date: str, 
+        self,
+        results: list[pd.DataFrame],
+        target: str,
+        partition_date: str,
         **kwargs
-    ) -> Dict[str, Any]:
-        
+    ) -> dict[str, Any]:
+
         # 1. Merge
         valid_frames = [df for df in results if df is not None and not df.empty]
         if not valid_frames:
             log_event(logger, "No data to compact", target=target)
             return {"row_count": 0, "status": "skipped"}
-            
+
         merged_df = pd.concat(valid_frames, ignore_index=True)
-        
+
         # 2. Dedupe
         if self.dedup_cols:
             # Drop dedup logic is same
@@ -94,25 +95,25 @@ class StandardS3Compactor(BaseCompactor):
             available_cols = [c for c in self.dedup_cols if c in merged_df.columns]
             if available_cols:
                 merged_df = merged_df.drop_duplicates(subset=available_cols, keep="last")
-            
+
             dropped_count = before - len(merged_df)
             log_event(logger, "Deduplication finished", before=before, after=len(merged_df), dropped=dropped_count)
 
         # 3. Partition & Write
         paths = []
-        
+
         if self.partition_column:
             if self.partition_column not in merged_df.columns:
                  # Fallback or error? Let's error to be safe.
                  # Or warn and dump to default partition?
                  # Error is better to prevent data pollution.
                  raise ValueError(f"Partition column '{self.partition_column}' not found in data.")
-            
+
             # Ensure it's string-like for grouping
             # If it's date/datetime, convert to YYYY-MM-DD string
             if pd.api.types.is_datetime64_any_dtype(merged_df[self.partition_column]):
                  merged_df[self.partition_column] = merged_df[self.partition_column].dt.strftime("%Y-%m-%d")
-            
+
             # GroupBy
             for val, group in merged_df.groupby(self.partition_column):
                 val_str = str(val)
@@ -121,10 +122,10 @@ class StandardS3Compactor(BaseCompactor):
                     continue
                 path = self._write_single_partition(group, target, val_str)
                 paths.append(path)
-                
+
         else:
             # Default Mode: Use the DAG provided partition_date
             path = self._write_single_partition(merged_df, target, partition_date)
             paths.append(path)
-            
+
         return {"row_count": len(merged_df), "partition_count": len(paths), "paths": paths}
