@@ -76,14 +76,16 @@ def create_dag(config_path: Path):
         def prepare_ingestion_paths(**context) -> dict:
             dag_run_conf = context.get("dag_run").conf or {}
             partition_date = dag_run_conf.get("start_date") or get_partition_date_str()
-            run_id = context["run_id"]
+            
+            # Sanitize run_id for S3/MinIO compatibility (remove :, +, . etc)
+            raw_run_id = context["run_id"]
+            safe_run_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_run_id)
             
             # 使用 core API 生成标准路径
-            # Ingestion 写入 lake/raw/daily/{target}
             base_prefix = f"lake/raw/daily/{target}"
             paths = prepare_paths(
                 base_prefix=base_prefix,
-                run_id=run_id,
+                run_id=safe_run_id,
                 partition_date=partition_date,
                 is_partitioned=True,
                 store_namespace=DEFAULT_BUCKET
