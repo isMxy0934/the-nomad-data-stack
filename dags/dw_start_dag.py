@@ -34,11 +34,11 @@ with DAG(
         python_callable=build_run_conf,
     )
 
-    trigger_ods = TriggerDagRunOperator(
-        task_id="trigger_dw_ods_dag",
-        trigger_dag_id="dw_ods",
+    trigger_catalog = TriggerDagRunOperator(
+        task_id="trigger_dw_catalog_dag",
+        trigger_dag_id="dw_catalog_dag",
         reset_dag_run=True,
         conf=XComArg(build_conf),
     )
 
-    build_conf >> trigger_ods
+    build_conf >> trigger_catalog
