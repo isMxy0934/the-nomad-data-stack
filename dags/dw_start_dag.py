@@ -34,11 +34,11 @@ with DAG(
         python_callable=build_run_conf,
     )
 
-    trigger_extractor = TriggerDagRunOperator(
-        task_id="trigger_dw_extractor_dag",
-        trigger_dag_id="dw_extractor_dag",
+    trigger_ods = TriggerDagRunOperator(
+        task_id="trigger_dw_ods_dag",
+        trigger_dag_id="dw_ods",
         reset_dag_run=True,
         conf=XComArg(build_conf),
     )
 
-    build_conf >> trigger_extractor
+    build_conf >> trigger_ods
