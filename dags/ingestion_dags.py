@@ -124,12 +124,12 @@ def create_dag(config_path: Path):
             # 写入到 prepare 阶段定义的临时目录
             import uuid
             from dags.adapters.airflow_s3_store import AirflowS3Store
+            from lakehouse_core.io.uri import join_uri
             
             file_id = str(uuid.uuid4())[:8]
-            # 这里的路径设计为 tmp_prefix/task_results/xxx.parquet
-            # 方便后续 compact 任务扫描
-            key = f"{paths_dict['tmp_prefix']}/results/{file_id}.parquet"
-            uri = f"s3://{DEFAULT_BUCKET}/{key}"
+            # paths_dict['tmp_prefix'] 已经是 s3://bucket/path 格式
+            # 直接使用 join_uri 拼接子路径
+            uri = join_uri(paths_dict['tmp_prefix'], f"results/{file_id}.parquet")
             
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
             store = AirflowS3Store(s3_hook)
