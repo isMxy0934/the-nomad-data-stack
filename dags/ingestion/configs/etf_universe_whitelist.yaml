@@ -1,0 +1,29 @@
+target: etf_universe_whitelist
+description: "ETF Universe Whitelist from local CSV"
+schedule_interval: "@daily"
+start_date: "2024-01-01"
+
+# 1. Split Strategy
+partitioner:
+  # Since it's a single local file, we just need one job per partition date.
+  class: "dags.ingestion.standard.partitioners.TimePartitioner"
+  kwargs:
+    method: "range"
+
+# 2. Extraction Logic
+extractor:
+  class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
+  kwargs:
+    # Pointing to the existing function that reads the local CSV
+    function_ref: "dags.extractor.increment.functions.etf.fetch_etf_universe_whitelist:fetch_etf_universe_whitelist"
+
+# 3. Compaction/Storage
+compactor:
+  class: "dags.ingestion.standard.compactors.StandardS3Compactor"
+  kwargs:
+    bucket: "stock-data"
+    # Note: We align the path with the legacy ODS structure
+    prefix_template: "lake/raw/daily/etf_universe_whitelist/local/dt={date}"
+    file_format: "csv"
+    # Whitelist is small, usually no need for complex dedup, but let's keep it clean
+    dedup_cols: ["symbol"]

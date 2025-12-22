@@ -47,6 +47,11 @@ class SqlPartitioner(BasePartitioner):
             configure_s3_access(conn, s3_config)
 
             df = conn.sql(self.query).df()
+        except Exception as e:
+            # If the ODS table doesn't exist yet, we don't want to crash the whole DAG.
+            # Just log the error and return empty, which will skip downstream tasks.
+            print(f"Warning: Failed to execute partitioning query: {e}")
+            return iter([])
         finally:
             conn.close()
 

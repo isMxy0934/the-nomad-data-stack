@@ -1,4 +1,5 @@
 import importlib
+import inspect
 from typing import Any, Optional, Callable
 import pandas as pd
 from datetime import date
@@ -24,8 +25,23 @@ class SimpleFunctionExtractor(BaseExtractor):
 
     def extract(self, job: IngestionJob) -> Optional[pd.DataFrame]:
         # Call the function with unpacked params
+        # We smartly filter params to only what the function accepts
         try:
-            result = self.function(**job.params)
+            sig = inspect.signature(self.function)
+            
+            # Check if function accepts **kwargs
+            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+            
+            call_kwargs = {}
+            if accepts_kwargs:
+                call_kwargs = job.params
+            else:
+                # Only pass args that exist in signature
+                for k, v in job.params.items():
+                    if k in sig.parameters:
+                        call_kwargs[k] = v
+            
+            result = self.function(**call_kwargs)
             
             # Adapt legacy return types if necessary
             if hasattr(result, "csv_bytes"): # CsvPayload support for legacy

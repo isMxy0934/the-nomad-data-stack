@@ -34,6 +34,6 @@ compactor:
   class: "dags.ingestion.standard.compactors.StandardS3Compactor"
   kwargs:
     bucket: "stock-data" # Or use env var in code
-    prefix_template: "lake/raw/daily/{target}/dt={date}"
+    prefix_template: "lake/raw/daily/fund_etf_history/em/akshare/dt={date}"
     file_format: "csv"
     dedup_cols: ["trade_date", "symbol"]

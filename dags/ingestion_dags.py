@@ -94,7 +94,7 @@ def create_dag(config_path: Path):
             return jobs
 
         # --- 2. Execute Phase (Map) ---
-        @task(task_id="execute", map_index_template="{{ task.op_kwargs['job']['params'] }}")
+        @task(task_id="execute", map_index_template="{{ job_dict['params'] }}")
         def execute(job_dict: dict, **context) -> str:
             """
             Executes extraction and saves result to a temp S3 file.
@@ -156,8 +156,9 @@ def create_dag(config_path: Path):
             # Instantiate Compactor
             compactor = instantiate_component(conf["compactor"])
             
-            # Determine partition date (usually execution date)
-            partition_date = context.get("ds")
+            # Determine partition date (align with plan phase logic)
+            dag_run_conf = context.get("dag_run").conf or {}
+            partition_date = dag_run_conf.get("start_date") or get_partition_date_str()
             
             # Run Compact
             metrics = compactor.compact(
