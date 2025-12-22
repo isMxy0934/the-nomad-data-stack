@@ -171,7 +171,7 @@ def create_dag(config_path: Path):
         # --- Workflow ---
         p_paths = prepare_ingestion_paths()
         p_jobs = plan(p_paths)
-        results = execute.expand(job_dict=p_jobs, paths_dict=p_paths)
+        results = execute.partial(paths_dict=p_paths).expand(job_dict=p_jobs)
         commit_ingestion(results, p_paths)
 
     return dag
