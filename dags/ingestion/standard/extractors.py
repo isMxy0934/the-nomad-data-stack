@@ -1,5 +1,5 @@
 import importlib
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Optional, Callable
 import pandas as pd
 from datetime import date
 
@@ -24,14 +24,10 @@ class SimpleFunctionExtractor(BaseExtractor):
 
     def extract(self, job: IngestionJob) -> Optional[pd.DataFrame]:
         # Call the function with unpacked params
-        # Note: We filter params to only what the function accepts? 
-        # For simplicity, we assume the function accepts **kwargs or the specific keys provided by partitioner.
         try:
             result = self.function(**job.params)
             
             # Adapt legacy return types if necessary
-            # Some legacy functions return CsvPayload, some return DataFrame.
-            # This extractor assumes the function has been refactored to return DataFrame or None.
             if hasattr(result, "csv_bytes"): # CsvPayload support for legacy
                  from io import BytesIO
                  return pd.read_csv(BytesIO(result.csv_bytes))
@@ -51,13 +47,13 @@ class AkShareExtractor(BaseExtractor):
     def __init__(
         self, 
         api_ref: str,
-        rename_map: Dict[str, str],
+        rename_map: dict[str, str],
         date_column: str = "trade_date",
-        cols: Optional[List[str]] = None
+        cols: Optional[list[str]] = None
     ):
         """
         Args:
-            api_ref: "akshare.fund_etf_hist_em" (can be string ref or we import akshare inside)
+            api_ref: "akshare.fund_etf_hist_em"
             rename_map: {"日期": "trade_date", "收盘": "close"}
             date_column: The name of the date column *after* renaming.
             cols: List of columns to keep.
@@ -71,22 +67,12 @@ class AkShareExtractor(BaseExtractor):
         import akshare as ak
         
         # 1. Resolve API function
-        # Simple lookup in akshare module
         func_name = self.api_ref.split(".")[-1]
         api_func = getattr(ak, func_name)
         
         # 2. Call API
-        # We need to map standard job params (start_date, end_date, symbol) to AkShare specific args
-        # This is the tricky part: AkShare args vary (symbol vs code, start_date vs period).
-        # We can pass job.params directly, but might need mapping.
-        # For now, assume params match or are handled by **kwargs in API (mostly true for symbol).
-        # Dates are usually required strings.
-        
         call_kwargs = {}
         call_kwargs.update(job.params)
-        
-        # AkShare usually wants 'start_date' as 'YYYYMMDD' or 'YYYY-MM-DD'
-        # We assume params are already strings.
         
         df = api_func(**call_kwargs)
         
@@ -101,13 +87,11 @@ class AkShareExtractor(BaseExtractor):
             existing_cols = [c for c in self.cols if c in df.columns]
             df = df[existing_cols]
             
-        # 5. Filter Date Range (Client-side filtering)
-        # Because many AkShare APIs ignore start/end and return full history
+        # 5. Filter Date Range
         start = job.params.get("start_date")
         end = job.params.get("end_date")
         
         if self.date_column in df.columns:
-            # Ensure it's datetime
             df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
             
             if start:
