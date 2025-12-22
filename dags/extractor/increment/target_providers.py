@@ -156,9 +156,7 @@ def provide_jobs_from_catalog_values(
         values = df[value_column].tolist()
     else:
         if len(df.columns) != 1:
-            raise ValueError(
-                "Query must return exactly 1 column when value_column is not provided"
-            )
+            raise ValueError("Query must return exactly 1 column when value_column is not provided")
         values = df[df.columns[0]].tolist()
 
     jobs: list[dict[str, object]] = []

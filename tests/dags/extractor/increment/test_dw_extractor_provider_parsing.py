@@ -30,4 +30,3 @@ extractors:
     assert providers["a"][0] == "some.module:provide"
     assert providers["a"][1]["sql"] == "select 1"
     assert "b" not in providers
-

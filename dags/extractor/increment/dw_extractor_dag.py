@@ -542,7 +542,9 @@ def create_dw_extractor_dag() -> DAG:
             ctx = get_current_context()
             dag_run = ctx.get("dag_run")
             conf = (dag_run.conf or {}) if dag_run else {}
-            partition_date = str(conf.get("partition_date") or "").strip() or get_partition_date_str()
+            partition_date = (
+                str(conf.get("partition_date") or "").strip() or get_partition_date_str()
+            )
             return _write_raw(
                 target=target,
                 destination_key_template=template,
