@@ -155,7 +155,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
     with dag:
 
         @task
-        def get_date_list(**context: Any) -> list[str]:
+        def get_partition_dates(**context: Any) -> list[str]:
             conf = context.get("dag_run").conf or {}
             start_date = conf.get("start_date")
             end_date = conf.get("end_date")
@@ -174,7 +174,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
 
             return sorted(set(dates))
 
-        date_list = get_date_list()
+        partition_dates = get_partition_dates()
         table_last_tasks = {}
 
         for spec_dict in ordered_specs:
@@ -197,7 +197,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     task_id="prepare",
                     python_callable=_prepare_adapter,
                 ).expand(
-                    op_kwargs=date_list.map(
+                    op_kwargs=partition_dates.map(
                         lambda d, spec=spec_dict: {
                             "base_prefix": str(spec["base_prefix"]),
                             "is_partitioned": bool(spec.get("is_partitioned", True)),

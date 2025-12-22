@@ -12,14 +12,8 @@ layer_dependencies:
     - "dws"
 
 sources:
-  ods_fund_names_em_akshare:
-    path: "lake/raw/daily/fund_name/akshare/em"
-    format: "csv"
-  ods_tool_trade_date_hist_sina_akshare:
-    path: "lake/raw/daily/tool_trade_date_hist/sina/akshare"
-    format: "csv"
-  ods_fund_etf_spot_em_akshare:
-    path: "lake/raw/daily/fund_etf_spot/akshare/em"
+  ods_fund_etf_spot:
+    path: "lake/raw/daily/fund_etf_spot"
     format: "csv"
   ods_etf_universe_whitelist:
     path: "lake/raw/daily/etf_universe_whitelist/local"
