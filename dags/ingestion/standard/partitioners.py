@@ -3,8 +3,11 @@ import pandas as pd
 import duckdb
 from pathlib import Path
 import itertools
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.ingestion.core.interfaces import BasePartitioner, IngestionJob
+from dags.utils.etl_utils import build_s3_connection_config
+from lakehouse_core.compute import configure_s3_access
 
 class SqlPartitioner(BasePartitioner):
     """
@@ -15,11 +18,13 @@ class SqlPartitioner(BasePartitioner):
         self, 
         query: str, 
         item_key: str = "symbol", 
-        catalog_path: str = ".duckdb/catalog.duckdb"
+        catalog_path: str = ".duckdb/catalog.duckdb",
+        aws_conn_id: str = "MINIO_S3"
     ):
         self.query = query
         self.item_key = item_key
         self.catalog_path = catalog_path
+        self.aws_conn_id = aws_conn_id
 
     def generate_jobs(
         self, 
@@ -36,6 +41,11 @@ class SqlPartitioner(BasePartitioner):
 
         conn = duckdb.connect(str(db_path), read_only=True)
         try:
+            # Configure S3 Access for DuckDB to read remote tables
+            s3_hook = S3Hook(aws_conn_id=self.aws_conn_id)
+            s3_config = build_s3_connection_config(s3_hook)
+            configure_s3_access(conn, s3_config)
+
             df = conn.sql(self.query).df()
         finally:
             conn.close()

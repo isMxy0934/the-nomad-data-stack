@@ -1,5 +1,5 @@
 target: fund_etf_history
-description: "ETF history data from AkShare (Migrated)"
+description: "ETF history data from AkShare"
 schedule_interval: "@daily" # Or "0 18 * * *"
 start_date: "2024-01-01"
 
