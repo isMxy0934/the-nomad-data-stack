@@ -1,6 +1,6 @@
 import pandas as pd
 
-def fetch_fund_etf_history_em_akshare(**kwargs) -> pd.DataFrame | None:
+def fetch_fund_etf_history(**kwargs) -> pd.DataFrame | None:
     """
     Fetches ETF history data (Mock implementation for now).
     """

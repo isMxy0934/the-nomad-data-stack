@@ -14,7 +14,7 @@ extractor:
   class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
   kwargs:
     # Pointing to the migrated function
-    function_ref: "dags.ingestion.impl.etf.whitelist:fetch_etf_universe_whitelist"
+    function_ref: "dags.ingestion.impl.etf. fetch_etf_universe_whitelist:fetch_etf_universe_whitelist"
 
 # 3. Compaction/Storage
 compactor:

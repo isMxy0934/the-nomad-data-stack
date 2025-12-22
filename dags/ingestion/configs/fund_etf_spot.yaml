@@ -12,7 +12,7 @@ partitioner:
 extractor:
   class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
   kwargs:
-    function_ref: "dags.ingestion.impl.etf.spot:fetch_fund_etf_spot_em_akshare"
+    function_ref: "dags.ingestion.impl.etf.fetch_fund_etf_spot:fetch_fund_etf_spot"
 
 # 3. Compaction/Storage
 compactor:

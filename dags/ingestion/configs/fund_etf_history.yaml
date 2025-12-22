@@ -27,7 +27,7 @@ extractor:
   class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
   kwargs:
     # Pointing to the migrated function
-    function_ref: "dags.ingestion.impl.etf.history:fetch_fund_etf_history_em_akshare"
+    function_ref: "dags.ingestion.impl.etf.fetch_fund_etf_history:fetch_fund_etf_history"
 
 # 3. Compaction/Storage
 compactor:
