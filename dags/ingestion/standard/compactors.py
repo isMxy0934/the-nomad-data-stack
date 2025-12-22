@@ -9,10 +9,11 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.ingestion.core.interfaces import BaseCompactor
-from lakehouse_core.domain.models import RunSpec
+from dags.utils.etl_utils import build_s3_connection_config
+from lakehouse_core.api import prepare_paths
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.uri import join_uri
-from lakehouse_core.pipeline import cleanup, commit, prepare
+from lakehouse_core.pipeline import cleanup, commit
 
 logger = logging.getLogger(__name__)
 
@@ -53,33 +54,17 @@ class StandardS3Compactor(BaseCompactor):
     ) -> dict[str, Any]:
         """Runs the standard prepare -> load(write) -> commit -> cleanup pipeline."""
 
-        # 1. Prepare Paths
+        # 1. Prepare Paths (Directly via API to avoid RunSpec validation)
         base_prefix = self.prefix_template.format(target=target)
-        spec = RunSpec(
-            layer="raw",
-            table=target,
+        
+        # We bypass the 'prepare' pipeline function because it requires a RunSpec
+        # and RunSpec has strict validation on base_prefix.
+        paths = prepare_paths(
             base_prefix=base_prefix,
-            is_partitioned=True,
-        )
-
-        paths_payload = prepare(
-            spec=spec,
             run_id=run_id,
-            store_namespace=self.bucket,
             partition_date=partition_val,
-        )
-
-        # We need the actual path objects for pipeline functions
-        from lakehouse_core.io.paths import PartitionPaths
-
-        paths = PartitionPaths(
-            partition_date=paths_payload["partition_date"],
-            canonical_prefix=paths_payload["canonical_prefix"],
-            tmp_prefix=paths_payload["tmp_prefix"],
-            tmp_partition_prefix=paths_payload["tmp_partition_prefix"],
-            manifest_path=paths_payload["manifest_path"],
-            success_flag_path=paths_payload["success_flag_path"],
-            partition_date=paths_payload["partition_date"],
+            is_partitioned=True,
+            store_namespace=self.bucket,
         )
 
         # 2. Write to TMP
