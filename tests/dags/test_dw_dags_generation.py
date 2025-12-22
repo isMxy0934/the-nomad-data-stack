@@ -34,10 +34,10 @@ def test_dw_ods_structure():
 
     # Check if some expected tables are in the DAG
     # Based on dags/ods/ods_daily_fund_price_akshare.sql
-    assert "ods_fund_names_em_akshare" in ods_dag.task_group_dict
+    assert "ods_etf_universe_whitelist" in ods_dag.task_group_dict
 
-    assert "ods_fund_names_em_akshare.prepare" in ods_dag.task_dict
-    assert "ods_fund_names_em_akshare.load" in ods_dag.task_dict
-    assert "ods_fund_names_em_akshare.validate" in ods_dag.task_dict
-    assert "ods_fund_names_em_akshare.commit" in ods_dag.task_dict
-    assert "ods_fund_names_em_akshare.cleanup" in ods_dag.task_dict
+    assert "ods_etf_universe_whitelist.prepare" in ods_dag.task_dict
+    assert "ods_etf_universe_whitelist.load" in ods_dag.task_dict
+    assert "ods_etf_universe_whitelist.validate" in ods_dag.task_dict
+    assert "ods_etf_universe_whitelist.commit" in ods_dag.task_dict
+    assert "ods_etf_universe_whitelist.cleanup" in ods_dag.task_dict

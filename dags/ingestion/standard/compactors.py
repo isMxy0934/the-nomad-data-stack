@@ -9,7 +9,6 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.ingestion.core.interfaces import BaseCompactor
-from dags.utils.etl_utils import build_s3_connection_config
 from lakehouse_core.api import prepare_paths
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.uri import join_uri
@@ -56,7 +55,7 @@ class StandardS3Compactor(BaseCompactor):
 
         # 1. Prepare Paths (Directly via API to avoid RunSpec validation)
         base_prefix = self.prefix_template.format(target=target)
-        
+
         # We bypass the 'prepare' pipeline function because it requires a RunSpec
         # and RunSpec has strict validation on base_prefix.
         paths = prepare_paths(
