@@ -7,13 +7,12 @@ from typing import Any
 import pandas as pd
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.ingestion.core.interfaces import BaseCompactor
-from dags.utils.etl_utils import build_s3_connection_config
 from lakehouse_core.domain.models import RunSpec
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.uri import join_uri
 from lakehouse_core.pipeline import cleanup, commit, prepare
-from lakehouse_core.store.stores import ObjectStore
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +44,9 @@ class StandardS3Compactor(BaseCompactor):
         self.dedup_cols = dedup_cols
         self.partition_column = partition_column
 
-        # Initialize ObjectStore via standard factory/hooks
+        # Initialize AirflowS3Store via S3Hook
         s3_hook = S3Hook(aws_conn_id="MINIO_S3")
-        s3_config = build_s3_connection_config(s3_hook)
-        self.store = ObjectStore(s3_config)
+        self.store = AirflowS3Store(s3_hook)
 
     def _commit_single_partition(
         self, df: pd.DataFrame, target: str, partition_val: str, run_id: str
@@ -56,8 +54,6 @@ class StandardS3Compactor(BaseCompactor):
         """Runs the standard prepare -> load(write) -> commit -> cleanup pipeline."""
 
         # 1. Prepare Paths
-        # We wrap the target in a virtual 'RunSpec'
-        # prefix_template here is the base_prefix (e.g. lake/raw/daily/fund_etf)
         base_prefix = self.prefix_template.format(target=target)
         spec = RunSpec(
             layer="raw",
@@ -77,6 +73,7 @@ class StandardS3Compactor(BaseCompactor):
         from lakehouse_core.io.paths import PartitionPaths
 
         paths = PartitionPaths(
+            partition_date=paths_payload["partition_date"],
             canonical_prefix=paths_payload["canonical_prefix"],
             tmp_prefix=paths_payload["tmp_prefix"],
             tmp_partition_prefix=paths_payload["tmp_partition_prefix"],
@@ -85,8 +82,7 @@ class StandardS3Compactor(BaseCompactor):
             partition_date=paths_payload["partition_date"],
         )
 
-        # 2. Write to TMP (The 'Load' equivalent for in-memory DataFrames)
-        # Ensure tmp is clean for idempotency
+        # 2. Write to TMP
         self.store.delete_prefix(paths.tmp_prefix)
 
         filename = f"data.{self.file_format}"
@@ -97,7 +93,7 @@ class StandardS3Compactor(BaseCompactor):
         else:
             content = df.to_parquet(index=False)
 
-        self.store.put_object(tmp_uri, content)
+        self.store.write_bytes(tmp_uri, content)
 
         # 3. Commit
         metrics = {
