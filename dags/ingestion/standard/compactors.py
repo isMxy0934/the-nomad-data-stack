@@ -13,7 +13,7 @@ from lakehouse_core.domain.models import RunSpec
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.uri import join_uri
 from lakehouse_core.pipeline import cleanup, commit, prepare
-from lakehouse_core.store.stores import S3ObjectStore
+from lakehouse_core.store.stores import ObjectStore
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class StandardS3Compactor(BaseCompactor):
         # Initialize ObjectStore via standard factory/hooks
         s3_hook = S3Hook(aws_conn_id="MINIO_S3")
         s3_config = build_s3_connection_config(s3_hook)
-        self.store = S3ObjectStore(s3_config)
+        self.store = ObjectStore(s3_config)
 
     def _commit_single_partition(
         self, df: pd.DataFrame, target: str, partition_val: str, run_id: str
