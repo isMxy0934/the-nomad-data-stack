@@ -1,0 +1,39 @@
+target: fund_etf_history
+description: "ETF history data from AkShare (Migrated)"
+schedule_interval: "@daily" # Or "0 18 * * *"
+start_date: "2024-01-01"
+
+# 1. Split Strategy
+partitioner:
+  class: "dags.ingestion.standard.partitioners.CompositePartitioner"
+  kwargs:
+    strategies:
+      # Dimension 1: Symbol (from DuckDB)
+      - class: "dags.ingestion.standard.partitioners.SqlPartitioner"
+        kwargs:
+          query: "SELECT symbol FROM ods.ods_etf_universe_whitelist WHERE enabled = 1"
+          item_key: "symbol"
+          
+      # Dimension 2: Time (Passthrough Range)
+      # We use 'range' mode to pass the full date range to the fetcher, 
+      # assuming the fetcher handles the date filtering.
+      - class: "dags.ingestion.standard.partitioners.TimePartitioner"
+        kwargs:
+          method: "range" 
+          # No frequency needed for range mode
+
+# 2. Extraction Logic
+extractor:
+  class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
+  kwargs:
+    # Pointing to the existing legacy function
+    function_ref: "dags.extractor.increment.functions.etf.fetch_fund_etf_history_em_akshare:fetch_fund_etf_history_em_akshare"
+
+# 3. Compaction/Storage
+compactor:
+  class: "dags.ingestion.standard.compactors.StandardS3Compactor"
+  kwargs:
+    bucket: "stock-data" # Or use env var in code
+    prefix_template: "lake/raw/daily/{target}/dt={date}"
+    file_format: "csv"
+    dedup_cols: ["trade_date", "symbol"]
