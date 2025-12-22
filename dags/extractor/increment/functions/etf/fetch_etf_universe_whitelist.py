@@ -1,5 +1,7 @@
 import os
+
 import pandas as pd
+
 from dags.utils.extractor_utils import CsvPayload
 from lakehouse_core.io.time import get_date_str
 
