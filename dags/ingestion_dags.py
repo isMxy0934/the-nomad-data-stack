@@ -19,6 +19,7 @@ import pandas as pd
 
 from dags.ingestion.core.loader import instantiate_component
 from dags.ingestion.core.interfaces import IngestionJob
+from lakehouse_core.io.time import get_partition_date_str
 
 logger = logging.getLogger(__name__)
 
@@ -74,13 +75,12 @@ def create_dag(config_path: Path):
             partitioner = instantiate_component(conf["partitioner"])
             
             # Determine logic date range
-            # If manually triggered with conf={"start_date": "...", "end_date": "..."}, use that.
-            # Otherwise use data_interval.
+            # Priority: 1. dag_run.conf, 2. get_partition_date_str()
             dag_run_conf = context.get("dag_run").conf or {}
-            execution_date = context.get("ds") # YYYY-MM-DD
+            default_date = get_partition_date_str()
             
-            start = dag_run_conf.get("start_date") or execution_date
-            end = dag_run_conf.get("end_date") or execution_date
+            start = dag_run_conf.get("start_date") or default_date
+            end = dag_run_conf.get("end_date") or default_date
             
             logger.info(f"Planning jobs for {start} to {end}")
             
