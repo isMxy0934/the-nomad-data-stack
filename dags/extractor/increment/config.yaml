@@ -13,3 +13,8 @@ extractors:
     tags: ["extractor", "akshare"]
     destination_key_template: "lake/raw/daily/fund_etf_spot/akshare/em/dt={PARTITION_DATE}/data.csv"
     fetcher: "dags.extractor.increment.functions.etf.fetch_fund_etf_spot_em_akshare:fetch_fund_etf_spot_em_akshare"
+
+  - target: etf_universe_whitelist
+    tags: ["extractor", "whitelist"]
+    destination_key_template: "lake/raw/daily/etf_universe_whitelist/local/dt={PARTITION_DATE}/data.csv"
+    fetcher: "dags.extractor.increment.functions.etf.fetch_etf_universe_whitelist:fetch_etf_universe_whitelist"
