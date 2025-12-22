@@ -1,10 +1,14 @@
 import importlib
 import inspect
+import logging
 from typing import Any, Optional, Callable
 import pandas as pd
 from datetime import date
 
 from dags.ingestion.core.interfaces import BaseExtractor, IngestionJob
+from lakehouse_core.domain.observability import log_event
+
+logger = logging.getLogger(__name__)
 
 class SimpleFunctionExtractor(BaseExtractor):
     """
@@ -50,7 +54,7 @@ class SimpleFunctionExtractor(BaseExtractor):
             
             return result
         except Exception as e:
-            print(f"Extraction failed for {job.params}: {e}")
+            log_event(logger, "Extraction failed", params=str(job.params), error=str(e))
             raise
 
 class AkShareExtractor(BaseExtractor):
@@ -82,37 +86,46 @@ class AkShareExtractor(BaseExtractor):
     def extract(self, job: IngestionJob) -> Optional[pd.DataFrame]:
         import akshare as ak
         
-        # 1. Resolve API function
-        func_name = self.api_ref.split(".")[-1]
-        api_func = getattr(ak, func_name)
-        
-        # 2. Call API
-        call_kwargs = {}
-        call_kwargs.update(job.params)
-        
-        df = api_func(**call_kwargs)
-        
-        if df is None or df.empty:
-            return None
+        try:
+            # 1. Resolve API function
+            func_name = self.api_ref.split(".")[-1]
+            api_func = getattr(ak, func_name)
             
-        # 3. Rename
-        df = df.rename(columns=self.rename_map)
-        
-        # 4. Filter Columns
-        if self.cols:
-            existing_cols = [c for c in self.cols if c in df.columns]
-            df = df[existing_cols]
+            # 2. Call API
+            call_kwargs = {}
+            call_kwargs.update(job.params)
             
-        # 5. Filter Date Range
-        start = job.params.get("start_date")
-        end = job.params.get("end_date")
-        
-        if self.date_column in df.columns:
-            df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
+            # log_event(logger, "Calling AkShare API", api=func_name, params=str(call_kwargs))
             
-            if start:
-                df = df[df[self.date_column] >= pd.Timestamp(start)]
-            if end:
-                df = df[df[self.date_column] <= pd.Timestamp(end)]
-        
-        return df
+            df = api_func(**call_kwargs)
+            
+            if df is None or df.empty:
+                log_event(logger, "AkShare returned empty", api=func_name)
+                return None
+                
+            # 3. Rename
+            df = df.rename(columns=self.rename_map)
+            
+            # 4. Filter Columns
+            if self.cols:
+                existing_cols = [c for c in self.cols if c in df.columns]
+                df = df[existing_cols]
+                
+            # 5. Filter Date Range
+            start = job.params.get("start_date")
+            end = job.params.get("end_date")
+            
+            if self.date_column in df.columns:
+                df[self.date_column] = pd.to_datetime(df[self.date_column], errors="coerce")
+                
+                if start:
+                    df = df[df[self.date_column] >= pd.Timestamp(start)]
+                if end:
+                    df = df[df[self.date_column] <= pd.Timestamp(end)]
+            
+            log_event(logger, "AkShare extraction success", api=func_name, row_count=len(df))
+            return df
+            
+        except Exception as e:
+            log_event(logger, "AkShare extraction failed", api=self.api_ref, error=str(e))
+            raise

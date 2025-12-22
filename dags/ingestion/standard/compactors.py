@@ -2,9 +2,13 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import json
 import os
+import logging
 from datetime import datetime, date
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dags.ingestion.core.interfaces import BaseCompactor
+from lakehouse_core.domain.observability import log_event
+
+logger = logging.getLogger(__name__)
 
 class StandardS3Compactor(BaseCompactor):
     """
@@ -78,7 +82,7 @@ class StandardS3Compactor(BaseCompactor):
         # 1. Merge
         valid_frames = [df for df in results if df is not None and not df.empty]
         if not valid_frames:
-            print(f"No data to compact for {target}.")
+            log_event(logger, "No data to compact", target=target)
             return {"row_count": 0, "status": "skipped"}
             
         merged_df = pd.concat(valid_frames, ignore_index=True)
@@ -86,9 +90,13 @@ class StandardS3Compactor(BaseCompactor):
         # 2. Dedupe
         if self.dedup_cols:
             # Drop dedup logic is same
+            before = len(merged_df)
             available_cols = [c for c in self.dedup_cols if c in merged_df.columns]
             if available_cols:
                 merged_df = merged_df.drop_duplicates(subset=available_cols, keep="last")
+            
+            dropped_count = before - len(merged_df)
+            log_event(logger, "Deduplication finished", before=before, after=len(merged_df), dropped=dropped_count)
 
         # 3. Partition & Write
         paths = []

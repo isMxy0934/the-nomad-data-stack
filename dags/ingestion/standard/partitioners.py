@@ -3,11 +3,15 @@ import pandas as pd
 import duckdb
 from pathlib import Path
 import itertools
+import logging
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.ingestion.core.interfaces import BasePartitioner, IngestionJob
 from dags.utils.etl_utils import build_s3_connection_config
 from lakehouse_core.compute import configure_s3_access
+from lakehouse_core.domain.observability import log_event
+
+logger = logging.getLogger(__name__)
 
 class SqlPartitioner(BasePartitioner):
     """
@@ -50,12 +54,13 @@ class SqlPartitioner(BasePartitioner):
         except Exception as e:
             # If the ODS table doesn't exist yet, we don't want to crash the whole DAG.
             # Just log the error and return empty, which will skip downstream tasks.
-            print(f"Warning: Failed to execute partitioning query: {e}")
+            log_event(logger, "Partitioning failed (graceful skip)", error=str(e), query=self.query)
             return iter([])
         finally:
             conn.close()
 
         if df.empty:
+            log_event(logger, "Partitioning query returned empty result", query=self.query)
             return iter([])
         
         # Assume the query returns the item in the first column if not specified, 
@@ -66,6 +71,8 @@ class SqlPartitioner(BasePartitioner):
             
         items = df[target_col].dropna().unique().tolist()
         
+        log_event(logger, "Partitioning via SQL success", item_count=len(items), strategy="SqlPartitioner")
+
         for item in items:
             yield IngestionJob(params={self.item_key: str(item)})
 
