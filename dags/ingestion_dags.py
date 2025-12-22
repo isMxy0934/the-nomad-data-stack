@@ -14,6 +14,17 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+import logging
+import yaml
+from datetime import datetime, timedelta
+from io import BytesIO
+from pathlib import Path
+from typing import Any
+
+from airflow import DAG
+from airflow.decorators import task
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
 from dags.ingestion.core.interfaces import IngestionJob
 from dags.ingestion.core.loader import instantiate_component
 from lakehouse_core.api import prepare_paths
@@ -23,6 +34,11 @@ from lakehouse_core.pipeline import commit, cleanup
 logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).parent / "ingestion" / "configs"
+DEFAULT_ARGS = {
+    "owner": "ingestion",
+    "retries": 1,
+    "retry_delay": timedelta(minutes=1),
+}
 DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET = "stock-data"
 TMP_PREFIX_BASE = "tmp/ingestion"

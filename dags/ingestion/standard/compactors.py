@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
