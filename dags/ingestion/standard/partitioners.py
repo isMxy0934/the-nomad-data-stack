@@ -167,3 +167,22 @@ class CompositePartitioner(BasePartitioner):
                 merged_meta.update(job.meta)
             
             yield IngestionJob(params=merged_params, meta=merged_meta)
+
+class SingleJobPartitioner(BasePartitioner):
+    """
+    A minimal partitioner that yields exactly one job with no parameters.
+    Useful for:
+    - Scripts that fetch a full snapshot (e.g. local files).
+    - APIs that don't accept parameters.
+    - Tasks where partitioning is handled internally by the extractor.
+    """
+    def generate_jobs(
+        self, 
+        start_date: Optional[str] = None, 
+        end_date: Optional[str] = None, 
+        **kwargs
+    ) -> Iterator[IngestionJob]:
+        # Yield one empty job. The Extractor will receive empty params.
+        # The storage partition date will be handled by the DAG/Compactor context, 
+        # not by the job params.
+        yield IngestionJob(params={})

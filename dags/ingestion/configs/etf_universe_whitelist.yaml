@@ -5,10 +5,9 @@ start_date: "2024-01-01"
 
 # 1. Split Strategy
 partitioner:
-  # Since it's a single local file, we just need one job per partition date.
-  class: "dags.ingestion.standard.partitioners.TimePartitioner"
-  kwargs:
-    method: "range"
+  # Since it's a single local file, we just need one job.
+  # The storage partition (dt=...) is determined by the DAG execution date, not the partitioner.
+  class: "dags.ingestion.standard.partitioners.SingleJobPartitioner"
 
 # 2. Extraction Logic
 extractor:
