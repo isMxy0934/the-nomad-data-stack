@@ -152,8 +152,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
         tags=["dw"],
     )
 
-        with dag:
-
+    with dag:
         @task
         def get_partition_dates(**context: Any) -> list[str]:
             conf = context.get("dag_run").conf or {}
