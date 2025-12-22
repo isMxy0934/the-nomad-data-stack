@@ -14,8 +14,10 @@ class IngestionJob:
         params: The dictionary of arguments passed to the Extractor (e.g., {'symbol': 'AAPL', 'start_date': ...})
         meta: Optional metadata used for tracking or compaction (e.g., {'shard_id': '2023-01'})
     """
+
     params: dict[str, Any]
     meta: dict[str, Any] = field(default_factory=dict)
+
 
 class BasePartitioner(ABC):
     """
@@ -24,15 +26,13 @@ class BasePartitioner(ABC):
 
     @abstractmethod
     def generate_jobs(
-        self,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        **kwargs
+        self, start_date: str | None = None, end_date: str | None = None, **kwargs
     ) -> Iterator[IngestionJob]:
         """
         Generates a stream of jobs based on the time range and configuration.
         """
         pass
+
 
 class BaseExtractor(ABC):
     """
@@ -48,6 +48,7 @@ class BaseExtractor(ABC):
         """
         pass
 
+
 class BaseCompactor(ABC):
     """
     Responsible for persisting the extracted data into the final storage.
@@ -56,11 +57,7 @@ class BaseCompactor(ABC):
 
     @abstractmethod
     def compact(
-        self,
-        results: list[Any],
-        target: str,
-        partition_date: str,
-        **kwargs
+        self, results: list[Any], target: str, partition_date: str, **kwargs
     ) -> dict[str, Any]:
         """
         Compacts the results.

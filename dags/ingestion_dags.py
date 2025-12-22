@@ -26,14 +26,16 @@ DEFAULT_ARGS = {
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
 }
-TMP_BUCKET = "stock-data" # Should come from env
+TMP_BUCKET = "stock-data"  # Should come from env
 TMP_PREFIX = "tmp/ingestion"
+
 
 def _load_yaml_configs() -> list[Path]:
     if not CONFIG_DIR.exists():
         logger.warning(f"Config directory not found: {CONFIG_DIR}")
         return []
     return list(CONFIG_DIR.glob("*.yaml"))
+
 
 def create_dag(config_path: Path):
     """
@@ -61,7 +63,7 @@ def create_dag(config_path: Path):
         start_date=start_date,
         catchup=catchup,
         tags=["ingestion", conf["target"]],
-        max_active_runs=1
+        max_active_runs=1,
     )
 
     with dag:
@@ -108,13 +110,14 @@ def create_dag(config_path: Path):
 
             if df is None or df.empty:
                 logger.info("No data extracted.")
-                return "" # Skip
+                return ""  # Skip
 
             # Save to Tmp S3 to avoid XCom limit
             # Path: tmp/ingestion/{dag_run_id}/{task_id}/{index}.parquet
             run_id = context["run_id"]
             # We use a hash or just random string for uniqueness if index is tricky
             import uuid
+
             fname = f"{uuid.uuid4()}.parquet"
             key = f"{TMP_PREFIX}/{dag_id}/{run_id}/{fname}"
 
@@ -147,7 +150,7 @@ def create_dag(config_path: Path):
             for key in valid_keys:
                 obj = s3_hook.get_key(key, bucket_name=TMP_BUCKET)
                 if obj:
-                    buf = BytesIO(obj.get()['Body'].read())
+                    buf = BytesIO(obj.get()["Body"].read())
                     frames.append(pd.read_parquet(buf))
 
             # Instantiate Compactor
@@ -159,9 +162,7 @@ def create_dag(config_path: Path):
 
             # Run Compact
             metrics = compactor.compact(
-                results=frames,
-                target=conf["target"],
-                partition_date=partition_date
+                results=frames, target=conf["target"], partition_date=partition_date
             )
 
             logger.info(f"Compaction finished: {metrics}")
@@ -173,9 +174,10 @@ def create_dag(config_path: Path):
         # --- Graph Definition ---
         plan_task = plan()
         execute_task = execute.expand(job_dict=plan_task)
-        compact_task = compact(s3_keys=execute_task)
+        compact(s3_keys=execute_task)
 
     return dag
+
 
 # Scan and Generate
 for config_file in _load_yaml_configs():

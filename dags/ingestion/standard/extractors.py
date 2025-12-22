@@ -10,12 +10,14 @@ from lakehouse_core.domain.observability import log_event
 
 logger = logging.getLogger(__name__)
 
+
 class SimpleFunctionExtractor(BaseExtractor):
     """
     A generic extractor that wraps a simple Python function.
     Useful for migrating existing functional code.
     The function should accept **kwargs matching the job params.
     """
+
     def __init__(self, function_ref: str):
         self.function = self._resolve_callable(function_ref)
 
@@ -33,7 +35,9 @@ class SimpleFunctionExtractor(BaseExtractor):
             sig = inspect.signature(self.function)
 
             # Check if function accepts **kwargs
-            accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+            accepts_kwargs = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
 
             call_kwargs = {}
             if accepts_kwargs:
@@ -47,14 +51,16 @@ class SimpleFunctionExtractor(BaseExtractor):
             result = self.function(**call_kwargs)
 
             # Adapt legacy return types if necessary
-            if hasattr(result, "csv_bytes"): # CsvPayload support for legacy
-                 from io import BytesIO
-                 return pd.read_csv(BytesIO(result.csv_bytes))
+            if hasattr(result, "csv_bytes"):  # CsvPayload support for legacy
+                from io import BytesIO
+
+                return pd.read_csv(BytesIO(result.csv_bytes))
 
             return result
         except Exception as e:
             log_event(logger, "Extraction failed", params=str(job.params), error=str(e))
             raise
+
 
 class AkShareExtractor(BaseExtractor):
     """
@@ -63,12 +69,13 @@ class AkShareExtractor(BaseExtractor):
     - Date filtering (start_date/end_date)
     - Standardizing trade_date column
     """
+
     def __init__(
         self,
         api_ref: str,
         rename_map: dict[str, str],
         date_column: str = "trade_date",
-        cols: list[str] | None = None
+        cols: list[str] | None = None,
     ):
         """
         Args:

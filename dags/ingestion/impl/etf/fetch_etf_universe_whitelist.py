@@ -7,6 +7,7 @@ from lakehouse_core.io.time import get_date_str
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 WHITELIST_FILE = os.path.join(CURRENT_DIR, "etf_universe_whitelist.csv")
 
+
 def fetch_etf_universe_whitelist(**kwargs) -> pd.DataFrame | None:
     """
     Fetches the ETF whitelist from a local CSV file.

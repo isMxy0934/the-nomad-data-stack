@@ -14,17 +14,19 @@ from lakehouse_core.domain.observability import log_event
 
 logger = logging.getLogger(__name__)
 
+
 class SqlPartitioner(BasePartitioner):
     """
     Partitions jobs based on a SQL query against the local DuckDB catalog.
     Useful for getting a list of symbols (whitelist).
     """
+
     def __init__(
         self,
         query: str,
         item_key: str = "symbol",
         catalog_path: str = ".duckdb/catalog.duckdb",
-        aws_conn_id: str = "MINIO_S3"
+        aws_conn_id: str = "MINIO_S3",
     ):
         self.query = query
         self.item_key = item_key
@@ -32,12 +34,8 @@ class SqlPartitioner(BasePartitioner):
         self.aws_conn_id = aws_conn_id
 
     def generate_jobs(
-        self,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        **kwargs
+        self, start_date: str | None = None, end_date: str | None = None, **kwargs
     ) -> Iterator[IngestionJob]:
-
         db_path = Path(self.catalog_path)
         if not db_path.exists():
             # Fallback or error? For now, empty list to avoid crashing during initial setup
@@ -72,7 +70,9 @@ class SqlPartitioner(BasePartitioner):
 
         items = df[target_col].dropna().unique().tolist()
 
-        log_event(logger, "Partitioning via SQL success", item_count=len(items), strategy="SqlPartitioner")
+        log_event(
+            logger, "Partitioning via SQL success", item_count=len(items), strategy="SqlPartitioner"
+        )
 
         for item in items:
             yield IngestionJob(params={self.item_key: str(item)})
@@ -85,17 +85,14 @@ class TimePartitioner(BasePartitioner):
     - 'range': Passes the full start/end date as a single job (passthrough).
     - 'chunk': Splits the range into smaller chunks (e.g., monthly).
     """
+
     def __init__(self, method: str = "range", freq: str = "1M"):
         self.method = method
         self.freq = freq
 
     def generate_jobs(
-        self,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        **kwargs
+        self, start_date: str | None = None, end_date: str | None = None, **kwargs
     ) -> Iterator[IngestionJob]:
-
         if not start_date:
             # If no start date provided (e.g. ad-hoc run without params),
             # we might rely on default behavior or return empty.
@@ -118,8 +115,8 @@ class TimePartitioner(BasePartitioner):
             dates = pd.date_range(start=start_date, end=end_date, freq=self.freq)
             # Handle edge case: date_range might be empty if start=end and freq is large
             if len(dates) == 0:
-                 yield IngestionJob(params={"start_date": start_date, "end_date": end_date})
-                 return
+                yield IngestionJob(params={"start_date": start_date, "end_date": end_date})
+                return
 
             # This simple logic needs refinement for precise day-to-day chunking
             # But for now, basic implementation:
@@ -138,9 +135,9 @@ class TimePartitioner(BasePartitioner):
                 yield IngestionJob(
                     params={
                         "start_date": cursor.strftime("%Y-%m-%d"),
-                        "end_date": chunk_end.strftime("%Y-%m-%d")
+                        "end_date": chunk_end.strftime("%Y-%m-%d"),
                     },
-                    meta={"shard_id": cursor.strftime("%Y%m")}
+                    meta={"shard_id": cursor.strftime("%Y%m")},
                 )
                 cursor = next_cursor
 
@@ -149,16 +146,13 @@ class CompositePartitioner(BasePartitioner):
     """
     Combines multiple partitioners using Cartesian Product.
     """
+
     def __init__(self, strategies: list[BasePartitioner]):
         self.strategies = strategies
 
     def generate_jobs(
-        self,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        **kwargs
+        self, start_date: str | None = None, end_date: str | None = None, **kwargs
     ) -> Iterator[IngestionJob]:
-
         # 1. Generate lists of jobs from each strategy
         job_lists = []
         for strategy in self.strategies:
@@ -176,6 +170,7 @@ class CompositePartitioner(BasePartitioner):
 
             yield IngestionJob(params=merged_params, meta=merged_meta)
 
+
 class SingleJobPartitioner(BasePartitioner):
     """
     A minimal partitioner that yields exactly one job with no parameters.
@@ -184,11 +179,9 @@ class SingleJobPartitioner(BasePartitioner):
     - APIs that don't accept parameters.
     - Tasks where partitioning is handled internally by the extractor.
     """
+
     def generate_jobs(
-        self,
-        start_date: str | None = None,
-        end_date: str | None = None,
-        **kwargs
+        self, start_date: str | None = None, end_date: str | None = None, **kwargs
     ) -> Iterator[IngestionJob]:
         # Yield one empty job. The Extractor will receive empty params.
         # The storage partition date will be handled by the DAG/Compactor context,

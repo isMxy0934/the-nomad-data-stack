@@ -13,7 +13,7 @@ def fetch_fund_etf_history(**kwargs) -> pd.DataFrame | None:
         {
             "symbol": [symbol],
             "name": [symbol],
-            "trade_date": ["2021-01-01"], # Mock date
+            "trade_date": ["2021-01-01"],  # Mock date
             "close": [10.0],
             "open": [9.0],
             "high": [11.0],

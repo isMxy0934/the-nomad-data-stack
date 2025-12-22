@@ -16,7 +16,8 @@ def load_class(class_path: str) -> type[Any]:
         cls = getattr(module, class_name)
         return cls
     except (ImportError, AttributeError) as e:
-        raise ImportError(f"Could not load class {class_path}: {e}")
+        raise ImportError(f"Could not load class {class_path}: {e}") from e
+
 
 def instantiate_component(config: dict) -> Any:
     """

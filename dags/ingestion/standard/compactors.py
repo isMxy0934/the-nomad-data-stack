@@ -11,18 +11,20 @@ from lakehouse_core.domain.observability import log_event
 
 logger = logging.getLogger(__name__)
 
+
 class StandardS3Compactor(BaseCompactor):
     """
     Standard compactor that writes DataFrames to S3 in CSV/Parquet format.
     Handles partitioning (by DAG date or data column) and atomic writes.
     """
+
     def __init__(
         self,
         bucket: str,
         prefix_template: str,
         file_format: str = "csv",
         dedup_cols: list[str] | None = None,
-        partition_column: str | None = None
+        partition_column: str | None = None,
     ):
         """
         Args:
@@ -65,21 +67,18 @@ class StandardS3Compactor(BaseCompactor):
             "partition_date": partition_val,
             "row_count": len(df),
             "generated_at": datetime.now().isoformat(),
-            "columns": list(df.columns)
+            "columns": list(df.columns),
         }
-        self.s3_hook.load_string(json.dumps(manifest), key=manifest_key, bucket_name=self.bucket, replace=True)
+        self.s3_hook.load_string(
+            json.dumps(manifest), key=manifest_key, bucket_name=self.bucket, replace=True
+        )
         self.s3_hook.load_string("", key=success_key, bucket_name=self.bucket, replace=True)
 
         return f"s3://{self.bucket}/{data_key}"
 
     def compact(
-        self,
-        results: list[pd.DataFrame],
-        target: str,
-        partition_date: str,
-        **kwargs
+        self, results: list[pd.DataFrame], target: str, partition_date: str, **kwargs
     ) -> dict[str, Any]:
-
         # 1. Merge
         valid_frames = [df for df in results if df is not None and not df.empty]
         if not valid_frames:
@@ -97,22 +96,30 @@ class StandardS3Compactor(BaseCompactor):
                 merged_df = merged_df.drop_duplicates(subset=available_cols, keep="last")
 
             dropped_count = before - len(merged_df)
-            log_event(logger, "Deduplication finished", before=before, after=len(merged_df), dropped=dropped_count)
+            log_event(
+                logger,
+                "Deduplication finished",
+                before=before,
+                after=len(merged_df),
+                dropped=dropped_count,
+            )
 
         # 3. Partition & Write
         paths = []
 
         if self.partition_column:
             if self.partition_column not in merged_df.columns:
-                 # Fallback or error? Let's error to be safe.
-                 # Or warn and dump to default partition?
-                 # Error is better to prevent data pollution.
-                 raise ValueError(f"Partition column '{self.partition_column}' not found in data.")
+                # Fallback or error? Let's error to be safe.
+                # Or warn and dump to default partition?
+                # Error is better to prevent data pollution.
+                raise ValueError(f"Partition column '{self.partition_column}' not found in data.")
 
             # Ensure it's string-like for grouping
             # If it's date/datetime, convert to YYYY-MM-DD string
             if pd.api.types.is_datetime64_any_dtype(merged_df[self.partition_column]):
-                 merged_df[self.partition_column] = merged_df[self.partition_column].dt.strftime("%Y-%m-%d")
+                merged_df[self.partition_column] = merged_df[self.partition_column].dt.strftime(
+                    "%Y-%m-%d"
+                )
 
             # GroupBy
             for val, group in merged_df.groupby(self.partition_column):
