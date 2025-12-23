@@ -50,6 +50,7 @@ def sample_partition_paths_dict():
         "tmp_partition_prefix": "s3://bucket/lake/raw/daily/target/_tmp/run_123/dt=2024-01-01",
         "manifest_path": "s3://bucket/lake/raw/daily/target/dt=2024-01-01/manifest.json",
         "success_flag_path": "s3://bucket/lake/raw/daily/target/dt=2024-01-01/_SUCCESS",
+        "run_id": "test_run_123",
     }
 
 
@@ -62,6 +63,7 @@ def sample_non_partition_paths_dict():
         "tmp_prefix": "s3://bucket/lake/raw/daily/target/_tmp/run_123",
         "manifest_path": "s3://bucket/lake/raw/daily/target/manifest.json",
         "success_flag_path": "s3://bucket/lake/raw/daily/target/_SUCCESS",
+        "run_id": "test_run_123",
     }
 
 
@@ -114,7 +116,7 @@ class TestStandardS3Compactor:
         assert paths.canonical_prefix == sample_non_partition_paths_dict["canonical_prefix"]
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
-    @patch("dags.ingestion.standard.compactors.validate_dataset")
+    @patch("dags.ingestion.standard.compactors.validate")
     @patch("dags.ingestion.standard.compactors.commit")
     @patch("dags.ingestion.standard.compactors.cleanup")
     @patch("pandas.read_parquet")
@@ -228,7 +230,7 @@ class TestStandardS3Compactor:
             )
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
-    @patch("dags.ingestion.standard.compactors.validate_dataset")
+    @patch("dags.ingestion.standard.compactors.validate")
     @patch("dags.ingestion.standard.compactors.commit")
     @patch("dags.ingestion.standard.compactors.cleanup")
     @patch("pandas.read_parquet")
@@ -291,7 +293,7 @@ class TestStandardS3Compactor:
         assert b"id,value" in written_content or b"value,id" in written_content
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
-    @patch("dags.ingestion.standard.compactors.validate_dataset")
+    @patch("dags.ingestion.standard.compactors.validate")
     @patch("dags.ingestion.standard.compactors.commit")
     @patch("dags.ingestion.standard.compactors.cleanup")
     def test_compact_with_partition_column(
@@ -343,7 +345,7 @@ class TestStandardS3Compactor:
         mock_store.read_bytes.side_effect = track_read_bytes
 
         # Mock validate to return actual metrics based on input
-        def mock_validate_side_effect(paths_dict, metrics, s3_hook, file_format):
+        def mock_validate_side_effect(store, paths, metrics, file_format):
             # Return the actual metrics passed in
             return metrics
 
@@ -390,7 +392,7 @@ class TestStandardS3Compactor:
         assert "2024-01-02" in partition_dates
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
-    @patch("dags.ingestion.standard.compactors.validate_dataset")
+    @patch("dags.ingestion.standard.compactors.validate")
     @patch("dags.ingestion.standard.compactors.commit")
     @patch("dags.ingestion.standard.compactors.cleanup")
     def test_compact_partition_column_non_partitioned_paths(

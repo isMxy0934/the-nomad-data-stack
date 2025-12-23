@@ -64,25 +64,37 @@ def create_dag(config_path: Path):
         @task
         def prepare_ingestion_paths(**context) -> dict:
             dag_run_conf = context.get("dag_run").conf or {}
-            partition_date = dag_run_conf.get("start_date") or get_partition_date_str()
+            partition_date = (
+                dag_run_conf.get("partition_date")
+                or dag_run_conf.get("start_date")
+                or get_partition_date_str()
+            )
 
             # Sanitize run_id for S3/MinIO compatibility (remove :, +, . etc)
             raw_run_id = context["run_id"]
             safe_run_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_run_id)
 
-            # 使用 core API 生成标准路径
-            base_prefix = f"lake/raw/daily/{target}"
+            # Get prefix_template from compactor config
+            compactor_kwargs = conf.get("compactor", {}).get("kwargs", {})
+            base_prefix = compactor_kwargs.get("prefix_template")
+            if not base_prefix:
+                # Fallback to legacy default if missing
+                base_prefix = f"lake/raw/daily/{target}"
+
+            bucket = compactor_kwargs.get("bucket", DEFAULT_BUCKET)
+
             paths = prepare_paths(
                 base_prefix=base_prefix,
                 run_id=safe_run_id,
                 partition_date=partition_date,
                 is_partitioned=True,
-                store_namespace=DEFAULT_BUCKET,
+                store_namespace=bucket,
             )
             return {
                 "partition_date": partition_date,
                 "partitioned": True,
                 "base_prefix": base_prefix,
+                "run_id": safe_run_id,
                 "tmp_prefix": paths.tmp_prefix,
                 "tmp_partition_prefix": paths.tmp_partition_prefix,
                 "canonical_prefix": paths.canonical_prefix,
@@ -94,10 +106,14 @@ def create_dag(config_path: Path):
         @task
         def plan(paths_dict: dict, **context) -> list[dict]:
             partitioner = instantiate_component(conf["partitioner"])
-            start = paths_dict["partition_date"]
+            dag_run_conf = context.get("dag_run").conf or {}
+
+            # Prefer explicit range from dag_run.conf, fallback to paths_dict.partition_date
+            start = dag_run_conf.get("start_date") or paths_dict["partition_date"]
+            end = dag_run_conf.get("end_date") or start
 
             jobs = []
-            for job in partitioner.generate_jobs(start_date=start, end_date=start):
+            for job in partitioner.generate_jobs(start_date=start, end_date=end):
                 jobs.append({"params": job.params, "meta": job.meta})
             return jobs
 
@@ -118,8 +134,7 @@ def create_dag(config_path: Path):
             from lakehouse_core.io.uri import join_uri
 
             file_id = str(uuid.uuid4())[:8]
-            # paths_dict['tmp_prefix'] 已经是 s3://bucket/path 格式
-            # 直接使用 join_uri 拼接子路径
+            # Use safe run_id from paths_dict
             uri = join_uri(paths_dict["tmp_prefix"], f"results/{file_id}.parquet")
 
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
@@ -143,7 +158,6 @@ def create_dag(config_path: Path):
             logger.info(f"Total rows from all extraction jobs: {total_rows}")
 
             # 使用 StandardS3Compactor 处理最终合并和提交
-            # compact() 内部包含: Load → Validate → Commit → Cleanup
             compactor = instantiate_component(conf["compactor"])
 
             publish_result = compactor.compact(
@@ -151,15 +165,9 @@ def create_dag(config_path: Path):
                 target=target,
                 partition_date=paths_dict["partition_date"],
                 paths_dict=paths_dict,
-                run_id=context["run_id"],
+                run_id=paths_dict["run_id"],
             )
             logger.info(f"Compaction and commit completed: {publish_result}")
-
-            return {
-                "status": "success",
-                "manifest_path": publish_result.get("manifest_path", ""),
-                "total_rows": total_rows,
-            }
 
         # --- Workflow ---
         p_paths = prepare_ingestion_paths()
