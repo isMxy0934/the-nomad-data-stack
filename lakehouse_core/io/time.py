@@ -100,20 +100,20 @@ def normalize_to_partition_format(date_value: date | datetime | str) -> str:
             try:
                 datetime.strptime(date_str, "%Y-%m-%d")
                 return date_str
-            except ValueError:
+            except ValueError as err:
                 raise ValueError(
                     f"Invalid date string '{date_value}': not a valid YYYY-MM-DD date"
-                )
+                ) from err
 
         # YYYYMMDD format - convert to YYYY-MM-DD
         if len(date_str) == 8 and date_str.isdigit():
             try:
                 parsed = datetime.strptime(date_str, "%Y%m%d")
                 return parsed.strftime("%Y-%m-%d")
-            except ValueError:
+            except ValueError as err:
                 raise ValueError(
                     f"Invalid date string '{date_value}': not a valid YYYYMMDD date"
-                )
+                ) from err
 
         # Unsupported string format
         raise ValueError(
@@ -123,6 +123,5 @@ def normalize_to_partition_format(date_value: date | datetime | str) -> str:
 
     # Unsupported type
     raise TypeError(
-        f"Unsupported type {type(date_value).__name__}. "
-        f"Expected date, datetime, or str"
+        f"Unsupported type {type(date_value).__name__}. Expected date, datetime, or str"
     )
