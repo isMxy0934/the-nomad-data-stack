@@ -48,7 +48,6 @@ def connect_catalog(catalog_path=None):
         con.execute("USE catalog;")
 
         print(f"✅ 已成功连接并切换至 Catalog: {abs_path}")
-        print("💡 现在你可以直接使用 ods.xxx 或 dwd.xxx 进行查询")
     else:
         print(f"⚠️ 未找到 Catalog 文件: {catalog_path}，已进入纯 S3 查询模式。")
 
