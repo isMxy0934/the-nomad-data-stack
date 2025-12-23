@@ -37,4 +37,4 @@ compactor:
     prefix_template: "lake/raw/daily/fund_etf_history"
     file_format: "csv"
     dedup_cols: ["trade_date", "symbol"]
-    partition_column: "trade_date" # Enable data-driven partitioning
+    partition_column: "trade_date"
