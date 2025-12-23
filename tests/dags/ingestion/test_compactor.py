@@ -113,6 +113,7 @@ class TestStandardS3Compactor:
         assert paths.canonical_prefix == sample_non_partition_paths_dict["canonical_prefix"]
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
+    @patch("dags.ingestion.standard.compactors.validate_dataset")
     @patch("dags.ingestion.standard.compactors.commit")
     @patch("dags.ingestion.standard.compactors.cleanup")
     @patch("pandas.read_parquet")
@@ -121,6 +122,7 @@ class TestStandardS3Compactor:
         mock_read_parquet,
         mock_cleanup,
         mock_commit,
+        mock_validate,
         mock_store_class,
         sample_partition_paths_dict,
     ):
@@ -140,6 +142,9 @@ class TestStandardS3Compactor:
         parquet_bytes = BytesIO()
         df1.to_parquet(parquet_bytes)
         mock_store.read_bytes.return_value = parquet_bytes.getvalue()
+
+        # Mock validate to return the same metrics
+        mock_validate.return_value = {"row_count": 3, "file_count": 1, "has_data": 1}
 
         # Mock commit return value
         mock_commit.return_value = ({"manifest_path": "s3://.../manifest.json"}, {})
@@ -167,14 +172,20 @@ class TestStandardS3Compactor:
             run_id="test_run_123",
         )
 
+        # Verify validate was called with load metrics
+        mock_validate.assert_called_once()
+        call_args = mock_validate.call_args
+        assert call_args[1]["metrics"]["row_count"] == 3  # After dedup
+        assert call_args[1]["metrics"]["file_count"] == 1
+
+        # Verify commit was called with validated metrics
+        mock_commit.assert_called_once()
+
+        # Verify cleanup was called
+        mock_cleanup.assert_called_once()
+
         # Verify - compact returns publish_result from commit()
         assert "manifest_path" in result or "published" in result
-        # The result is what commit() returns: dict with manifest_path, success_flag_path
-        assert isinstance(result, dict)
-
-        # Verify commit and cleanup were called
-        mock_commit.assert_called_once()
-        mock_cleanup.assert_called_once()
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
     def test_compact_with_no_data(self, mock_store_class, sample_partition_paths_dict):
@@ -214,6 +225,7 @@ class TestStandardS3Compactor:
             )
 
     @patch("dags.ingestion.standard.compactors.AirflowS3Store")
+    @patch("dags.ingestion.standard.compactors.validate_dataset")
     @patch("dags.ingestion.standard.compactors.commit")
     @patch("dags.ingestion.standard.compactors.cleanup")
     @patch("pandas.read_parquet")
@@ -222,6 +234,7 @@ class TestStandardS3Compactor:
         mock_read_parquet,
         mock_cleanup,
         mock_commit,
+        mock_validate,
         mock_store_class,
         sample_partition_paths_dict,
     ):
@@ -236,6 +249,7 @@ class TestStandardS3Compactor:
         df.to_parquet(parquet_bytes)
         mock_store.read_bytes.return_value = parquet_bytes.getvalue()
 
+        mock_validate.return_value = {"row_count": 2, "file_count": 1, "has_data": 1}
         mock_commit.return_value = ({"manifest_path": "s3://..."}, {})
 
         compactor = StandardS3Compactor(
@@ -253,6 +267,11 @@ class TestStandardS3Compactor:
             paths_dict=sample_partition_paths_dict,
             run_id="test_run_123",
         )
+
+        # Verify validate, commit, cleanup were called
+        mock_validate.assert_called_once()
+        mock_commit.assert_called_once()
+        mock_cleanup.assert_called_once()
 
         # Verify write_bytes was called (for CSV format)
         assert mock_store.write_bytes.called

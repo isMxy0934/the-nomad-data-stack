@@ -6,7 +6,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.ingestion.core.interfaces import BaseCompactor
-from dags.utils.etl_utils import non_partition_paths_from_xcom, partition_paths_from_xcom
+from dags.utils.etl_utils import non_partition_paths_from_xcom, partition_paths_from_xcom, validate_dataset
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.paths import PartitionPaths, NonPartitionPaths
 from lakehouse_core.io.uri import join_uri
@@ -93,23 +93,32 @@ class StandardS3Compactor(BaseCompactor):
 
         self.store.write_bytes(final_uri, content)
 
-        # 4. Standard Commit via lakehouse_core
-        metrics = {
+        # 4. Prepare load metrics (before commit)
+        load_metrics = {
             "row_count": len(merged_df),
             "file_count": 1,
             "has_data": 1,
         }
 
+        # 5. Validate load metrics (before commit, following standard pipeline)
+        validated_metrics = validate_dataset(
+            paths_dict=kwargs.get("paths_dict", {}),
+            metrics=load_metrics,
+            s3_hook=self.s3_hook,
+        )
+        logger.info(f"Validation passed: {validated_metrics}")
+
+        # 6. Standard Commit via lakehouse_core
         publish_result, _ = commit(
             store=self.store,
             paths=paths,
             dest=target,
             run_id=run_id,
             partition_date=partition_date,
-            metrics=metrics,
+            metrics=validated_metrics,
         )
 
-        # 5. Cleanup (core handled)
+        # 7. Cleanup (core handled)
         cleanup(store=self.store, paths=paths)
 
         return publish_result

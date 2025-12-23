@@ -200,7 +200,7 @@ class TestIngestionDAGIntegration:
         assert len(tasks) >= expected_task_count
 
     def test_commit_task_has_validate_step(self):
-        """Test that commit_ingestion task includes validate step."""
+        """Test that commit_ingestion task includes validate step via compactor."""
         config_files = _load_yaml_configs()
         if not config_files:
             pytest.skip("No config files found")
@@ -215,7 +215,12 @@ class TestIngestionDAGIntegration:
         assert commit_task is not None
         assert commit_task.task_id == "commit_ingestion"
 
-        # The validate step is inside the function, so we can't directly test it
-        # But we can verify the task exists and is properly configured
+        # The validate step is now inside StandardS3Compactor.compact()
+        # which is called from commit_ingestion
+        # We can verify the task exists and is properly configured
         assert hasattr(commit_task, "downstream_list")
         assert hasattr(commit_task, "upstream_list")
+
+        # Verify that commit_ingestion is downstream of execute
+        execute_task = dag.get_task("execute")
+        assert execute_task in commit_task.upstream_list
