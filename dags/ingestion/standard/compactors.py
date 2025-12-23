@@ -6,6 +6,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.ingestion.core.interfaces import BaseCompactor
+from dags.utils.etl_utils import non_partition_paths_from_xcom, partition_paths_from_xcom
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.paths import PartitionPaths, NonPartitionPaths
 from lakehouse_core.io.uri import join_uri
@@ -39,22 +40,10 @@ class StandardS3Compactor(BaseCompactor):
         self.store = AirflowS3Store(self.s3_hook)
 
     def _get_paths_obj(self, paths_dict: dict) -> PartitionPaths | NonPartitionPaths:
-        """Reconstruct paths object from serialized dict."""
-        if paths_dict.get("partition_date"):
-            return PartitionPaths(
-                partition_date=str(paths_dict["partition_date"]),
-                canonical_prefix=str(paths_dict["canonical_prefix"]),
-                tmp_prefix=str(paths_dict["tmp_prefix"]),
-                tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
-                manifest_path=str(paths_dict["manifest_path"]),
-                success_flag_path=str(paths_dict["success_flag_path"]),
-            )
-        return NonPartitionPaths(
-            canonical_prefix=str(paths_dict["canonical_prefix"]),
-            tmp_prefix=str(paths_dict["tmp_prefix"]),
-            manifest_path=str(paths_dict["manifest_path"]),
-            success_flag_path=str(paths_dict["success_flag_path"]),
-        )
+        """Reconstruct paths object from serialized dict (using etl_utils for consistency)."""
+        if bool(paths_dict.get("partitioned")):
+            return partition_paths_from_xcom(paths_dict)
+        return non_partition_paths_from_xcom(paths_dict)
 
     def compact(
         self, results: list[dict], target: str, partition_date: str, **kwargs

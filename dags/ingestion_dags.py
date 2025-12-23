@@ -27,6 +27,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.ingestion.core.interfaces import IngestionJob
 from dags.ingestion.core.loader import instantiate_component
+from dags.utils.etl_utils import validate_dataset
 from lakehouse_core.api import prepare_paths
 from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import commit, cleanup
@@ -92,6 +93,7 @@ def create_dag(config_path: Path):
             )
             return {
                 "partition_date": partition_date,
+                "partitioned": True,
                 "base_prefix": base_prefix,
                 "tmp_prefix": paths.tmp_prefix,
                 "tmp_partition_prefix": paths.tmp_partition_prefix,
@@ -151,24 +153,35 @@ def create_dag(config_path: Path):
             success_results = [r for r in task_results if r.get("status") == "success"]
             if not success_results:
                 logger.info("No data to commit.")
-                return
+                return {"status": "skipped", "reason": "no_data"}
 
             total_rows = sum(r["row_count"] for r in success_results)
-            
+            logger.info(f"Total rows from all extraction jobs: {total_rows}")
+
             # 使用 StandardS3Compactor 处理最终合并和提交
-            # 传入 task_results 让 Compactor 知道去哪里读数据
             compactor = instantiate_component(conf["compactor"])
-            
-            # 这里的 compactor 会调用 lakehouse_core.pipeline.commit
+
+            # Load 步骤：合并所有 extractor 结果并写入 tmp
             metrics = compactor.compact(
-                results=success_results, 
-                target=target, 
+                results=success_results,
+                target=target,
                 partition_date=paths_dict["partition_date"],
                 paths_dict=paths_dict,
                 run_id=context["run_id"]
             )
-            
-            logger.info(f"Ingestion committed: {metrics}")
+            logger.info(f"Compaction metrics: {metrics}")
+
+            # Validate 步骤：验证数据质量（与 dw_dags 保持一致）
+            s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
+            validated_metrics = validate_dataset(paths_dict, metrics, s3_hook)
+            logger.info(f"Validation passed: {validated_metrics}")
+
+            # Commit 步骤：已在 compactor.compact() 中完成
+            return {
+                "status": "success",
+                "total_rows": validated_metrics.get("row_count", 0),
+                "validated": True
+            }
 
         # --- Workflow ---
         p_paths = prepare_ingestion_paths()
