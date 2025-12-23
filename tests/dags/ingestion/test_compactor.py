@@ -308,16 +308,20 @@ class TestStandardS3Compactor:
 
         # Create DataFrames with different trade_date values AND different symbols
         # to avoid deduplication removing rows
-        df1 = pd.DataFrame({
-            "symbol": ["ETF1", "ETF2"],
-            "trade_date": ["2024-01-01", "2024-01-01"],
-            "close": [10.0, 11.0],
-        })
-        df2 = pd.DataFrame({
-            "symbol": ["ETF3", "ETF4"],
-            "trade_date": ["2024-01-02", "2024-01-02"],
-            "close": [11.5, 12.0],
-        })
+        df1 = pd.DataFrame(
+            {
+                "symbol": ["ETF1", "ETF2"],
+                "trade_date": ["2024-01-01", "2024-01-01"],
+                "close": [10.0, 11.0],
+            }
+        )
+        df2 = pd.DataFrame(
+            {
+                "symbol": ["ETF3", "ETF4"],
+                "trade_date": ["2024-01-02", "2024-01-02"],
+                "close": [11.5, 12.0],
+            }
+        )
 
         # Create parquet bytes for each DataFrame
         parquet_bytes1 = BytesIO()
@@ -327,6 +331,7 @@ class TestStandardS3Compactor:
 
         # Track read_bytes calls to debug
         read_bytes_calls = []
+
         def track_read_bytes(uri):
             read_bytes_calls.append(uri)
             if len(read_bytes_calls) == 1:
@@ -341,6 +346,7 @@ class TestStandardS3Compactor:
         def mock_validate_side_effect(paths_dict, metrics, s3_hook, file_format):
             # Return the actual metrics passed in
             return metrics
+
         mock_validate.side_effect = mock_validate_side_effect
 
         # Mock commit to return success for each partition
@@ -399,11 +405,13 @@ class TestStandardS3Compactor:
         mock_store = MagicMock()
         mock_store_class.return_value = mock_store
 
-        df = pd.DataFrame({
-            "symbol": ["ETF1"],
-            "trade_date": ["2024-01-01"],
-            "close": [10.0],
-        })
+        df = pd.DataFrame(
+            {
+                "symbol": ["ETF1"],
+                "trade_date": ["2024-01-01"],
+                "close": [10.0],
+            }
+        )
 
         parquet_bytes = BytesIO()
         df.to_parquet(parquet_bytes)
