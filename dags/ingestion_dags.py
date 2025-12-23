@@ -58,18 +58,18 @@ def create_dag(config_path: Path):
         catchup=conf.get("catchup", False),
         tags=["ingestion", target],
         max_active_runs=1,
+        params={
+            "start_date": get_partition_date_str(),
+            "end_date": get_partition_date_str(),
+        },
     )
 
     with dag:
         # --- 1. Prepare Phase ---
         @task
         def prepare_ingestion_paths(**context) -> dict:
-            dag_run_conf = context.get("dag_run").conf or {}
-            partition_date = (
-                dag_run_conf.get("partition_date")
-                or dag_run_conf.get("start_date")
-                or get_partition_date_str()
-            )
+            # Partition date is determined by compactor, not by user input
+            partition_date = get_partition_date_str()
 
             # Sanitize run_id for S3/MinIO compatibility (remove :, +, . etc)
             raw_run_id = context["run_id"]
@@ -102,11 +102,21 @@ def create_dag(config_path: Path):
         @task
         def plan(paths_dict: dict, **context) -> list[dict]:
             partitioner = instantiate_component(conf["partitioner"])
+            # Support both params (UI) and conf (JSON config)
+            dag_params = context.get("params") or {}
             dag_run_conf = context.get("dag_run").conf or {}
 
-            # Prefer explicit range from dag_run.conf, fallback to paths_dict.partition_date
-            start = dag_run_conf.get("start_date") or paths_dict["partition_date"]
-            end = dag_run_conf.get("end_date") or start
+            # Prefer explicit range from params or conf, fallback to paths_dict.partition_date
+            start = (
+                dag_params.get("start_date")
+                or dag_run_conf.get("start_date")
+                or paths_dict["partition_date"]
+            )
+            end = (
+                dag_params.get("end_date")
+                or dag_run_conf.get("end_date")
+                or start
+            )
 
             jobs = []
             for job in partitioner.generate_jobs(start_date=start, end_date=end):
