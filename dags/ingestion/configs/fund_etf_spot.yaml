@@ -22,4 +22,4 @@ compactor:
     prefix_template: "lake/raw/daily/fund_etf_spot"
     file_format: "csv"
     dedup_cols: ["symbol", "trade_date"]
-    # partition_column: "trade_date"
+    partition_column: "trade_date"
