@@ -65,6 +65,7 @@ class StandardS3Compactor(BaseCompactor):
                 continue
             # Note: We assume Parquet for intermediate results
             from io import BytesIO
+
             content = self.store.read_bytes(uri)
             frames.append(pd.read_parquet(BytesIO(content)))
 
@@ -127,4 +128,3 @@ class StandardS3Compactor(BaseCompactor):
         cleanup(store=self.store, paths=paths)
 
         return publish_result
-

@@ -30,11 +30,13 @@ DEFAULT_AWS_CONN_ID = "MINIO_S3"
 DEFAULT_BUCKET = "stock-data"
 TMP_PREFIX_BASE = "tmp/ingestion"
 
+
 def _load_yaml_configs() -> list[Path]:
     if not CONFIG_DIR.exists():
         logger.warning(f"Config directory not found: {CONFIG_DIR}")
         return []
     return list(CONFIG_DIR.glob("*.yaml"))
+
 
 def create_dag(config_path: Path):
     try:
@@ -75,7 +77,7 @@ def create_dag(config_path: Path):
                 run_id=safe_run_id,
                 partition_date=partition_date,
                 is_partitioned=True,
-                store_namespace=DEFAULT_BUCKET
+                store_namespace=DEFAULT_BUCKET,
             )
             return {
                 "partition_date": partition_date,
@@ -118,7 +120,7 @@ def create_dag(config_path: Path):
             file_id = str(uuid.uuid4())[:8]
             # paths_dict['tmp_prefix'] 已经是 s3://bucket/path 格式
             # 直接使用 join_uri 拼接子路径
-            uri = join_uri(paths_dict['tmp_prefix'], f"results/{file_id}.parquet")
+            uri = join_uri(paths_dict["tmp_prefix"], f"results/{file_id}.parquet")
 
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
             store = AirflowS3Store(s3_hook)
@@ -127,12 +129,7 @@ def create_dag(config_path: Path):
             df.to_parquet(buf, index=False)
             store.write_bytes(uri, buf.getvalue())
 
-            return {
-                "uri": uri,
-                "row_count": len(df),
-                "file_count": 1,
-                "status": "success"
-            }
+            return {"uri": uri, "row_count": len(df), "file_count": 1, "status": "success"}
 
         # --- 4. Compact & Commit Phase (Reduce) ---
         @task
@@ -154,7 +151,7 @@ def create_dag(config_path: Path):
                 target=target,
                 partition_date=paths_dict["partition_date"],
                 paths_dict=paths_dict,
-                run_id=context["run_id"]
+                run_id=context["run_id"],
             )
             logger.info(f"Compaction and commit completed: {publish_result}")
 

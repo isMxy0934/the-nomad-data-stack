@@ -99,7 +99,9 @@ def validate_output(
     if not has_data:
         count = _count_files(paths.tmp_prefix, file_format)
         if count != 0:
-            raise ValueError(f"Expected no {file_format} files in tmp prefix for empty source result")
+            raise ValueError(
+                f"Expected no {file_format} files in tmp prefix for empty source result"
+            )
         log_event(
             logger,
             "core.validate_output",
@@ -121,7 +123,9 @@ def validate_output(
     if actual_files == 0:
         raise ValueError(f"No {file_format} files were written to the tmp prefix")
     if actual_files != expected_files:
-        raise ValueError(f"File count mismatch between load metrics and store contents: expected {expected_files}, found {actual_files}")
+        raise ValueError(
+            f"File count mismatch between load metrics and store contents: expected {expected_files}, found {actual_files}"
+        )
     if int(metrics["row_count"]) < 0:
         raise ValueError("Row count cannot be negative")
 

@@ -17,7 +17,8 @@ try:
     from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
-        f"StandardS3Compactor imports unavailable in this environment: {exc}", allow_module_level=True
+        f"StandardS3Compactor imports unavailable in this environment: {exc}",
+        allow_module_level=True,
     )
 
 
@@ -269,6 +270,9 @@ class TestStandardS3Compactor:
             paths_dict=sample_partition_paths_dict,
             run_id="test_run_123",
         )
+
+        # Verify compact returns publish_result
+        assert "manifest_path" in result or "published" in result
 
         # Verify validate, commit, cleanup were called
         mock_validate.assert_called_once()

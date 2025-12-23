@@ -185,7 +185,9 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 # 1. Prepare
                 def _prepare_adapter(base_prefix, is_partitioned, partition_date, **context):
                     # Sanitize run_id for S3/MinIO compatibility
-                    safe_run_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in context["run_id"])
+                    safe_run_id = "".join(
+                        c if c.isalnum() or c in "-_" else "_" for c in context["run_id"]
+                    )
                     # Inject partition_date into run_id to avoid parallel conflict in DuckDB COPY
                     unique_run_id = f"{safe_run_id}_{partition_date.replace('-', '')}"
                     return prepare_dataset(
