@@ -3,7 +3,7 @@
 import sys
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -177,6 +177,8 @@ class TestStandardS3Compactor:
         call_args = mock_validate.call_args
         assert call_args[1]["metrics"]["row_count"] == 3  # After dedup
         assert call_args[1]["metrics"]["file_count"] == 1
+        # Verify file_format was passed to validate
+        assert call_args[1]["file_format"] == "parquet"
 
         # Verify commit was called with validated metrics
         mock_commit.assert_called_once()
@@ -272,6 +274,10 @@ class TestStandardS3Compactor:
         mock_validate.assert_called_once()
         mock_commit.assert_called_once()
         mock_cleanup.assert_called_once()
+
+        # Verify file_format="csv" was passed to validate
+        call_args = mock_validate.call_args
+        assert call_args[1]["file_format"] == "csv"
 
         # Verify write_bytes was called (for CSV format)
         assert mock_store.write_bytes.called

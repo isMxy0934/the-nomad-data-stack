@@ -78,20 +78,28 @@ def validate_output(
     store: ObjectStore,
     paths: core_paths.PartitionPaths | core_paths.NonPartitionPaths,
     metrics: Mapping[str, int],
+    file_format: str = "parquet",
 ) -> dict[str, int]:
     """Validate tmp output based on expected metrics.
+
+    Args:
+        store: Object store to list files
+        paths: Temporary paths for validation
+        metrics: Expected metrics (row_count, file_count, has_data)
+        file_format: File format to validate ("parquet" or "csv")
 
     This mirrors the Phase 1 behavior in `dags/utils/etl_utils.py`: validate tmp only.
     """
 
-    def _parquet_count(prefix_uri: str) -> int:
-        return len([uri for uri in store.list_keys(prefix_uri) if uri.endswith(".parquet")])
+    def _count_files(prefix_uri: str, file_format: str) -> int:
+        extension = f".{file_format}"
+        return len([uri for uri in store.list_keys(prefix_uri) if uri.endswith(extension)])
 
     has_data = int(metrics.get("has_data", 1))
     if not has_data:
-        count = _parquet_count(paths.tmp_prefix)
+        count = _count_files(paths.tmp_prefix, file_format)
         if count != 0:
-            raise ValueError("Expected no parquet files in tmp prefix for empty source result")
+            raise ValueError(f"Expected no {file_format} files in tmp prefix for empty source result")
         log_event(
             logger,
             "core.validate_output",
@@ -99,20 +107,21 @@ def validate_output(
             file_count=0,
             row_count=0,
             tmp_prefix=paths.tmp_prefix,
+            file_format=file_format,
         )
         return dict(metrics)
 
     expected_files = int(metrics["file_count"])
     actual_files = (
-        _parquet_count(paths.tmp_partition_prefix)
+        _count_files(paths.tmp_partition_prefix, file_format)
         if isinstance(paths, core_paths.PartitionPaths)
-        else _parquet_count(paths.tmp_prefix)
+        else _count_files(paths.tmp_prefix, file_format)
     )
 
     if actual_files == 0:
-        raise ValueError("No parquet files were written to the tmp prefix")
+        raise ValueError(f"No {file_format} files were written to the tmp prefix")
     if actual_files != expected_files:
-        raise ValueError("File count mismatch between load metrics and store contents")
+        raise ValueError(f"File count mismatch between load metrics and store contents: expected {expected_files}, found {actual_files}")
     if int(metrics["row_count"]) < 0:
         raise ValueError("Row count cannot be negative")
 
@@ -123,6 +132,7 @@ def validate_output(
         file_count=actual_files,
         row_count=int(metrics["row_count"]),
         tmp_prefix=paths.tmp_prefix,
+        file_format=file_format,
     )
     return dict(metrics)
 

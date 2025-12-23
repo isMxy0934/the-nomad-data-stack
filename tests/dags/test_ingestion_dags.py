@@ -11,7 +11,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
-    from dags.ingestion_dags import create_dag, _load_yaml_configs
+    from dags.ingestion_dags import _load_yaml_configs, create_dag
 except ImportError as exc:
     pytest.skip(
         f"ingestion_dags imports unavailable in this environment: {exc}", allow_module_level=True

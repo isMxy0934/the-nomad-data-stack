@@ -6,9 +6,13 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.ingestion.core.interfaces import BaseCompactor
-from dags.utils.etl_utils import non_partition_paths_from_xcom, partition_paths_from_xcom, validate_dataset
+from dags.utils.etl_utils import (
+    non_partition_paths_from_xcom,
+    partition_paths_from_xcom,
+    validate_dataset,
+)
 from lakehouse_core.domain.observability import log_event
-from lakehouse_core.io.paths import PartitionPaths, NonPartitionPaths
+from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
 from lakehouse_core.io.uri import join_uri
 from lakehouse_core.pipeline import cleanup, commit
 
@@ -34,7 +38,7 @@ class StandardS3Compactor(BaseCompactor):
         self.file_format = file_format
         self.dedup_cols = dedup_cols
         self.partition_column = partition_column
-        
+
         # Initialize AirflowS3Store via S3Hook
         self.s3_hook = S3Hook(aws_conn_id="MINIO_S3")
         self.store = AirflowS3Store(self.s3_hook)
@@ -105,6 +109,7 @@ class StandardS3Compactor(BaseCompactor):
             paths_dict=kwargs.get("paths_dict", {}),
             metrics=load_metrics,
             s3_hook=self.s3_hook,
+            file_format=self.file_format,  # Pass file format for validation
         )
         logger.info(f"Validation passed: {validated_metrics}")
 

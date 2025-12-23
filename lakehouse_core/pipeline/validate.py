@@ -12,5 +12,6 @@ def validate(
     store: ObjectStore,
     paths: PartitionPaths | NonPartitionPaths,
     metrics: Mapping[str, int],
+    file_format: str = "parquet",
 ) -> dict[str, int]:
-    return validate_output(store=store, paths=paths, metrics=metrics)
+    return validate_output(store=store, paths=paths, metrics=metrics, file_format=file_format)

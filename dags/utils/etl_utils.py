@@ -135,8 +135,16 @@ def validate_dataset(
     paths_dict: Mapping[str, Any],
     metrics: Mapping[str, int],
     s3_hook: S3Hook,
+    file_format: str = "parquet",
 ) -> dict[str, int]:
-    """Core logic to validate dataset output (delegates to lakehouse_core API)."""
+    """Core logic to validate dataset output (delegates to lakehouse_core API).
+
+    Args:
+        paths_dict: Paths dictionary from XCom
+        metrics: Load metrics to validate
+        s3_hook: Airflow S3 hook
+        file_format: File format for validation ("parquet" or "csv")
+    """
     store = AirflowS3Store(s3_hook)
     partitioned = bool(paths_dict.get("partitioned"))
 
@@ -168,7 +176,7 @@ def validate_dataset(
                 manifest_path=str(paths_dict.get("manifest_path") or ""),
                 success_flag_path=str(paths_dict.get("success_flag_path") or ""),
             )
-    return pipeline_validate(store=store, paths=paths, metrics=metrics)
+    return pipeline_validate(store=store, paths=paths, metrics=metrics, file_format=file_format)
 
 
 def commit_dataset(

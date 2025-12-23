@@ -8,19 +8,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
-import pandas as pd
 import yaml
-from airflow import DAG
-from airflow.decorators import task
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-
-import logging
-import yaml
-from datetime import datetime, timedelta
-from io import BytesIO
-from pathlib import Path
-from typing import Any
-
 from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -29,7 +17,6 @@ from dags.ingestion.core.interfaces import IngestionJob
 from dags.ingestion.core.loader import instantiate_component
 from lakehouse_core.api import prepare_paths
 from lakehouse_core.io.time import get_partition_date_str
-from lakehouse_core.pipeline import commit, cleanup
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +46,7 @@ def create_dag(config_path: Path):
 
     target = conf["target"]
     dag_id = f"ingestion_{target}"
-    
+
     dag = DAG(
         dag_id=dag_id,
         default_args=DEFAULT_ARGS,
@@ -76,11 +63,11 @@ def create_dag(config_path: Path):
         def prepare_ingestion_paths(**context) -> dict:
             dag_run_conf = context.get("dag_run").conf or {}
             partition_date = dag_run_conf.get("start_date") or get_partition_date_str()
-            
+
             # Sanitize run_id for S3/MinIO compatibility (remove :, +, . etc)
             raw_run_id = context["run_id"]
             safe_run_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_run_id)
-            
+
             # 使用 core API 生成标准路径
             base_prefix = f"lake/raw/daily/{target}"
             paths = prepare_paths(
@@ -106,7 +93,7 @@ def create_dag(config_path: Path):
         def plan(paths_dict: dict, **context) -> list[dict]:
             partitioner = instantiate_component(conf["partitioner"])
             start = paths_dict["partition_date"]
-            
+
             jobs = []
             for job in partitioner.generate_jobs(start_date=start, end_date=start):
                 jobs.append({"params": job.params, "meta": job.meta})
@@ -124,17 +111,18 @@ def create_dag(config_path: Path):
 
             # 写入到 prepare 阶段定义的临时目录
             import uuid
+
             from dags.adapters.airflow_s3_store import AirflowS3Store
             from lakehouse_core.io.uri import join_uri
-            
+
             file_id = str(uuid.uuid4())[:8]
             # paths_dict['tmp_prefix'] 已经是 s3://bucket/path 格式
             # 直接使用 join_uri 拼接子路径
             uri = join_uri(paths_dict['tmp_prefix'], f"results/{file_id}.parquet")
-            
+
             s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
             store = AirflowS3Store(s3_hook)
-            
+
             buf = BytesIO()
             df.to_parquet(buf, index=False)
             store.write_bytes(uri, buf.getvalue())
