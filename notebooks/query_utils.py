@@ -44,13 +44,11 @@ def connect_catalog(catalog_path=None):
         abs_path = os.path.abspath(catalog_path)
         con.execute(f"ATTACH '{abs_path}' AS catalog (READ_ONLY);")
 
-        # 修复：去掉空格。同时把 catalog 里的常用 schema 加入搜索路径
-        # 这样用户可以直接查 ods_xxx 而不需要写 catalog.ods.ods_xxx
-        con.execute(
-            "SET search_path='main,catalog.ods,catalog.dwd,catalog.dim,catalog.ads,catalog.main';"
-        )
+        # 切换到 catalog 数据库，这样可以直接使用 ods.xxx, dwd.xxx 前缀
+        con.execute("USE catalog;")
 
-        print(f"✅ 已成功连接并挂载 Catalog (只读): {abs_path}")
+        print(f"✅ 已成功连接并切换至 Catalog: {abs_path}")
+        print("💡 现在你可以直接使用 ods.xxx 或 dwd.xxx 进行查询")
     else:
         print(f"⚠️ 未找到 Catalog 文件: {catalog_path}，已进入纯 S3 查询模式。")
 
