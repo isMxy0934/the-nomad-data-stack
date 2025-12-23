@@ -289,3 +289,145 @@ class TestStandardS3Compactor:
         call_args = mock_store.write_bytes.call_args
         written_content = call_args[0][1]  # Second arg is content
         assert b"id,value" in written_content or b"value,id" in written_content
+
+    @patch("dags.ingestion.standard.compactors.AirflowS3Store")
+    @patch("dags.ingestion.standard.compactors.validate_dataset")
+    @patch("dags.ingestion.standard.compactors.commit")
+    @patch("dags.ingestion.standard.compactors.cleanup")
+    def test_compact_with_partition_column(
+        self,
+        mock_cleanup,
+        mock_commit,
+        mock_validate,
+        mock_store_class,
+        sample_partition_paths_dict,
+    ):
+        """Test compact with partition_column groups data correctly."""
+        mock_store = MagicMock()
+        mock_store_class.return_value = mock_store
+
+        # Create DataFrames with different trade_date values AND different symbols
+        # to avoid deduplication removing rows
+        df1 = pd.DataFrame({
+            "symbol": ["ETF1", "ETF2"],
+            "trade_date": ["2024-01-01", "2024-01-01"],
+            "close": [10.0, 11.0],
+        })
+        df2 = pd.DataFrame({
+            "symbol": ["ETF3", "ETF4"],
+            "trade_date": ["2024-01-02", "2024-01-02"],
+            "close": [11.5, 12.0],
+        })
+
+        # Create parquet bytes for each DataFrame
+        parquet_bytes1 = BytesIO()
+        df1.to_parquet(parquet_bytes1)
+        parquet_bytes2 = BytesIO()
+        df2.to_parquet(parquet_bytes2)
+
+        # Track read_bytes calls to debug
+        read_bytes_calls = []
+        def track_read_bytes(uri):
+            read_bytes_calls.append(uri)
+            if len(read_bytes_calls) == 1:
+                return parquet_bytes1.getvalue()
+            elif len(read_bytes_calls) == 2:
+                return parquet_bytes2.getvalue()
+            raise AssertionError(f"Unexpected read_bytes call: {uri}")
+
+        mock_store.read_bytes.side_effect = track_read_bytes
+
+        # Mock validate to return actual metrics based on input
+        def mock_validate_side_effect(paths_dict, metrics, s3_hook, file_format):
+            # Return the actual metrics passed in
+            return metrics
+        mock_validate.side_effect = mock_validate_side_effect
+
+        # Mock commit to return success for each partition
+        mock_commit.return_value = ({"manifest_path": "s3://.../manifest.json"}, {})
+
+        compactor = StandardS3Compactor(
+            bucket="test-bucket",
+            prefix_template="lake/raw/daily/{target}",
+            file_format="csv",
+            dedup_cols=["trade_date", "symbol"],
+            partition_column="trade_date",
+        )
+
+        results = [
+            {"uri": "s3://tmp/result1.parquet", "row_count": 2},
+            {"uri": "s3://tmp/result2.parquet", "row_count": 2},
+        ]
+
+        result = compactor.compact(
+            results=results,
+            target="test_target",
+            partition_date="2024-01-01",
+            paths_dict=sample_partition_paths_dict,
+            run_id="test_run_123",
+        )
+
+        # Verify the result has partitioned status
+        assert result["status"] == "partitioned"
+        assert result["partition_count"] == 2
+        assert result["row_count"] == 4
+
+        # Verify commit was called twice (once for each partition)
+        assert mock_commit.call_count == 2
+        assert mock_cleanup.call_count == 2
+        assert mock_validate.call_count == 2
+
+        # Verify each partition was committed with correct partition_date
+        commit_calls = mock_commit.call_args_list
+        partition_dates = [call[1]["partition_date"] for call in commit_calls]
+        assert "2024-01-01" in partition_dates
+        assert "2024-01-02" in partition_dates
+
+    @patch("dags.ingestion.standard.compactors.AirflowS3Store")
+    @patch("dags.ingestion.standard.compactors.validate_dataset")
+    @patch("dags.ingestion.standard.compactors.commit")
+    @patch("dags.ingestion.standard.compactors.cleanup")
+    def test_compact_partition_column_non_partitioned_paths(
+        self,
+        mock_cleanup,
+        mock_commit,
+        mock_validate,
+        mock_store_class,
+        sample_non_partition_paths_dict,
+    ):
+        """Test that partition_column is ignored for non-partitioned paths."""
+        mock_store = MagicMock()
+        mock_store_class.return_value = mock_store
+
+        df = pd.DataFrame({
+            "symbol": ["ETF1"],
+            "trade_date": ["2024-01-01"],
+            "close": [10.0],
+        })
+
+        parquet_bytes = BytesIO()
+        df.to_parquet(parquet_bytes)
+        mock_store.read_bytes.return_value = parquet_bytes.getvalue()
+
+        mock_validate.return_value = {"row_count": 1, "file_count": 1, "has_data": 1}
+        mock_commit.return_value = ({"manifest_path": "s3://..."}, {})
+
+        compactor = StandardS3Compactor(
+            bucket="test-bucket",
+            prefix_template="lake/raw/daily/{target}",
+            partition_column="trade_date",
+        )
+
+        results = [{"uri": "s3://tmp/result1.parquet", "row_count": 1}]
+
+        compactor.compact(
+            results=results,
+            target="test_target",
+            partition_date="2024-01-01",
+            paths_dict=sample_non_partition_paths_dict,
+            run_id="test_run_123",
+        )
+
+        # Should use single partition mode (no grouping)
+        mock_commit.assert_called_once()
+        mock_validate.assert_called_once()
