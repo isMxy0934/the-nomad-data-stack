@@ -72,3 +72,41 @@ def build_non_partition_paths(*, base_uri: str, base_prefix: str, run_id: str) -
         manifest_path=manifest_path,
         success_flag_path=success_flag_path,
     )
+
+
+def paths_to_dict(
+    paths: PartitionPaths | NonPartitionPaths,
+    *,
+    partition_date: str | None = None,
+) -> dict[str, object]:
+    """Convert paths object to XCom-serializable dict.
+
+    This is the canonical way to serialize paths for Airflow XCom or similar.
+
+    Args:
+        paths: PartitionPaths or NonPartitionPaths object
+        partition_date: Override partition_date for non-partitioned paths (optional)
+
+    Returns:
+        JSON-serializable dict suitable for XCom
+    """
+    if isinstance(paths, PartitionPaths):
+        return {
+            "partitioned": True,
+            "partition_date": paths.partition_date,
+            "canonical_prefix": paths.canonical_prefix,
+            "tmp_prefix": paths.tmp_prefix,
+            "tmp_partition_prefix": paths.tmp_partition_prefix,
+            "manifest_path": paths.manifest_path,
+            "success_flag_path": paths.success_flag_path,
+        }
+    if isinstance(paths, NonPartitionPaths):
+        return {
+            "partitioned": False,
+            "partition_date": str(partition_date or ""),
+            "canonical_prefix": paths.canonical_prefix,
+            "tmp_prefix": paths.tmp_prefix,
+            "manifest_path": paths.manifest_path,
+            "success_flag_path": paths.success_flag_path,
+        }
+    raise TypeError(f"Unexpected paths type: {type(paths)}")

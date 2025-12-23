@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, MutableMapping
 
-from lakehouse_core.api import publish_output
+from lakehouse_core.domain import commit_protocol
 from lakehouse_core.domain.manifest import build_manifest
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
@@ -25,6 +25,7 @@ def commit(
     """Commit tmp outputs to canonical.
 
     For has_data=0, this clears canonical prefix and does NOT write manifest/_SUCCESS.
+    Calls domain.commit_protocol for core publish logic.
     """
 
     if not int(metrics.get("has_data", 1)):
@@ -49,9 +50,23 @@ def commit(
         source_prefix=getattr(paths, "tmp_partition_prefix", paths.tmp_prefix),
         target_prefix=paths.canonical_prefix,
     )
-    publish_result = publish_output(
-        store=store, paths=paths, manifest=manifest, write_success_flag=write_success_flag
-    )
+
+    # Call domain layer directly instead of api.publish_output
+    if isinstance(paths, PartitionPaths):
+        publish_result = commit_protocol.publish_partition(
+            store=store,
+            paths=paths,
+            manifest=manifest,
+            write_success_flag=write_success_flag,
+        )
+    else:
+        publish_result = commit_protocol.publish_non_partition(
+            store=store,
+            paths=paths,
+            manifest=manifest,
+            write_success_flag=write_success_flag,
+        )
+
     log_event(
         logger,
         "pipeline.commit",

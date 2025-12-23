@@ -78,53 +78,38 @@ def validate_output(
     store: ObjectStore,
     paths: core_paths.PartitionPaths | core_paths.NonPartitionPaths,
     metrics: Mapping[str, int],
+    file_format: str = "parquet",
 ) -> dict[str, int]:
     """Validate tmp output based on expected metrics.
 
+    Args:
+        store: Object store to list files
+        paths: Temporary paths for validation
+        metrics: Expected metrics (row_count, file_count, has_data)
+        file_format: File format to validate ("parquet" or "csv")
+
     This mirrors the Phase 1 behavior in `dags/utils/etl_utils.py`: validate tmp only.
     """
+    from lakehouse_core.domain.validate import validate_output_core
 
-    def _parquet_count(prefix_uri: str) -> int:
-        return len([uri for uri in store.list_keys(prefix_uri) if uri.endswith(".parquet")])
-
-    has_data = int(metrics.get("has_data", 1))
-    if not has_data:
-        count = _parquet_count(paths.tmp_prefix)
-        if count != 0:
-            raise ValueError("Expected no parquet files in tmp prefix for empty source result")
-        log_event(
-            logger,
-            "core.validate_output",
-            status="no_data",
-            file_count=0,
-            row_count=0,
-            tmp_prefix=paths.tmp_prefix,
-        )
-        return dict(metrics)
-
-    expected_files = int(metrics["file_count"])
-    actual_files = (
-        _parquet_count(paths.tmp_partition_prefix)
-        if isinstance(paths, core_paths.PartitionPaths)
-        else _parquet_count(paths.tmp_prefix)
+    result = validate_output_core(
+        store=store,
+        paths=paths,
+        metrics=metrics,
+        file_format=file_format,
     )
 
-    if actual_files == 0:
-        raise ValueError("No parquet files were written to the tmp prefix")
-    if actual_files != expected_files:
-        raise ValueError("File count mismatch between load metrics and store contents")
-    if int(metrics["row_count"]) < 0:
-        raise ValueError("Row count cannot be negative")
-
+    has_data = int(metrics.get("has_data", 1))
     log_event(
         logger,
         "core.validate_output",
-        status="ok",
-        file_count=actual_files,
-        row_count=int(metrics["row_count"]),
+        status="no_data" if not has_data else "ok",
+        file_count=result.get("file_count", 0),
+        row_count=result.get("row_count", 0),
         tmp_prefix=paths.tmp_prefix,
+        file_format=file_format,
     )
-    return dict(metrics)
+    return result
 
 
 def publish_output(
