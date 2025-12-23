@@ -79,6 +79,10 @@ def fetch_fund_etf_history(**kwargs) -> Optional[pd.DataFrame]:
         existing_columns = [col for col in target_columns if col in df.columns]
         df = df[existing_columns]
         
+        # Convert trade_date to proper format if needed
+        if "trade_date" in df.columns:
+            df["trade_date"] = pd.to_datetime(df["trade_date"], errors="coerce").dt.strftime("%Y%m%d")
+        
         return df
         
     except Exception as e:
