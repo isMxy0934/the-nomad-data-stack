@@ -1,0 +1,20 @@
+target: trade_date_hist
+description: "Trading calendar history from Sina Finance via AkShare"
+schedule_interval: "@daily"
+start_date: "2024-01-01"
+
+partitioner:
+  class: "dags.ingestion.standard.partitioners.SingleJobPartitioner"
+
+extractor:
+  class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
+  kwargs:
+    function_ref: "dags.ingestion.impl.etf.fetch_trade_date_hist:fetch_trade_date_hist"
+
+compactor:
+  class: "dags.ingestion.standard.compactors.StandardS3Compactor"
+  kwargs:
+    bucket: "stock-data"
+    prefix_template: "lake/raw/daily/trade_date_hist"
+    file_format: "csv"
+    dedup_cols: ["trade_date"]
