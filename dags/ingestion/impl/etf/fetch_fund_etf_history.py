@@ -87,4 +87,4 @@ def fetch_fund_etf_history(**kwargs) -> Optional[pd.DataFrame]:
         
     except Exception as e:
         print(f"Error fetching ETF history for {symbol}: {e}")
-        return None
+        raise

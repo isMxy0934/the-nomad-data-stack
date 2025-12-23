@@ -9,7 +9,11 @@ def fetch_fund_etf_spot(**kwargs) -> pd.DataFrame | None:
     """
     import akshare as ak
 
-    df = ak.fund_etf_spot_em()
+    try:
+        df = ak.fund_etf_spot_em()
+    except Exception as e:
+        print(f"Error fetching ETF spot data: {e}")
+        raise
     if df is None or df.empty:
         return None
 
