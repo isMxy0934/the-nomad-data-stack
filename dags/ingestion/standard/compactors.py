@@ -49,21 +49,6 @@ class StandardS3Compactor(BaseCompactor):
             return partition_paths_from_xcom(paths_dict)
         return non_partition_paths_from_xcom(paths_dict)
 
-    def _extract_base_prefix(self, paths_dict: dict) -> str:
-        """Extract base prefix from paths_dict by removing bucket and dt= suffix."""
-        canonical_prefix = paths_dict.get("canonical_prefix", "")
-        # canonical_prefix format: s3://bucket/lake/raw/daily/target/dt=2024-01-01
-        # We need: lake/raw/daily/target
-        # Remove s3://bucket/
-        parts = canonical_prefix.split("/", 3)  # ["s3:", "", "bucket", "rest..."]
-        if len(parts) >= 4:
-            rest = parts[3]  # "lake/raw/daily/target/dt=2024-01-01"
-            # Remove /dt=XXXXX if present
-            if "/dt=" in rest:
-                return rest.rsplit("/dt=", 1)[0]
-            return rest
-        return canonical_prefix
-
     def _compact_single_partition(
         self,
         df: pd.DataFrame,
@@ -179,7 +164,6 @@ class StandardS3Compactor(BaseCompactor):
                 f"into {merged_df[self.partition_column].nunique()} unique partitions"
             )
 
-            base_prefix = self._extract_base_prefix(paths_dict)
             publish_results = []
             total_row_count = 0
 
@@ -198,7 +182,7 @@ class StandardS3Compactor(BaseCompactor):
                 # Build new PartitionPaths for this specific partition
                 partition_paths = build_partition_paths(
                     base_uri=f"s3://{self.bucket}",
-                    base_prefix=base_prefix,
+                    base_prefix=self.prefix_template,
                     partition_date=partition_date_str,
                     run_id=run_id,
                 )
