@@ -112,11 +112,7 @@ def create_dag(config_path: Path):
                 or dag_run_conf.get("start_date")
                 or paths_dict["partition_date"]
             )
-            end = (
-                dag_params.get("end_date")
-                or dag_run_conf.get("end_date")
-                or start
-            )
+            end = dag_params.get("end_date") or dag_run_conf.get("end_date") or start
 
             jobs = []
             for job in partitioner.generate_jobs(start_date=start, end_date=end):
