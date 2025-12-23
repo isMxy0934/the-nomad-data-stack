@@ -90,55 +90,26 @@ def validate_output(
 
     This mirrors the Phase 1 behavior in `dags/utils/etl_utils.py`: validate tmp only.
     """
+    from lakehouse_core.domain.validate import validate_output_core
 
-    def _count_files(prefix_uri: str, file_format: str) -> int:
-        extension = f".{file_format}"
-        return len([uri for uri in store.list_keys(prefix_uri) if uri.endswith(extension)])
-
-    has_data = int(metrics.get("has_data", 1))
-    if not has_data:
-        count = _count_files(paths.tmp_prefix, file_format)
-        if count != 0:
-            raise ValueError(
-                f"Expected no {file_format} files in tmp prefix for empty source result"
-            )
-        log_event(
-            logger,
-            "core.validate_output",
-            status="no_data",
-            file_count=0,
-            row_count=0,
-            tmp_prefix=paths.tmp_prefix,
-            file_format=file_format,
-        )
-        return dict(metrics)
-
-    expected_files = int(metrics["file_count"])
-    actual_files = (
-        _count_files(paths.tmp_partition_prefix, file_format)
-        if isinstance(paths, core_paths.PartitionPaths)
-        else _count_files(paths.tmp_prefix, file_format)
+    result = validate_output_core(
+        store=store,
+        paths=paths,
+        metrics=metrics,
+        file_format=file_format,
     )
 
-    if actual_files == 0:
-        raise ValueError(f"No {file_format} files were written to the tmp prefix")
-    if actual_files != expected_files:
-        raise ValueError(
-            f"File count mismatch between load metrics and store contents: expected {expected_files}, found {actual_files}"
-        )
-    if int(metrics["row_count"]) < 0:
-        raise ValueError("Row count cannot be negative")
-
+    has_data = int(metrics.get("has_data", 1))
     log_event(
         logger,
         "core.validate_output",
-        status="ok",
-        file_count=actual_files,
-        row_count=int(metrics["row_count"]),
+        status="no_data" if not has_data else "ok",
+        file_count=result.get("file_count", 0),
+        row_count=result.get("row_count", 0),
         tmp_prefix=paths.tmp_prefix,
         file_format=file_format,
     )
-    return dict(metrics)
+    return result
 
 
 def publish_output(

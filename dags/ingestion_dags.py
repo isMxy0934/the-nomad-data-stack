@@ -16,6 +16,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from dags.ingestion.core.interfaces import IngestionJob
 from dags.ingestion.core.loader import instantiate_component
 from lakehouse_core.api import prepare_paths
+from lakehouse_core.io.paths import paths_to_dict
 from lakehouse_core.io.time import get_partition_date_str
 
 logger = logging.getLogger(__name__)
@@ -90,17 +91,12 @@ def create_dag(config_path: Path):
                 is_partitioned=True,
                 store_namespace=bucket,
             )
-            return {
-                "partition_date": partition_date,
-                "partitioned": True,
-                "base_prefix": base_prefix,
-                "run_id": safe_run_id,
-                "tmp_prefix": paths.tmp_prefix,
-                "tmp_partition_prefix": paths.tmp_partition_prefix,
-                "canonical_prefix": paths.canonical_prefix,
-                "manifest_path": paths.manifest_path,
-                "success_flag_path": paths.success_flag_path,
-            }
+            # Use paths_to_dict for consistent serialization
+            result = paths_to_dict(paths, partition_date=partition_date)
+            # Add extra fields needed by ingestion workflow
+            result["base_prefix"] = base_prefix
+            result["run_id"] = safe_run_id
+            return result
 
         # --- 2. Plan Phase ---
         @task
@@ -174,8 +170,6 @@ def create_dag(config_path: Path):
         p_jobs = plan(p_paths)
         results = execute.partial(paths_dict=p_paths).expand(job_dict=p_jobs)
         commit_ingestion(results, p_paths)
-
-    return dag
 
     return dag
 
