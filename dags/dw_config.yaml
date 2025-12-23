@@ -18,6 +18,9 @@ sources:
   ods_etf_universe_whitelist:
     path: "lake/raw/daily/etf_universe_whitelist/local"
     format: "csv"
+  ods_fund_etf_history:
+    path: "lake/raw/daily/fund_etf_history"
+    format: "csv"
 
 # table_dependencies:
 #   dwd:

@@ -11,7 +11,7 @@ from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.compute import S3ConnectionConfig, configure_s3_access, temporary_connection
 from lakehouse_core.domain.models import RunContext
 from lakehouse_core.inputs import OdsCsvRegistrar
-from lakehouse_core.io.time import get_default_partition_date_str
+from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import cleanup, commit, load, validate
 from lakehouse_core.planning import DirectoryDWPlanner
 from lakehouse_core.store import Boto3S3Store, LocalFileStore
@@ -72,7 +72,7 @@ def _context_from_args(args: argparse.Namespace) -> RunContext:
 
     extra: dict[str, Any] = {}
     if not args.partition_date and not (args.start_date and args.end_date):
-        args.partition_date = get_default_partition_date_str()
+        args.partition_date = get_partition_date_str()
 
     if not args.run_id:
         args.run_id = (

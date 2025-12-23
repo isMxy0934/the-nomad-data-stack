@@ -13,6 +13,7 @@ from dags.utils.etl_utils import (
 )
 from lakehouse_core.domain.observability import log_event
 from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths, build_partition_paths
+from lakehouse_core.io.time import normalize_to_partition_format
 from lakehouse_core.io.uri import join_uri
 from lakehouse_core.pipeline import cleanup, commit, validate
 
@@ -158,11 +159,14 @@ class StandardS3Compactor(BaseCompactor):
                     logger.warning(f"Skipping empty/NaN partition value: {partition_value}")
                     continue
 
-                # Convert partition value to string (handle date/datetime)
-                if pd.api.types.is_datetime64_any_dtype(partition_df[self.partition_column]):
-                    p_date_str = partition_value.strftime("%Y-%m-%d")
-                else:
-                    p_date_str = str(partition_value)
+                # Normalize partition value to YYYY-MM-DD format with validation
+                try:
+                    p_date_str = normalize_to_partition_format(partition_value)
+                except (ValueError, TypeError) as e:
+                    logger.error(
+                        f"Invalid partition value for '{self.partition_column}': {partition_value} - {e}"
+                    )
+                    raise
 
                 logger.info(
                     f"Processing partition: {self.partition_column}={p_date_str} "
