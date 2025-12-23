@@ -21,6 +21,9 @@ sources:
   ods_fund_etf_history:
     path: "lake/raw/daily/fund_etf_history"
     format: "csv"
+  ods_trade_date_hist:
+    path: "lake/raw/daily/trade_date_hist"
+    format: "csv"
 
 # table_dependencies:
 #   dwd:
