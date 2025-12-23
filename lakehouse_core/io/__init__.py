@@ -13,13 +13,9 @@ from lakehouse_core.io.sql import (
     render_sql,
 )
 from lakehouse_core.io.time import (
-    get_current_date_str,
-    get_current_partition_date_str,
     get_date_str,
-    get_default_partition_date_str,
     get_partition_date_str,
-    get_previous_date_str,
-    get_previous_partition_date_str,
+    normalize_to_partition_format,
 )
 from lakehouse_core.io.uri import (
     ParsedUri,
@@ -37,13 +33,9 @@ __all__ = [
     "PartitionPaths",
     "build_non_partition_paths",
     "build_partition_paths",
-    "get_current_date_str",
-    "get_current_partition_date_str",
     "get_date_str",
-    "get_default_partition_date_str",
     "get_partition_date_str",
-    "get_previous_date_str",
-    "get_previous_partition_date_str",
+    "normalize_to_partition_format",
     "join_uri",
     "load_and_render_sql",
     "load_sql",
