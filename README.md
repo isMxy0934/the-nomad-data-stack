@@ -19,10 +19,12 @@
 
 ## 核心能力 (Features)
 
-*   **全自动 ETL 链路**: 内置标准化的 Raw -> ODS -> DWD -> ADS 分层处理流程。
-*   **配置驱动开发 (Config-Driven)**: 新增一张表只需编写 SQL 和简单的 YAML 配置，无需编写 Python 代码。
-*   **完备的初始化/回填**: 针对历史数据提供专用的回填机制 (`dw_init_dag`)，防止数据污染。
-*   **原子性保证**: 采用 "Write-Audit-Publish" 模式，确保数据写入的一致性，失败无残留。
+*   **分层 ETL 链路**: 内置标准化的 Raw -> ODS -> DW（DWD/DIM/.../ADS）分层处理流程。
+*   **约定优于配置**:
+    *   DW：目录即配置（`dags/{layer}/*.sql` 自动发现），并由 `dags/dw_config.yaml` 定义层依赖。
+    *   ODS：通过 `dags/dw_config.yaml:sources` 将 RAW 的 CSV 源映射到 `ods_*` 表。
+*   **初始化/回填入口**: `dw_init_dag` 支持按日期范围回放（可选 targets）。
+*   **一致性写入协议（非原子）**: 采用 “tmp → validate → delete→copy publish → markers → cleanup” 模式；S3/MinIO 不支持原子重命名，接受极小概率风险（详见 commit protocol 文档）。
 
 ## 快速开始 (Quick Start)
 
@@ -43,18 +45,23 @@ docker compose up -d
 
 ### 3. 运行任务
 
-在 Airflow UI 中，你主要关注两个入口 DAG：
+在 Airflow UI 中，你主要关注两类 DAG：
 
-*   **日常跑批 (Daily Run)**: 
-    *   手动触发 **`dw_start_dag`**。
-    *   它会自动计算“昨天”的日期，并依次执行：数据采集 -> Catalog 刷新 -> ODS 加载 -> 数仓分层计算。
-*   **历史初始化 (History Init)**: 
+*   **采集（Ingestion）**：
+    *   `dags/ingestion_dags.py` 会扫描 `dags/ingestion/configs/*.yaml` 并生成 `ingestion_{target}` DAG（按配置 schedule 运行或手动触发）。
+    *   采集写入 RAW（CSV），默认路径形如：`lake/raw/daily/{target}/dt=YYYY-MM-DD/data.csv`（可由 compactor 配置覆盖）。
+*   **数仓跑批（DW Orchestration）**：
+    *   **日常跑批 (Daily Run)**：手动触发 **`dw_start_dag`**，自动处理“昨天”（T-1）的分区日期，并触发 `dw_catalog_dag -> dw_ods -> dw_{layer}...`。
+    *   **历史初始化 (History Init)**：
     *   点击 **`dw_init_dag`** -> Trigger DAG w/ config。
     *   在表单中填写 `start_date` (开始日期) 和 `end_date` (结束日期)。
-    *   系统将并行处理历史分区的元数据和模型计算。
+    *   系统将按日期范围回放 `dw_ods` 与后续各层（可选 `targets`）。
 
 ---
 
 ### 更多文档
 *   [目录结构与开发约定](docs/conventions.md)
+*   [提交协议（Commit Protocol）与完成标记](docs/commit-protocol.md)
 *   [DuckDB Catalog 使用指南](docs/catalog.md)
+*   [`lakehouse_core` Public API](docs/lakehouse_core_api.md)
+*   [Architecture Notes / Open Questions](docs/architecture-notes.md)

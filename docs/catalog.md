@@ -22,19 +22,9 @@
 uv run python -m scripts.duckdb_catalog_migrate
 ```
 
-### Refresh（从 MinIO 扫描表并生成 view/macro）
+Airflow 内执行：
 
-刷新 ODS（生产数据）：
-
-```bash
-uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/ods
-```
-
-刷新集成测试数据：
-
-```bash
-uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/_integration/ods
-```
+- `dags/dw_catalog_dag.py` 会应用 migrations（使用 pool=`duckdb_catalog_pool`，单写者），并在完成后触发 `dw_ods` 开始跑批链路。
 
 ### 常用查询
 
@@ -45,6 +35,5 @@ uv run python -m scripts.duckdb_catalog_refresh --base-prefix lake/_integration/
 
 ### Airflow 维护
 
-- `dw_catalog_dag`：在 Airflow 内应用 migrations（pool=`duckdb_catalog_pool`，单写者）
-- refresh 目前通过脚本执行（如需全自动，可在未来把 refresh 加入 DAG，但建议仍保持单写者约束）
-
+- `dw_catalog_dag`：在 Airflow 内应用 migrations（pool=`duckdb_catalog_pool`，单写者），并触发 `dw_ods`
+ 

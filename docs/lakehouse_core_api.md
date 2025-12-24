@@ -7,13 +7,14 @@ This project treats `lakehouse_core` as an orchestrator-agnostic core. Airflow/P
 - Planning: `DirectoryDWPlanner`, `RunContext`, `RunSpec`
 - Storage: `ObjectStore`, `Boto3S3Store`, `LocalFileStore`
 - Inputs: `InputRegistrar`, `OdsCsvRegistrar`
-- Pipeline stages (fixed order): `pipeline.prepare`, `pipeline.load`, `pipeline.validate`, `pipeline.commit`, `pipeline.cleanup`
+- Pipeline stages (fixed order): `pipeline.load`, `pipeline.validate`, `pipeline.commit`, `pipeline.cleanup`
+- Path planning: `lakehouse_core.api.prepare_paths` (or `pipeline.prepare` if you want a JSON/XCom-friendly payload)
 
 ## Orchestrator Pattern (Five-Stage Chain)
 
 The core write protocol is a fixed chain:
 
-1. `prepare` – compute canonical/tmp prefixes for a `RunSpec` and run id
+1. `prepare` – compute canonical/tmp prefixes for a `RunSpec` and run id (`api.prepare_paths` / `pipeline.prepare`)
 2. `load` – register inputs, render SQL, materialize to tmp, return `(row_count,file_count,has_data)`
 3. `validate` – validate tmp output against metrics
 4. `commit` – publish tmp to canonical (delete→copy) and write markers (unless `has_data=0`)

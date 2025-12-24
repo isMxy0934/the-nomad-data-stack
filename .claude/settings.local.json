@@ -3,9 +3,11 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(find:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "outputStyle": "default"
 }
