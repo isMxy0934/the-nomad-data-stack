@@ -4,21 +4,27 @@
 
 ### 分层与数据流
 
-- Extractor：写入 RAW（CSV/原始格式）到 MinIO
-- ODS：按表 SQL 做轻标准化，落 Parquet 分区
+- Ingestion：写入 RAW（CSV/原始格式）到 MinIO
+- ODS：按表 SQL 做轻标准化，落 Parquet（分区或非分区）
 - DW（DWD/DIM/DWM/DWS/ADS）：按层 SQL 读取上游逻辑表，落 Parquet（分区或非分区）
 
-Extractor DAG 当前为单一 DAG：`dags/dw_extractor.py`（`dw_extractor`），按 `dags/extractor/configs/config.yaml` 生成多个 TaskGroup（例如 fund_price_akshare / fund_price_tushare）。
+Ingestion DAG 工厂入口：`dags/ingestion_dags.py`
+
+- 扫描配置：`dags/ingestion/configs/*.yaml`
+- 生成 DAG：`ingestion_{target}`（每个 target 一个 DAG）
+- DAG 结构：prepare → plan → execute(map) → compact+commit(reduce)
 
 ### 分区与路径
 
 - 分区列：`dt=YYYY-MM-DD`（Hive 风格）
 - 建议路径（canonical）：
-  - RAW：`lake/raw/{domain}/dt=YYYY-MM-DD/*.csv`
+  - RAW：`lake/raw/daily/{target}/dt=YYYY-MM-DD/*.csv`（默认；以 `compactor.kwargs.prefix_template` 为准）
   - ODS：`lake/ods/{table}/dt=YYYY-MM-DD/*.parquet`
   - DW：`lake/{layer}/{table}/dt=YYYY-MM-DD/*.parquet`
 - 临时写入（tmp）：
   - `lake/{layer}/{table}/_tmp/run_{run_id}/dt=YYYY-MM-DD/*.parquet`
+
+Ingestion 临时写入由 `lakehouse_core.api.prepare_paths()` 生成 tmp 前缀（与 DW 同样遵循 tmp→commit 协议），最终 RAW 输出由 compactor 负责落地。
 
 ### SQL 与模板变量
 
@@ -36,9 +42,17 @@ Extractor DAG 当前为单一 DAG：`dags/dw_extractor.py`（`dw_extractor`）�
 - `dags/dw_config.yaml`
   - `layer_dependencies`：层依赖（决定 `dw_{layer}` 的触发顺序）
   - `table_dependencies`：同层表依赖（同一个 `dw_{layer}` 内部做拓扑排序）
-  - `sources`：ODS seeds（ODS 表名 → RAW 源前缀与格式）
+  - `sources`：ODS sources（ODS 表名 → RAW 源前缀与格式）
+
+Ingestion 的配置在 `dags/ingestion/configs/*.yaml`，其中：
+
+- `partitioner`：如何拆分 job（时间范围/白名单等）
+- `extractor`：如何抓取数据（返回 DataFrame）
+- `compactor`：如何合并并写入 RAW（CSV/Parquet），并按提交协议发布到 canonical
 
 ### 命名规则
 
 - DW 层 SQL 文件名必须带 layer 前缀：
   - 例如：`dags/dwd/dwd_daily_stock_price.sql` → 逻辑表 `dwd.dwd_daily_stock_price`
+
+- ODS 表命名：`ods_{target}`（例如 ingestion `fund_etf_history` → ODS 表 `ods_fund_etf_history`）

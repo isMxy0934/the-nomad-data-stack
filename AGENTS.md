@@ -20,7 +20,7 @@
     *   **禁止**：不要将其重构为 Airflow `{{ ds }}` 或 `{{ data_interval_start }}`，除非你准备重写所有 SQL 模板和回填逻辑。
 
 2.  **Commit Protocol（非原子）**：
-    *   代码逻辑：`dags/utils/partition_utils.py` 中的 `publish_partition` 执行顺序是：`delete_prefix` -> `_copy_prefix`。
+    *   代码逻辑：`lakehouse_core/domain/commit_protocol.py` 中的 publish 执行顺序是：`delete_prefix` -> `copy_prefix` -> markers。
     *   原因：纯 S3 架构不支持原子重命名（Atomic Rename）。
     *   **禁止**：不要试图引入“先写后切指针”的复杂逻辑（除非引入 Hive Metastore/Iceberg），也不要试图用 `OVERWRITE_OR_IGNORE` 替代 Delete。我们接受极小概率的数据丢失风险（Delete 成功 Copy 失败）。
 
@@ -37,7 +37,7 @@
 
 - 禁止 in-place overwrite 远端分区。
 - 标准流程：写入临时前缀 → 校验（行数/文件数等）→ promote 到 canonical 分区 → 写入 `manifest.json` + `_SUCCESS` → 清理临时前缀。
-- 相关实现：`dags/utils/partition_utils.py`、`dags/dw_dags.py`。
+- 相关实现：`lakehouse_core/domain/commit_protocol.py`、`lakehouse_core/pipeline/commit.py`、`dags/utils/etl_utils.py`、`dags/dw_dags.py`。
 
 ## M2：DW（DWD/DIM/ADS）约定摘要
 
@@ -57,7 +57,7 @@
 - 单写者：维护 catalog 的任务请使用 Airflow pool `duckdb_catalog_pool`（slots=1），或串行执行脚本，避免同一 DuckDB 文件被并发写入导致锁冲突。
 - 只读挂载：DW 任务运行时以 `ATTACH ... (READ_ONLY)` 方式使用 catalog，避免写入。
 - 相关入口：
-  - 脚本：`scripts/duckdb_catalog_migrate.py`、`scripts/duckdb_catalog_refresh.py`
+  - 脚本：`scripts/duckdb_catalog_migrate.py`
   - DAG：`dags/dw_catalog_dag.py`
 
 ## 开发模式（强制）
@@ -77,7 +77,7 @@
 
 - 优先复用 `lakehouse_core/*`（可复用逻辑）；`dags/utils/*` 只保留 Airflow 专属桥接与 `dag_run.conf` 解析等编排层逻辑。
 - SQL 模板必须参数化，至少支持 `${PARTITION_DATE}`。
-- 非 SQL 模板（如 extractor 的 `destination_key_template`）使用 `{PARTITION_DATE}`（Python `str.format`）。
+- Ingestion 配置（`dags/ingestion/configs/*.yaml`）中建议使用 `compactor.kwargs.prefix_template` 指定 RAW 的基础前缀（不包含 `dt=...`），由提交协议追加分区目录。
 - 类型注解完整、错误处理充分、日志记录清晰。
 
 ## 质量保障（本地）
@@ -100,24 +100,26 @@ uv run ruff format .
 
 - GitHub Actions 会运行单元测试/集成测试与 ruff 检查；如需手动触发集成测试，可用 workflow dispatch 选择 `target_table`。
 
-## 新增 Extractor 完整检查清单
+## 新增 Ingestion（RAW）完整检查清单
 
-添加一个新的增量 Extractor（`dags/extractor/increment`）时，必须完成以下 5 个步骤，缺一不可：
+添加一个新的 Ingestion target（RAW CSV → MinIO）时，建议完成以下 5 个步骤，确保与 ODS/DW 约定一致：
 
-### 1. Extractor 函数
-- **位置**：`dags/extractor/increment/functions/fetch_{target}.py`
+### 1. Extractor 函数（抓取数据）
+- **位置**：`dags/ingestion/impl/{domain}/fetch_{target}.py`
 - **要求**：
-  - 函数签名：`def fetch_{target}() -> CsvPayload | None`
-  - 返回 `CsvPayload(csv_bytes=..., record_count=...)` 或 `None`（无数据时）
-  - 列名标准化：确保输出列名符合目标表规范
-  - 日期格式：如果包含日期列，确认 CSV 输出格式（pandas `date` 类型默认输出 `YYYY-MM-DD`）
+  - 返回 `pandas.DataFrame | None`
+  - 如需兼容旧实现，可返回 `CsvPayload(csv_bytes=..., record_count=...)`（`SimpleFunctionExtractor` 会自动适配）
+  - 列名标准化：确保输出列名与下游 ODS 期望一致
+  - 日期列：建议输出 `YYYY-MM-DD`（便于 compactor 按 `partition_column` 分区）
 
-### 2. Extractor 配置
-- **位置**：`dags/extractor/increment/config.yaml`
+### 2. Ingestion 配置（生成 DAG）
+- **位置**：`dags/ingestion/configs/{target}.yaml`
 - **要求**：
-  - 添加 `target`、`tags`、`destination_key_template`、`fetcher` 配置
-  - `destination_key_template` 路径格式：`lake/raw/daily/{domain}/{source}/dt={PARTITION_DATE}/data.csv`
-  - `fetcher` 格式：`dags.extractor.increment.functions.fetch_{target}:fetch_{target}`
+  - `target: {target}`（将生成 `ingestion_{target}` DAG）
+  - 配置 `partitioner` / `extractor` / `compactor` 三段
+  - `compactor.kwargs.prefix_template`：RAW 基础前缀（不包含 `dt=...`），例如 `lake/raw/daily/{target}`
+  - `compactor.kwargs.file_format`：通常为 `csv`
+  - 可选：`compactor.kwargs.partition_column`（例如 `trade_date`），用于按列值写入多个 `dt=...` 分区
 
 ### 3. ODS SQL 文件
 - **位置**：`dags/ods/ods_{target}.sql`
@@ -131,7 +133,7 @@ uv run ruff format .
 - **位置**：`dags/dw_config.yaml` 的 `sources:` 部分
 - **要求**：
   - 添加 `ods_{target}:` 配置项
-  - `path` 必须匹配 extractor 的 `destination_key_template`（去掉 `dt={PARTITION_DATE}/data.csv` 部分）
+  - `path` 必须匹配 ingestion 的 `compactor.kwargs.prefix_template`
   - `format: "csv"`
 
 ### 5. Catalog Migration
@@ -145,8 +147,9 @@ uv run ruff format .
 ### 命名一致性规则
 
 所有组件必须遵循统一的命名约定：
-- **Extractor target**：`{source}_{provider}`（例如 `tool_trade_date_hist_sina_akshare`）
-- **ODS 表名**：`ods_{target}`（例如 `ods_tool_trade_date_hist_sina_akshare`）
+- **Ingestion target**：`{target}`（snake_case，例如 `fund_etf_history`）
+- **Ingestion DAG**：`ingestion_{target}`（由 `dags/ingestion_dags.py` 生成）
+- **ODS 表名**：`ods_{target}`（例如 `ods_fund_etf_history`）
 - **SQL 文件名**：`ods_{target}.sql`
 - **Migration 表名**：`ods_{target}`（与 SQL 文件名一致）
 - **Source 配置名**：`ods_{target}`（与表名一致）
@@ -154,15 +157,15 @@ uv run ruff format .
 ### 路径匹配验证
 
 确保以下路径一致：
-- Extractor 写入：`lake/raw/daily/{domain}/{source}/dt={PARTITION_DATE}/data.csv`
-- Source path：`lake/raw/daily/{domain}/{source}`（去掉 `dt={PARTITION_DATE}/data.csv`）
+- Ingestion 写入：`lake/raw/daily/{target}/dt=YYYY-MM-DD/data.csv`（或 prefix_template 指定的前缀）
+- Source path：`lake/raw/daily/{target}`（不包含 `dt=...`）
 - ODS 输出：`lake/ods/ods_{target}/dt={PARTITION_DATE}/*.parquet`
 
 ### 示例：完整实现参考
 
-参考 `tool_trade_date_hist_sina_akshare` 的完整实现：
-- 函数：`dags/extractor/increment/functions/fetch_tool_trade_date_hist_sina_akshare.py`
-- 配置：`dags/extractor/increment/config.yaml`（`tool_trade_date_hist_sina_akshare` 条目）
-- SQL：`dags/ods/ods_tool_trade_date_hist_sina_akshare.sql`
-- Source：`dags/dw_config.yaml`（`ods_tool_trade_date_hist_sina_akshare` 条目）
-- Migration：`catalog/migrations/0003_tool_trade_date_hist_sina_akshare_table.sql`
+参考 `fund_etf_history` 的完整实现：
+- 函数：`dags/ingestion/impl/etf/fetch_fund_etf_history.py`
+- 配置：`dags/ingestion/configs/fund_etf_history.yaml`
+- SQL：`dags/ods/ods_fund_etf_history.sql`
+- Source：`dags/dw_config.yaml`（`ods_fund_etf_history` 条目）
+- Migration：`catalog/migrations/0004_fund_etf_history_table.sql`
