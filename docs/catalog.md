@@ -26,8 +26,6 @@ Airflow 内执行：
 
 - `dags/dw_catalog_dag.py` 会应用 migrations（使用 pool=`duckdb_catalog_pool`，单写者），并在完成后触发 `dw_ods` 开始跑批链路。
 
-### Refresh（从 MinIO 扫描表并生成 view/macro）
-
 ### 常用查询
 
 - 探索（可能触发列举分区）：
