@@ -8,10 +8,10 @@
 
 | 层级 | SQL 文件位置 | Migration 命名格式 |
 |------|-------------|-------------------|
-| **ODS** | `dags/ods/{target}.sql` | `00XX_{target}_table.sql` |
-| **DWD** | `dags/dwd/{table}.sql` | `00XX_dwd_{table}_table.sql` |
-| **DIM** | `dags/dim/{table}.sql` | `00XX_dim_{table}_table.sql` |
-| **ADS** | `dags/ads/{table}.sql` | `00XX_ads_{table}_table.sql` |
+| **ODS** | `dags/ods/ods_{target}.sql` | `00XX_ods_{target}_table.sql` |
+| **DWD** | `dags/dwd/dwd_{table}.sql` | `00XX_dwd_{table}_table.sql` |
+| **DIM** | `dags/dim/dim_{table}.sql` | `00XX_dim_{table}_table.sql` |
+| **ADS** | `dags/ads/ads_{table}.sql` | `00XX_ads_{table}_table.sql` |
 
 ---
 
@@ -203,7 +203,7 @@ SELECT * FROM {layer}.{layer}_{table_name}_dt('2024-01-01');
 - 规则：小写 + 下划线
 
 ### 文件名
-- ODS SQL：`{target}.sql`（不含层级前缀）
+- ODS SQL：`ods_{target}.sql`（包含 `ods_` 前缀）
 - 其他层 SQL：`{layer}_{table}.sql`（含层级前缀）
 - Migration：`00XX_{table}_table.sql`
 

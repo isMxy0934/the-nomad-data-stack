@@ -31,7 +31,7 @@ sources:
 
 ## 步骤 2：创建 ODS SQL 文件
 
-创建文件：`dags/ods/fund_etf_spot.sql`
+创建文件：`dags/ods/ods_fund_etf_spot.sql`
 
 ```sql
 SELECT
@@ -44,6 +44,7 @@ FROM tmp_ods_fund_etf_spot;
 ```
 
 **说明**：
+- 文件名必须包含 `ods_` 前缀
 - 从 `tmp_ods_fund_etf_spot` 读取（Airflow 自动创建临时表）
 - 字段映射：symbol（代码）、name（名称）、amount（成交额）
 - 日期转换：`STRPTIME` 将字符串（YYYYMMDD）转换为 DATE
@@ -62,7 +63,7 @@ ls catalog/migrations/
 
 下一个编号是 `0007`。
 
-创建文件：`catalog/migrations/0007_fund_etf_spot_table.sql`
+创建文件：`catalog/migrations/0007_ods_fund_etf_spot_table.sql`
 
 ```sql
 -- Schema Macro
@@ -116,10 +117,10 @@ WHERE dt = p_date;
 cat dags/dw_config.yaml | grep fund_etf_spot
 
 # 确认 SQL 文件
-cat dags/ods/fund_etf_spot.sql
+cat dags/ods/ods_fund_etf_spot.sql
 
 # 确认 migration 文件
-ls catalog/migrations/0007_fund_etf_spot_table.sql
+ls catalog/migrations/0007_ods_fund_etf_spot_table.sql
 ```
 
 ### 2. 运行 DAG
@@ -151,9 +152,9 @@ dags/
 ├── dw_config.yaml (已修改)
 │   └── 添加了 ods_fund_etf_spot 配置
 ├── ods/
-│   └── fund_etf_spot.sql (新建)
+│   └── ods_fund_etf_spot.sql (新建)
 └── catalog/migrations/
-    └── 0007_fund_etf_spot_table.sql (新建)
+    └── 0007_ods_fund_etf_spot_table.sql (新建)
 ```
 
 ---

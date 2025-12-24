@@ -58,7 +58,7 @@ sources:
 
 #### 步骤 2：创建 SQL 文件
 
-在 `dags/ods/` 目录创建 `{target}.sql`：
+在 `dags/ods/` 目录创建 `ods_{target}.sql`：
 
 ```sql
 SELECT
@@ -66,17 +66,18 @@ SELECT
   field2,
   CAST(STRPTIME(CAST(date_field AS VARCHAR), '%Y%m%d') AS DATE) AS trade_date,
   '${PARTITION_DATE}' AS dt
-FROM tmp_{target};
+FROM tmp_ods_{target};
 ```
 
 **关键点**：
-- 从 `tmp_{target}` 读取（Airflow 自动创建的临时表）
+- 文件名必须包含 `ods_` 前缀（例如 `ods_fund_etf_spot.sql`）
+- 从 `tmp_ods_{target}` 读取（Airflow 自动创建的临时表）
 - 进行字段类型转换
 - 添加 `${PARTITION_DATE}` 作为分区列
 
 #### 步骤 3：创建 Migration 文件
 
-在 `catalog/migrations/` 创建 `{number}_{table_name}_table.sql`
+在 `catalog/migrations/` 创建 `{number}_ods_{target}_table.sql`
 
 参考示例中的 Migration 文件格式，包含：
 - Schema 定义宏
@@ -103,7 +104,7 @@ FROM tmp_{target};
 
 #### 步骤 2：创建 SQL 文件
 
-在 `dags/{layer}/` 目录创建 `{table_name}_{type}.sql`
+在 `dags/{layer}/` 目录创建 `{layer}_{table_name}_{type}.sql`
 
 **⚠️ 重要**：表名必须包含类型后缀（`_full`、`_inc` 或 `_zip`）
 
@@ -163,10 +164,10 @@ table_dependencies:
 
 | 层级 | SQL 文件位置 | Migration 位置 |
 |------|-------------|----------------|
-| ODS  | `dags/ods/{target}.sql` | `catalog/migrations/00XX_{target}_table.sql` |
-| DIM  | `dags/dim/{table}_{type}.sql` | `catalog/migrations/00XX_dim_{table}_{type}_table.sql` |
-| DWD  | `dags/dwd/{table}_{type}.sql` | `catalog/migrations/00XX_dwd_{table}_{type}_table.sql` |
-| ADS  | `dags/ads/{table}_{type}.sql` | `catalog/migrations/00XX_ads_{table}_{type}_table.sql` |
+| ODS  | `dags/ods/ods_{target}.sql` | `catalog/migrations/00XX_ods_{target}_table.sql` |
+| DIM  | `dags/dim/dim_{table}_{type}.sql` | `catalog/migrations/00XX_dim_{table}_{type}_table.sql` |
+| DWD  | `dags/dwd/dwd_{table}_{type}.sql` | `catalog/migrations/00XX_dwd_{table}_{type}_table.sql` |
+| ADS  | `dags/ads/ads_{table}_{type}.sql` | `catalog/migrations/00XX_ads_{table}_{type}_table.sql` |
 
 **注意**：`{type}` 是 `_full`、`_inc` 或 `_zip`，ODS 层除外。
 
