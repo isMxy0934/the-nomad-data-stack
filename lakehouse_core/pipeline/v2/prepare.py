@@ -30,7 +30,17 @@ def prepare(ctx: PipelineExecutionContext) -> dict[str, Any]:
         >>> paths_dict = prepare(ctx)
         >>> # Use paths_dict in orchestrator (e.g., Airflow XCom)
     """
-    effective_dt = ctx.partition_date if ctx.spec.is_partitioned else None
+    # Determine effective partition date for paths and XCom
+    # For non-partitioned tables, use T-1 as default (consistent with v1 prepare_dataset)
+    if ctx.spec.is_partitioned:
+        effective_dt = ctx.partition_date
+    else:
+        # Non-partitioned tables also need a partition_date for manifest consistency
+        # Use T-1 default if not provided (same as v1 prepare_dataset behavior)
+        from lakehouse_core.io.time import get_partition_date_str
+
+        effective_dt = ctx.partition_date or get_partition_date_str()
+
     paths = prepare_paths(
         base_prefix=ctx.spec.base_prefix,
         run_id=ctx.run_id,
@@ -38,4 +48,5 @@ def prepare(ctx: PipelineExecutionContext) -> dict[str, Any]:
         is_partitioned=ctx.spec.is_partitioned,
         store_namespace=ctx.store_namespace,
     )
-    return dict(paths_to_dict(paths, partition_date=ctx.partition_date))
+    # Use effective_dt for both paths and XCom to ensure consistency
+    return dict(paths_to_dict(paths, partition_date=effective_dt))
