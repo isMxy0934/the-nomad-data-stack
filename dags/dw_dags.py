@@ -16,12 +16,12 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.trigger_rule import TriggerRule
 
+from dags.adapters import build_s3_connection_config
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from dags.utils.dag_run_utils import parse_targets
 from dags.utils.etl_utils import (
     DEFAULT_AWS_CONN_ID,
     DEFAULT_BUCKET_NAME,
-    build_s3_connection_config,
     cleanup_dataset,
     commit_dataset,
     prepare_dataset,
@@ -31,7 +31,7 @@ from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.compute import configure_s3_access, temporary_connection
 from lakehouse_core.domain.models import RunContext, RunSpec
 from lakehouse_core.inputs import OdsCsvRegistrar
-from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+from lakehouse_core.io.paths import dict_to_paths
 from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import load as pipeline_load
 from lakehouse_core.planning import (
@@ -93,22 +93,8 @@ def load_table(
     if bool(paths_dict.get("partitioned")) != bool(spec.is_partitioned):
         raise ValueError("paths_dict.partitioned does not match RunSpec.is_partitioned")
 
-    if spec.is_partitioned:
-        paths = PartitionPaths(
-            partition_date=str(paths_dict["partition_date"]),
-            canonical_prefix=str(paths_dict["canonical_prefix"]),
-            tmp_prefix=str(paths_dict["tmp_prefix"]),
-            tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
-            manifest_path=str(paths_dict["manifest_path"]),
-            success_flag_path=str(paths_dict["success_flag_path"]),
-        )
-    else:
-        paths = NonPartitionPaths(
-            canonical_prefix=str(paths_dict["canonical_prefix"]),
-            tmp_prefix=str(paths_dict["tmp_prefix"]),
-            manifest_path=str(paths_dict["manifest_path"]),
-            success_flag_path=str(paths_dict["success_flag_path"]),
-        )
+    # Use unified deserialization from lakehouse_core
+    paths = dict_to_paths(paths_dict)
 
     with temporary_connection() as connection:
         configure_s3_access(connection, s3_config)
@@ -242,9 +228,12 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 # 4. Commit
                 def _commit_adapter(paths_dict, metrics, dest_name, **context):
                     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-                    # Use the same unique run_id as prepare
+                    # Use the same unique run_id as prepare - sanitize run_id first
+                    safe_run_id = "".join(
+                        c if c.isalnum() or c in "-_" else "_" for c in context["run_id"]
+                    )
                     partition_date = str(paths_dict.get("partition_date"))
-                    unique_run_id = f"{context['run_id']}_{partition_date.replace('-', '')}"
+                    unique_run_id = f"{safe_run_id}_{partition_date.replace('-', '')}"
                     res, _ = commit_dataset(dest_name, unique_run_id, paths_dict, metrics, s3_hook)
                     return res
 

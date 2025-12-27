@@ -1,0 +1,15 @@
+# Pre-commit hooks for enforcing architecture boundaries
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: check-lakehouse-core-imports
+        name: Check lakehouse_core has no Airflow imports
+        description: Ensure lakehouse_core/ remains orchestrator-agnostic
+        entry: python scripts/check_imports.py
+        language: python
+        files: ^lakehouse_core/.*\.py$
+        pass_filenames: true
+        verbose: true

@@ -8,7 +8,6 @@ from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 
 from airflow import DAG
-from airflow.models import Connection
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
@@ -16,8 +15,14 @@ from airflow.utils.trigger_rule import TriggerRule
 
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.api import prepare_paths
-from lakehouse_core.compute import S3ConnectionConfig
-from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
+
+# Re-export for backward compatibility - allows legacy code to import from etl_utils
+from lakehouse_core.io.paths import (  # noqa: F401 (re-exported for backward compatibility)
+    NonPartitionPaths,
+    PartitionPaths,
+    dict_to_non_partition_paths,
+    dict_to_partition_paths,
+)
 from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import cleanup as pipeline_cleanup
 from lakehouse_core.pipeline import commit as pipeline_commit
@@ -30,52 +35,21 @@ logger = logging.getLogger(__name__)
 
 
 def partition_paths_from_xcom(paths_dict: Mapping[str, Any]) -> PartitionPaths:
-    """Reconstruct ``PartitionPaths`` from XCom payloads produced by ``prepare_dataset``."""
+    """Reconstruct ``PartitionPaths`` from XCom payloads produced by ``prepare_dataset``.
 
-    return PartitionPaths(
-        partition_date=str(paths_dict["partition_date"]),
-        canonical_prefix=str(paths_dict["canonical_prefix"]),
-        tmp_prefix=str(paths_dict["tmp_prefix"]),
-        tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
-        manifest_path=str(paths_dict["manifest_path"]),
-        success_flag_path=str(paths_dict["success_flag_path"]),
-    )
+    DEPRECATED: Use lakehouse_core.io.paths.dict_to_partition_paths instead.
+    This wrapper is maintained for backward compatibility.
+    """
+    return dict_to_partition_paths(paths_dict)
 
 
 def non_partition_paths_from_xcom(paths_dict: Mapping[str, Any]) -> NonPartitionPaths:
-    """Reconstruct ``NonPartitionPaths`` from XCom payloads produced by ``prepare_dataset``."""
+    """Reconstruct ``NonPartitionPaths`` from XCom payloads produced by ``prepare_dataset``.
 
-    return NonPartitionPaths(
-        canonical_prefix=str(paths_dict["canonical_prefix"]),
-        tmp_prefix=str(paths_dict["tmp_prefix"]),
-        manifest_path=str(paths_dict["manifest_path"]),
-        success_flag_path=str(paths_dict["success_flag_path"]),
-    )
-
-
-def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
-    """Construct DuckDB S3 settings from an Airflow connection."""
-
-    connection: Connection = s3_hook.get_connection(s3_hook.aws_conn_id)
-    extras = connection.extra_dejson or {}
-
-    endpoint = extras.get("endpoint_url") or extras.get("host")
-    if not endpoint:
-        raise ValueError("S3 connection must define endpoint_url")
-
-    url_style = extras.get("s3_url_style", "path")
-    region = extras.get("region_name", "us-east-1")
-    use_ssl = bool(extras.get("use_ssl", endpoint.startswith("https")))
-
-    return S3ConnectionConfig(
-        endpoint_url=endpoint,
-        access_key=connection.login or "",
-        secret_key=connection.password or "",
-        region=region,
-        use_ssl=use_ssl,
-        url_style=url_style,
-        session_token=extras.get("session_token"),
-    )
+    DEPRECATED: Use lakehouse_core.io.paths.dict_to_non_partition_paths instead.
+    This wrapper is maintained for backward compatibility.
+    """
+    return dict_to_non_partition_paths(paths_dict)
 
 
 def _strip_slashes(path: str) -> str:
