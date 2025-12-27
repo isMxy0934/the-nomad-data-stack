@@ -228,9 +228,12 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 # 4. Commit
                 def _commit_adapter(paths_dict, metrics, dest_name, **context):
                     s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-                    # Use the same unique run_id as prepare
+                    # Use the same unique run_id as prepare - sanitize run_id first
+                    safe_run_id = "".join(
+                        c if c.isalnum() or c in "-_" else "_" for c in context["run_id"]
+                    )
                     partition_date = str(paths_dict.get("partition_date"))
-                    unique_run_id = f"{context['run_id']}_{partition_date.replace('-', '')}"
+                    unique_run_id = f"{safe_run_id}_{partition_date.replace('-', '')}"
                     res, _ = commit_dataset(dest_name, unique_run_id, paths_dict, metrics, s3_hook)
                     return res
 

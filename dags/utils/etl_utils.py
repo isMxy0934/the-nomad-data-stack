@@ -17,7 +17,8 @@ from airflow.utils.trigger_rule import TriggerRule
 from dags.adapters import build_s3_connection_config
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.api import prepare_paths
-from lakehouse_core.io.paths import (
+# Re-export for backward compatibility - allows legacy code to import from etl_utils
+from lakehouse_core.io.paths import (  # noqa: F401 (re-exported for backward compatibility)
     NonPartitionPaths,
     PartitionPaths,
     dict_to_non_partition_paths,

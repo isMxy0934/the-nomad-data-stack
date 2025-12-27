@@ -5,10 +5,32 @@ This module isolates Airflow connection format conversions from core business lo
 
 from __future__ import annotations
 
+from typing import Any
+
 from airflow.models import Connection
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 from lakehouse_core.compute import S3ConnectionConfig
+
+
+def _parse_bool(value: Any, default: bool = True) -> bool:
+    """Parse boolean value from string, bool, or other types.
+
+    Handles string representations of boolean values that Airflow
+    connections might store in extra fields.
+
+    Args:
+        value: Value to parse (can be bool, str, int, or None)
+        default: Default value if value is None
+
+    Returns:
+        Parsed boolean value
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() not in ("false", "0", "no", "off", "")
+    return bool(value) if value is not None else default
 
 
 def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
@@ -36,7 +58,7 @@ def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
 
     url_style = extras.get("s3_url_style", "path")
     region = extras.get("region_name", "us-east-1")
-    use_ssl = bool(extras.get("use_ssl", endpoint.startswith("https")))
+    use_ssl = _parse_bool(extras.get("use_ssl"), default=endpoint.startswith("https"))
 
     return S3ConnectionConfig(
         endpoint_url=endpoint,
@@ -47,3 +69,4 @@ def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
         url_style=url_style,
         session_token=extras.get("session_token"),
     )
+
