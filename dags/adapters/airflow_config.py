@@ -69,4 +69,3 @@ def build_s3_connection_config(s3_hook: S3Hook) -> S3ConnectionConfig:
         url_style=url_style,
         session_token=extras.get("session_token"),
     )
-

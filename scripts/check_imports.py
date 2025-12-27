@@ -17,7 +17,6 @@ import re
 import sys
 from pathlib import Path
 
-
 PROHIBITED_PATTERNS = [
     (r"from\s+airflow", "Airflow import"),
     (r"import\s+airflow", "Airflow import"),
@@ -38,7 +37,7 @@ def check_file(file_path: Path) -> list[tuple[int, str, str]]:
     violations = []
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             for line_num, line in enumerate(f, start=1):
                 line_stripped = line.strip()
 

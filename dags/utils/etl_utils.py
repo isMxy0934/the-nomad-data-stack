@@ -8,15 +8,14 @@ from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 
 from airflow import DAG
-from airflow.models import Connection
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 
-from dags.adapters import build_s3_connection_config
 from dags.adapters.airflow_s3_store import AirflowS3Store
 from lakehouse_core.api import prepare_paths
+
 # Re-export for backward compatibility - allows legacy code to import from etl_utils
 from lakehouse_core.io.paths import (  # noqa: F401 (re-exported for backward compatibility)
     NonPartitionPaths,

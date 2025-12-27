@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from lakehouse_core.domain.execution_context import PipelineExecutionContext
-from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.io.paths import PartitionPaths
+from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import commit as v1_commit
 
 
@@ -47,4 +47,3 @@ def commit(ctx: PipelineExecutionContext, metrics: Mapping[str, int]) -> Mapping
     )
 
     return commit_result
-

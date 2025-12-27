@@ -31,7 +31,7 @@ from lakehouse_core.catalog import attach_catalog_if_available
 from lakehouse_core.compute import configure_s3_access, temporary_connection
 from lakehouse_core.domain.models import RunContext, RunSpec
 from lakehouse_core.inputs import OdsCsvRegistrar
-from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths, dict_to_paths
+from lakehouse_core.io.paths import dict_to_paths
 from lakehouse_core.io.time import get_partition_date_str
 from lakehouse_core.pipeline import load as pipeline_load
 from lakehouse_core.planning import (

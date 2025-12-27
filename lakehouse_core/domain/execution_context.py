@@ -73,9 +73,7 @@ class PipelineExecutionContext:
     write_success_flag: bool = True
     file_format: str = "parquet"
 
-    def with_paths(
-        self, paths: PartitionPaths | NonPartitionPaths
-    ) -> PipelineExecutionContext:
+    def with_paths(self, paths: PartitionPaths | NonPartitionPaths) -> PipelineExecutionContext:
         """Create new context with paths populated.
 
         Args:

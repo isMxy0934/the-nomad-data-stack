@@ -114,9 +114,7 @@ def paths_to_dict(
     raise TypeError(f"Unexpected paths type: {type(paths)}")
 
 
-def dict_to_paths(
-    paths_dict: Mapping[str, Any]
-) -> PartitionPaths | NonPartitionPaths:
+def dict_to_paths(paths_dict: Mapping[str, Any]) -> PartitionPaths | NonPartitionPaths:
     """Convert XCom-serializable dict back to paths object.
 
     This is the canonical way to deserialize paths from Airflow XCom or similar.
