@@ -157,6 +157,9 @@ def dict_to_paths(
 def dict_to_partition_paths(paths_dict: Mapping[str, Any]) -> PartitionPaths:
     """Reconstruct PartitionPaths from XCom dict (type-safe variant).
 
+    This function assumes the dict contains partitioned paths data.
+    Use dict_to_paths() if you need automatic type detection.
+
     Args:
         paths_dict: Paths dictionary from XCom
 
@@ -164,11 +167,8 @@ def dict_to_partition_paths(paths_dict: Mapping[str, Any]) -> PartitionPaths:
         PartitionPaths object
 
     Raises:
-        ValueError: If paths_dict is not for partitioned paths
+        KeyError: If required fields are missing
     """
-    if not paths_dict.get("partitioned"):
-        raise ValueError("paths_dict must be for partitioned paths")
-
     return PartitionPaths(
         partition_date=str(paths_dict["partition_date"]),
         canonical_prefix=str(paths_dict["canonical_prefix"]),
@@ -182,6 +182,9 @@ def dict_to_partition_paths(paths_dict: Mapping[str, Any]) -> PartitionPaths:
 def dict_to_non_partition_paths(paths_dict: Mapping[str, Any]) -> NonPartitionPaths:
     """Reconstruct NonPartitionPaths from XCom dict (type-safe variant).
 
+    This function assumes the dict contains non-partitioned paths data.
+    Use dict_to_paths() if you need automatic type detection.
+
     Args:
         paths_dict: Paths dictionary from XCom
 
@@ -189,11 +192,8 @@ def dict_to_non_partition_paths(paths_dict: Mapping[str, Any]) -> NonPartitionPa
         NonPartitionPaths object
 
     Raises:
-        ValueError: If paths_dict is for partitioned paths
+        KeyError: If required fields are missing
     """
-    if paths_dict.get("partitioned"):
-        raise ValueError("paths_dict must be for non-partitioned paths")
-
     return NonPartitionPaths(
         canonical_prefix=str(paths_dict["canonical_prefix"]),
         tmp_prefix=str(paths_dict["tmp_prefix"]),
