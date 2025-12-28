@@ -19,6 +19,7 @@ dev = [
     "apache-airflow-providers-amazon>=9.18.1",
     "apache-airflow-providers-standard>=1.0.0",
     "freezegun>=1.5.5",
+    "pre-commit>=4.5.1",
     "ruff>=0.14.9",
 ]
 

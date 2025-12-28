@@ -78,19 +78,19 @@ def main(file_paths: list[str]) -> int:
 
         if violations:
             total_violations += len(violations)
-            print(f"\n❌ {file_path}:")
+            print(f"\n[X] {file_path}:")
             for line_num, line_content, violation_type in violations:
                 print(f"  Line {line_num}: {violation_type}")
                 print(f"    {line_content}")
 
     if total_violations > 0:
-        print(f"\n❌ Found {total_violations} architecture violation(s)")
-        print("\nℹ️  lakehouse_core/ must remain orchestrator-agnostic.")
+        print(f"\n[X] Found {total_violations} architecture violation(s)")
+        print("\n[i] lakehouse_core/ must remain orchestrator-agnostic.")
         print("   Move orchestrator-specific code to dags/adapters/")
         print("   See lakehouse_core/ARCHITECTURE.md for details.")
         return 1
     else:
-        print("✅ No architecture violations found")
+        print("[OK] No architecture violations found")
         return 0
 
 

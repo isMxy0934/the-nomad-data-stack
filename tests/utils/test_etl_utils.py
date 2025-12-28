@@ -9,6 +9,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
+    from dags.adapters import build_s3_connection_config
     from dags.utils.etl_utils import (
         commit_dataset,
         non_partition_paths_from_xcom,
@@ -16,7 +17,6 @@ try:
         prepare_dataset,
         validate_dataset,
     )
-    from dags.adapters import build_s3_connection_config
     from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
