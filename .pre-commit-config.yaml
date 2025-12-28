@@ -1,10 +1,34 @@
-# Pre-commit hooks for enforcing architecture boundaries
+# Pre-commit hooks for enforcing code quality and architecture boundaries
 # Install: uv add pre-commit --dev && uv run pre-commit install
 # Run manually: uv run pre-commit run --all-files
+#
+# Hooks order:
+# 1. Fast checks first (ruff format/lint)
+# 2. Architecture checks
+# 3. Tests (can be slow)
 
 repos:
   - repo: local
     hooks:
+      # Ruff format check (auto-fix)
+      - id: ruff-format
+        name: Ruff Format (auto-fix)
+        description: Format Python code with ruff
+        entry: uv run ruff format
+        language: system
+        files: \.py$
+        pass_filenames: true
+
+      # Ruff lint check (auto-fix)
+      - id: ruff-check
+        name: Ruff Lint
+        description: Lint and auto-fix Python code with ruff
+        entry: uv run ruff check --fix
+        language: system
+        files: \.py$
+        pass_filenames: true
+
+      # Architecture check (existing)
       - id: check-lakehouse-core-imports
         name: Check lakehouse_core has no Airflow imports
         description: Ensure lakehouse_core/ remains orchestrator-agnostic
@@ -13,3 +37,12 @@ repos:
         files: ^lakehouse_core/.*\.py$
         pass_filenames: true
         verbose: true
+
+      # Tests (can be slow - only run when tests are modified)
+      - id: pytest
+        name: Run Tests
+        description: Run pytest on modified tests
+        entry: uv run pytest
+        language: system
+        files: ^tests/.*\.py$
+        pass_filenames: true
