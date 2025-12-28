@@ -10,13 +10,13 @@ if str(ROOT_DIR) not in sys.path:
 
 try:
     from dags.utils.etl_utils import (
-        build_s3_connection_config,
         commit_dataset,
         non_partition_paths_from_xcom,
         partition_paths_from_xcom,
         prepare_dataset,
         validate_dataset,
     )
+    from dags.adapters import build_s3_connection_config
     from lakehouse_core.io.paths import NonPartitionPaths, PartitionPaths
 except ImportError as exc:
     pytest.skip(
