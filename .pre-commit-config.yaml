@@ -2,47 +2,47 @@
 # Install: uv add pre-commit --dev && uv run pre-commit install
 # Run manually: uv run pre-commit run --all-files
 #
-# Hooks order:
-# 1. Fast checks first (ruff format/lint)
-# 2. Architecture checks
-# 3. Tests (can be slow)
+# Hooks order (fastest to slowest):
+# 1. Ruff format (auto-fix)
+# 2. Ruff lint (auto-fix)
+# 3. Architecture check
+# 4. Tests (only on source changes, fail-fast)
 
 repos:
   - repo: local
     hooks:
-      # Ruff format check (auto-fix)
+      # Fast: code formatting (auto-fix)
       - id: ruff-format
-        name: Ruff Format (auto-fix)
+        name: Ruff Format
         description: Format Python code with ruff
         entry: uv run ruff format
         language: system
         files: \.py$
-        pass_filenames: true
+        types_or: [python]
 
-      # Ruff lint check (auto-fix)
+      # Fast: linting (auto-fix)
       - id: ruff-check
         name: Ruff Lint
-        description: Lint and auto-fix Python code with ruff
+        description: Check and fix Python code issues
         entry: uv run ruff check --fix
         language: system
         files: \.py$
-        pass_filenames: true
+        types_or: [python]
 
-      # Architecture check (existing)
+      # Medium: architecture boundary enforcement
       - id: check-lakehouse-core-imports
-        name: Check lakehouse_core has no Airflow imports
+        name: Check lakehouse_core Architecture
         description: Ensure lakehouse_core/ remains orchestrator-agnostic
-        entry: python scripts/check_imports.py
-        language: python
+        entry: uv run python scripts/check_imports.py
+        language: system
         files: ^lakehouse_core/.*\.py$
         pass_filenames: true
-        verbose: true
 
-      # Tests (can be slow - only run when tests are modified)
+      # Slow: run tests (fail-fast, only when code changes)
       - id: pytest
-        name: Run Tests
-        description: Run pytest on modified tests
-        entry: uv run pytest
+        name: Tests (pytest)
+        description: Run pytest - fail fast on first error
+        entry: uv run pytest -x -q --tb=short
         language: system
-        files: ^tests/.*\.py$
-        pass_filenames: true
+        files: ^(lakehouse_core|dags|tests)/.*\.py$
+        pass_filenames: false
