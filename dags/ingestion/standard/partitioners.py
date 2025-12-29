@@ -7,8 +7,8 @@ import duckdb
 import pandas as pd
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
+from dags.adapters import build_s3_connection_config
 from dags.ingestion.core.interfaces import BasePartitioner, IngestionJob
-from dags.utils.etl_utils import build_s3_connection_config
 from lakehouse_core.compute import configure_s3_access
 from lakehouse_core.domain.observability import log_event
 

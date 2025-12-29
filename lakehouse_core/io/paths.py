@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from lakehouse_core.io.uri import join_uri, strip_slashes
 
@@ -110,3 +112,89 @@ def paths_to_dict(
             "success_flag_path": paths.success_flag_path,
         }
     raise TypeError(f"Unexpected paths type: {type(paths)}")
+
+
+def dict_to_paths(paths_dict: Mapping[str, Any]) -> PartitionPaths | NonPartitionPaths:
+    """Convert XCom-serializable dict back to paths object.
+
+    This is the canonical way to deserialize paths from Airflow XCom or similar.
+    Inverse operation of paths_to_dict.
+
+    Args:
+        paths_dict: JSON-serializable dict from XCom
+
+    Returns:
+        PartitionPaths or NonPartitionPaths object
+
+    Raises:
+        ValueError: If paths_dict is missing required fields
+        TypeError: If partitioned flag is invalid
+    """
+    partitioned = paths_dict.get("partitioned")
+    if partitioned is None:
+        raise ValueError("paths_dict must contain 'partitioned' field")
+
+    if partitioned:
+        return PartitionPaths(
+            partition_date=str(paths_dict["partition_date"]),
+            canonical_prefix=str(paths_dict["canonical_prefix"]),
+            tmp_prefix=str(paths_dict["tmp_prefix"]),
+            tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
+            manifest_path=str(paths_dict["manifest_path"]),
+            success_flag_path=str(paths_dict["success_flag_path"]),
+        )
+    else:
+        return NonPartitionPaths(
+            canonical_prefix=str(paths_dict["canonical_prefix"]),
+            tmp_prefix=str(paths_dict["tmp_prefix"]),
+            manifest_path=str(paths_dict["manifest_path"]),
+            success_flag_path=str(paths_dict["success_flag_path"]),
+        )
+
+
+def dict_to_partition_paths(paths_dict: Mapping[str, Any]) -> PartitionPaths:
+    """Reconstruct PartitionPaths from XCom dict (type-safe variant).
+
+    This function assumes the dict contains partitioned paths data.
+    Use dict_to_paths() if you need automatic type detection.
+
+    Args:
+        paths_dict: Paths dictionary from XCom
+
+    Returns:
+        PartitionPaths object
+
+    Raises:
+        KeyError: If required fields are missing
+    """
+    return PartitionPaths(
+        partition_date=str(paths_dict["partition_date"]),
+        canonical_prefix=str(paths_dict["canonical_prefix"]),
+        tmp_prefix=str(paths_dict["tmp_prefix"]),
+        tmp_partition_prefix=str(paths_dict["tmp_partition_prefix"]),
+        manifest_path=str(paths_dict["manifest_path"]),
+        success_flag_path=str(paths_dict["success_flag_path"]),
+    )
+
+
+def dict_to_non_partition_paths(paths_dict: Mapping[str, Any]) -> NonPartitionPaths:
+    """Reconstruct NonPartitionPaths from XCom dict (type-safe variant).
+
+    This function assumes the dict contains non-partitioned paths data.
+    Use dict_to_paths() if you need automatic type detection.
+
+    Args:
+        paths_dict: Paths dictionary from XCom
+
+    Returns:
+        NonPartitionPaths object
+
+    Raises:
+        KeyError: If required fields are missing
+    """
+    return NonPartitionPaths(
+        canonical_prefix=str(paths_dict["canonical_prefix"]),
+        tmp_prefix=str(paths_dict["tmp_prefix"]),
+        manifest_path=str(paths_dict["manifest_path"]),
+        success_flag_path=str(paths_dict["success_flag_path"]),
+    )

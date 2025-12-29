@@ -9,8 +9,8 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 try:
+    from dags.adapters import build_s3_connection_config
     from dags.utils.etl_utils import (
-        build_s3_connection_config,
         commit_dataset,
         non_partition_paths_from_xcom,
         partition_paths_from_xcom,
