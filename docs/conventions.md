@@ -12,7 +12,7 @@ Ingestion DAG 工厂入口：`dags/ingestion_dags.py`
 
 - 扫描配置：`dags/ingestion/configs/*.yaml`
 - 生成 DAG：`ingestion_{target}`（每个 target 一个 DAG）
-- DAG 结构：prepare → plan → execute(map) → compact+commit(reduce)
+- DAG structure: run_ingestion (core runner)
 
 ### 分区与路径
 

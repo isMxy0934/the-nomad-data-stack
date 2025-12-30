@@ -31,3 +31,9 @@
 - 现有 migrations 的 seed parquet 生成语句里会写入一个 `dt` 列（部分文件使用占位符字符串）。
 - 由于视图读取使用了 `hive_partitioning=true`，最终查询的 `dt` 会以目录分区值为准，因此 seed 文件通常仍会被 `dt <> '1900-01-01'` 过滤掉。
 - 为减少歧义，可以在后续迭代中把 seed 的 `dt` 列固定为 `'1900-01-01'`（仅提升可读性，不改变行为）。
+
+## 6) Ingestion runner (core)
+
+- Ingestion execution is centralized in lakehouse_core.ingestion.runner.
+- Compaction is local DuckDB -> single S3 write + commit protocol.
+- Airflow DAGs call the runner instead of running the pipeline inline.

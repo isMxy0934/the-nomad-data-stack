@@ -49,6 +49,7 @@ docker compose up -d
 
 *   **采集（Ingestion）**：
     *   `dags/ingestion_dags.py` 会扫描 `dags/ingestion/configs/*.yaml` 并生成 `ingestion_{target}` DAG（按配置 schedule 运行或手动触发）。
+    *   Standalone runner: `scripts/run_ingestion.py` (no Airflow required)
     *   采集写入 RAW（CSV），默认路径形如：`lake/raw/daily/{target}/dt=YYYY-MM-DD/data.csv`（可由 compactor 配置覆盖）。
 *   **数仓跑批（DW Orchestration）**：
     *   **日常跑批 (Daily Run)**：手动触发 **`dw_start_dag`**，自动处理“昨天”（T-1）的分区日期，并触发 `dw_catalog_dag -> dw_ods -> dw_{layer}...`。

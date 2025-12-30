@@ -3,20 +3,17 @@ Ingestion DAG Factory.
 Scans dags/ingestion/configs/*.yaml and generates Airflow DAGs.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta
-from io import BytesIO
 from pathlib import Path
 
 import yaml
 from airflow import DAG
 from airflow.decorators import task
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
-from dags.ingestion.core.interfaces import IngestionJob
-from dags.ingestion.core.loader import instantiate_component
-from lakehouse_core.api import prepare_paths
-from lakehouse_core.io.paths import paths_to_dict
+from lakehouse_core.ingestion.runner import run_ingestion_config
 from lakehouse_core.io.time import get_partition_date_str
 
 logger = logging.getLogger(__name__)
@@ -27,24 +24,21 @@ DEFAULT_ARGS = {
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
 }
-DEFAULT_AWS_CONN_ID = "MINIO_S3"
-DEFAULT_BUCKET = "stock-data"
-TMP_PREFIX_BASE = "tmp/ingestion"
 
 
 def _load_yaml_configs() -> list[Path]:
     if not CONFIG_DIR.exists():
-        logger.warning(f"Config directory not found: {CONFIG_DIR}")
+        logger.warning("Config directory not found: %s", CONFIG_DIR)
         return []
     return list(CONFIG_DIR.glob("*.yaml"))
 
 
 def create_dag(config_path: Path):
     try:
-        with open(config_path, encoding="utf-8") as f:
-            conf = yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"Failed to load config {config_path}: {e}")
+        with open(config_path, encoding="utf-8") as handle:
+            conf = yaml.safe_load(handle)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to load config %s: %s", config_path, exc)
         return None
 
     target = conf["target"]
@@ -61,126 +55,41 @@ def create_dag(config_path: Path):
         params={
             "start_date": get_partition_date_str(),
             "end_date": get_partition_date_str(),
+            "write_mode": "overwrite",
+            "max_workers": 1,
         },
     )
 
     with dag:
-        # --- 1. Prepare Phase ---
+
         @task
-        def prepare_ingestion_paths(**context) -> dict:
-            # Partition date is determined by compactor, not by user input
-            partition_date = get_partition_date_str()
-
-            # Sanitize run_id for S3/MinIO compatibility (remove :, +, . etc)
-            raw_run_id = context["run_id"]
-            safe_run_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw_run_id)
-
-            # Get prefix_template from compactor config
-            compactor_kwargs = conf.get("compactor", {}).get("kwargs", {})
-            base_prefix = compactor_kwargs.get("prefix_template")
-            if not base_prefix:
-                # Fallback to legacy default if missing
-                base_prefix = f"lake/raw/daily/{target}"
-
-            bucket = compactor_kwargs.get("bucket", DEFAULT_BUCKET)
-
-            paths = prepare_paths(
-                base_prefix=base_prefix,
-                run_id=safe_run_id,
-                partition_date=partition_date,
-                is_partitioned=True,
-                store_namespace=bucket,
-            )
-            # Use paths_to_dict for consistent serialization
-            result = paths_to_dict(paths, partition_date=partition_date)
-            # Add extra fields needed by ingestion workflow
-            result["base_prefix"] = base_prefix
-            result["run_id"] = safe_run_id
-            return result
-
-        # --- 2. Plan Phase ---
-        @task
-        def plan(paths_dict: dict, **context) -> list[dict]:
-            partitioner = instantiate_component(conf["partitioner"])
-            # Support both params (UI) and conf (JSON config)
+        def run_ingestion(**context):
             dag_params = context.get("params") or {}
             dag_run_conf = context.get("dag_run").conf or {}
 
-            # Prefer explicit range from params or conf, fallback to paths_dict.partition_date
-            start = (
-                dag_params.get("start_date")
-                or dag_run_conf.get("start_date")
-                or paths_dict["partition_date"]
+            start_date = dag_run_conf.get("start_date") or dag_params.get("start_date")
+            end_date = dag_run_conf.get("end_date") or dag_params.get("end_date") or start_date
+            partition_date = dag_run_conf.get("partition_date")
+            write_mode = (
+                dag_run_conf.get("write_mode") or dag_params.get("write_mode") or "overwrite"
             )
-            end = dag_params.get("end_date") or dag_run_conf.get("end_date") or start
+            max_workers = int(dag_run_conf.get("max_workers") or dag_params.get("max_workers") or 1)
 
-            jobs = []
-            for job in partitioner.generate_jobs(start_date=start, end_date=end):
-                jobs.append({"params": job.params, "meta": job.meta})
-            return jobs
-
-        # --- 3. Execute Phase (Map) ---
-        @task(map_index_template="{{ job_dict['params'] }}")
-        def execute(job_dict: dict, paths_dict: dict, **context) -> dict:
-            job = IngestionJob(params=job_dict["params"], meta=job_dict["meta"])
-            extractor = instantiate_component(conf["extractor"])
-            df = extractor.extract(job)
-
-            if df is None or df.empty:
-                return {"row_count": 0, "status": "skipped"}
-
-            # 写入到 prepare 阶段定义的临时目录
-            import uuid
-
-            from dags.adapters.airflow_s3_store import AirflowS3Store
-            from lakehouse_core.io.uri import join_uri
-
-            file_id = str(uuid.uuid4())[:8]
-            # Use safe run_id from paths_dict
-            uri = join_uri(paths_dict["tmp_prefix"], f"results/{file_id}.parquet")
-
-            s3_hook = S3Hook(aws_conn_id=DEFAULT_AWS_CONN_ID)
-            store = AirflowS3Store(s3_hook)
-
-            buf = BytesIO()
-            df.to_parquet(buf, index=False)
-            store.write_bytes(uri, buf.getvalue())
-
-            return {"uri": uri, "row_count": len(df), "file_count": 1, "status": "success"}
-
-        # --- 4. Compact & Commit Phase (Reduce) ---
-        @task
-        def commit_ingestion(task_results: list[dict], paths_dict: dict, **context):
-            success_results = [r for r in task_results if r.get("status") == "success"]
-            if not success_results:
-                logger.info("No data to commit.")
-                return {"status": "skipped", "reason": "no_data"}
-
-            total_rows = sum(r["row_count"] for r in success_results)
-            logger.info(f"Total rows from all extraction jobs: {total_rows}")
-
-            # 使用 StandardS3Compactor 处理最终合并和提交
-            compactor = instantiate_component(conf["compactor"])
-
-            publish_result = compactor.compact(
-                results=success_results,
-                target=target,
-                partition_date=paths_dict["partition_date"],
-                paths_dict=paths_dict,
-                run_id=paths_dict["run_id"],
+            return run_ingestion_config(
+                config_path=config_path,
+                start_date=start_date,
+                end_date=end_date,
+                partition_date=partition_date,
+                run_id=context.get("run_id"),
+                write_mode=write_mode,
+                max_workers=max_workers,
             )
-            logger.info(f"Compaction and commit completed: {publish_result}")
 
-        # --- Workflow ---
-        p_paths = prepare_ingestion_paths()
-        p_jobs = plan(p_paths)
-        results = execute.partial(paths_dict=p_paths).expand(job_dict=p_jobs)
-        commit_ingestion(results, p_paths)
+        run_ingestion()
 
     return dag
 
 
-# Scan and Generate
 for config_file in _load_yaml_configs():
     dag_object = create_dag(config_file)
     if dag_object:
