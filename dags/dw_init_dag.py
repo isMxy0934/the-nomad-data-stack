@@ -36,6 +36,16 @@ with DAG(
             type=["array", "null"],
             description="List of targets (e.g. ['ods.fund_price_akshare']). Leave empty for ALL targets.",
         ),
+        "batch_size": Param(
+            default=30,
+            type="integer",
+            description="Number of dates to process in a single backfill task (internal batching, not Airflow task count).",
+        ),
+        "continue_on_error": Param(
+            default=False,
+            type="boolean",
+            description="Continue processing remaining dates when a single date fails (only for backfill).",
+        ),
     },
 ) as dag:
 
@@ -45,6 +55,8 @@ with DAG(
         start_date = str(params.get("start_date") or "").strip()
         end_date = str(params.get("end_date") or "").strip()
         targets = parse_targets(params)
+        batch_size = int(params.get("batch_size", 30))
+        continue_on_error = bool(params.get("continue_on_error", False))
 
         if not start_date:
             raise ValueError("Init run requires 'start_date'")
@@ -55,6 +67,8 @@ with DAG(
             "start_date": start_date,
             "end_date": end_date,
             "targets": targets or [],
+            "batch_size": batch_size,
+            "continue_on_error": continue_on_error,
             "init": True,
         }
 

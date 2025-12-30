@@ -8,10 +8,69 @@ from collections.abc import Sequence
 from typing import Any
 
 
+def parse_bool_param(value: Any, default: bool = False) -> bool:
+    """Parse boolean parameter from DAG run conf (handles Jinja string rendering).
+
+    Args:
+        value: Value from dag_run.conf (may be bool, string, or other)
+        default: Default value if parsing fails
+
+    Returns:
+        Boolean value
+
+    Examples:
+        >>> parse_bool_param(True)
+        True
+        >>> parse_bool_param("True")
+        True
+        >>> parse_bool_param("False")
+        False
+        >>> parse_bool_param("false")
+        False
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes")
+    return default
+
+
+def parse_int_param(value: Any, default: int = 0) -> int:
+    """Parse integer parameter from DAG run conf (handles Jinja string rendering).
+
+    Args:
+        value: Value from dag_run.conf (may be int, string, or other)
+        default: Default value if parsing fails
+
+    Returns:
+        Integer value
+
+    Examples:
+        >>> parse_int_param(30)
+        30
+        >>> parse_int_param("30")
+        30
+        >>> parse_int_param("invalid", 10)
+        10
+    """
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
 def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
     """Normalize dag_run.conf.targets.
 
     Accepts list or JSON-encoded list (with possible double-encoding).
+    Supports two formats:
+    - "layer.table" (e.g., "ods.fund_etf_spot")
+    - "layer" (e.g., "dwd" to process entire layer)
+
     Returns None when targets is absent/empty.
     """
 
@@ -47,11 +106,17 @@ def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
     targets = [str(t).strip() for t in raw if str(t).strip()]
     if not targets:
         return None
+
+    # Validate each target (allow both "layer" and "layer.table" formats)
     for target in targets:
         if "*" in target:
             raise ValueError("dag_run.conf.targets does not support wildcard targets")
-        if "." not in target:
-            raise ValueError("dag_run.conf.targets must use layer.table format")
+        # Allow layer-only format (e.g., "dwd") or layer.table format (e.g., "dwd.table_name")
+        if "." in target:
+            parts = target.split(".", 1)
+            if not parts[0] or not parts[1]:
+                raise ValueError(f"Invalid target format: '{target}'. Use 'layer' or 'layer.table'")
+
     return targets
 
 
