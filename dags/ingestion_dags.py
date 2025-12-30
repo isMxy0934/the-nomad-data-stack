@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 from airflow import DAG
 from airflow.decorators import task
+from airflow.models.param import Param
 
 from lakehouse_core.ingestion.runner import run_ingestion_config
 from lakehouse_core.io.time import get_partition_date_str
@@ -53,10 +54,28 @@ def create_dag(config_path: Path):
         tags=["ingestion", target],
         max_active_runs=1,
         params={
-            "start_date": get_partition_date_str(),
-            "end_date": get_partition_date_str(),
-            "write_mode": "overwrite",
-            "max_workers": 1,
+            "start_date": Param(
+                default=get_partition_date_str(),
+                type="string",
+                format="date",
+                description="Start date (YYYY-MM-DD).",
+            ),
+            "end_date": Param(
+                default=get_partition_date_str(),
+                type="string",
+                format="date",
+                description="End date (YYYY-MM-DD). Defaults to start_date if empty.",
+            ),
+            "write_mode": Param(
+                default="overwrite",
+                type="string",
+                description="Partition write mode: overwrite | skip_existing | fail_if_exists.",
+            ),
+            "max_workers": Param(
+                default=1,
+                type="integer",
+                description="Parallel extractor workers inside the ingestion runner.",
+            ),
         },
     )
 
