@@ -145,6 +145,7 @@ def run_ingestion_config(
             run_id=safe_run_id,
             local_dir=run_dir,
             write_mode=write_mode,
+            max_workers=max_workers,
         )
         return IngestionRunResult(target=target, status="ok", details=compactor_result)
     finally:

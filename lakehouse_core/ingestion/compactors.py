@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,7 @@ class DuckDBCompactor(BaseCompactor):
         run_id: str | None = kwargs.get("run_id")
         local_dir: Path | None = kwargs.get("local_dir")
         write_mode: str = str(kwargs.get("write_mode") or "overwrite").lower()
+        max_workers = int(kwargs.get("max_workers") or 1)
 
         if not store:
             raise ValueError("store is required for DuckDBCompactor")
@@ -81,6 +84,7 @@ class DuckDBCompactor(BaseCompactor):
                     local_dir=local_dir,
                     partition_column=self.partition_column,
                     write_mode=write_mode,
+                    max_workers=max_workers,
                 )
 
             if not partition_date:
@@ -169,6 +173,7 @@ class DuckDBCompactor(BaseCompactor):
         local_dir: Path,
         partition_column: str,
         write_mode: str,
+        max_workers: int,
     ) -> dict[str, Any]:
         prepared_view = _build_partition_view(connection, view_name, partition_column)
         partitions = _list_partitions(connection, prepared_view)
@@ -180,6 +185,7 @@ class DuckDBCompactor(BaseCompactor):
         total_rows = 0
         publish_results: list[dict[str, Any]] = []
         skipped: list[str] = []
+        work_items: list[_PartitionWork] = []
 
         for partition_date in partitions:
             unique_run_id = _unique_run_id(run_id, partition_date)
@@ -208,24 +214,54 @@ class DuckDBCompactor(BaseCompactor):
                 partition_date=partition_date,
             )
 
-            dest_uri = join_uri(paths.tmp_partition_prefix, local_path.name)
-            store.write_bytes(dest_uri, local_path.read_bytes())
+            work_items.append(
+                _PartitionWork(
+                    partition_date=partition_date,
+                    unique_run_id=unique_run_id,
+                    paths=paths,
+                    local_path=local_path,
+                    row_count=row_count,
+                )
+            )
 
-            metrics = {"row_count": row_count, "file_count": 1, "has_data": 1}
-            validated = validate(
-                store=store, paths=paths, metrics=metrics, file_format=self.file_format
-            )
-            publish_result, _ = commit(
-                store=store,
-                paths=paths,
-                dest=target,
-                run_id=unique_run_id,
-                partition_date=partition_date,
-                metrics=validated,
-            )
-            cleanup(store=store, paths=paths)
-            publish_results.append(dict(publish_result))
-            total_rows += row_count
+        if work_items:
+            total_rows = sum(item.row_count for item in work_items)
+            results_by_dt: dict[str, dict[str, Any]] = {}
+            if max_workers <= 1 or len(work_items) == 1:
+                for item in work_items:
+                    result = _upload_and_commit_partition(
+                        item=item,
+                        store=store,
+                        target=target,
+                        file_format=self.file_format,
+                    )
+                    results_by_dt[item.partition_date] = result
+            else:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(
+                            _upload_and_commit_partition,
+                            item=item,
+                            store=store,
+                            target=target,
+                            file_format=self.file_format,
+                        ): item.partition_date
+                        for item in work_items
+                    }
+                    for future in as_completed(futures):
+                        partition_date = futures[future]
+                        try:
+                            results_by_dt[partition_date] = future.result()
+                        except Exception as exc:  # noqa: BLE001
+                            raise RuntimeError(
+                                f"Failed to publish partition dt={partition_date}"
+                            ) from exc
+
+            publish_results = [
+                results_by_dt[item.partition_date]
+                for item in work_items
+                if item.partition_date in results_by_dt
+            ]
 
         return {
             "row_count": total_rows,
@@ -234,6 +270,39 @@ class DuckDBCompactor(BaseCompactor):
             "partitions": publish_results,
             "skipped_partitions": skipped,
         }
+
+
+@dataclass(frozen=True)
+class _PartitionWork:
+    partition_date: str
+    unique_run_id: str
+    paths: Any
+    local_path: Path
+    row_count: int
+
+
+def _upload_and_commit_partition(
+    *,
+    item: _PartitionWork,
+    store: ObjectStore,
+    target: str,
+    file_format: str,
+) -> dict[str, Any]:
+    dest_uri = join_uri(item.paths.tmp_partition_prefix, item.local_path.name)
+    store.write_bytes(dest_uri, item.local_path.read_bytes())
+
+    metrics = {"row_count": item.row_count, "file_count": 1, "has_data": 1}
+    validated = validate(store=store, paths=item.paths, metrics=metrics, file_format=file_format)
+    publish_result, _ = commit(
+        store=store,
+        paths=item.paths,
+        dest=target,
+        run_id=item.unique_run_id,
+        partition_date=item.partition_date,
+        metrics=validated,
+    )
+    cleanup(store=store, paths=item.paths)
+    return dict(publish_result)
 
 
 def _register_base_view(connection, parquet_files: list[Path]) -> None:
