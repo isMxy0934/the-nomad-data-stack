@@ -46,8 +46,17 @@ def test_parse_targets_empty_values():
 
 
 def test_parse_targets_invalid_format():
-    with pytest.raises(ValueError, match="must use layer.table format"):
-        parse_targets({"targets": ["table_without_layer"]})
+    # Empty layer or table part is invalid (e.g., ".table" or "layer.")
+    with pytest.raises(ValueError, match="Invalid target format"):
+        parse_targets({"targets": [".table"]})
+    with pytest.raises(ValueError, match="Invalid target format"):
+        parse_targets({"targets": ["layer."]})
+
+
+def test_parse_targets_layer_format():
+    # Layer-only format should be valid (e.g., "dwd" to process entire layer)
+    assert parse_targets({"targets": ["dwd"]}) == ["dwd"]
+    assert parse_targets({"targets": ["ods", "dwd"]}) == ["ods", "dwd"]
 
 
 def test_parse_targets_wildcard_error():

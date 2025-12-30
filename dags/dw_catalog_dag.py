@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from airflow import DAG
+from airflow.decorators import task
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
@@ -63,6 +64,29 @@ def create_catalog_dag() -> DAG:
             },
         )
 
+        @task.branch
+        def decide_dag_type(**context: Any) -> str:
+            """Decide whether to trigger daily or backfill DAG based on init parameter.
+
+            Returns:
+                Task ID of the DAG to trigger:
+                - "trigger_dw_ods_backfill" if init=True (backfill scenario)
+                - "trigger_dw_ods" if init=False or missing (daily scenario)
+            """
+            conf = context.get("dag_run").conf or {}
+            is_init = conf.get("init", False)
+
+            # Convert string "True"/"False" to boolean if needed (from Jinja templates)
+            if isinstance(is_init, str):
+                is_init = is_init.lower() in ("true", "1", "yes")
+
+            if is_init:
+                return "trigger_dw_ods_backfill"
+            return "trigger_dw_ods"
+
+        branch = decide_dag_type()
+
+        # Daily DAG trigger (for normal daily runs)
         trigger_ods = TriggerDagRunOperator(
             task_id="trigger_dw_ods",
             trigger_dag_id="dw_ods",
@@ -77,7 +101,23 @@ def create_catalog_dag() -> DAG:
             },
         )
 
-        migrate >> trigger_ods
+        # Backfill DAG trigger (for historical data backfill)
+        trigger_ods_backfill = TriggerDagRunOperator(
+            task_id="trigger_dw_ods_backfill",
+            trigger_dag_id="dw_ods_backfill",
+            wait_for_completion=False,
+            reset_dag_run=True,
+            conf={
+                "start_date": "{{ dag_run.conf.get('start_date') }}",
+                "end_date": "{{ dag_run.conf.get('end_date') }}",
+                "batch_size": "{{ dag_run.conf.get('batch_size', 30) }}",
+                "continue_on_error": "{{ dag_run.conf.get('continue_on_error', False) }}",
+                "targets": "{{ dag_run.conf.get('targets') }}",
+                "init": "{{ dag_run.conf.get('init') }}",
+            },
+        )
+
+        migrate >> branch >> [trigger_ods, trigger_ods_backfill]
 
     return dag
 

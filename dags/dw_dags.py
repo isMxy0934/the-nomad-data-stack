@@ -49,6 +49,55 @@ CATALOG_PATH = Path(os.getenv("DUCKDB_CATALOG_PATH", ".duckdb/catalog.duckdb"))
 logger = logging.getLogger(__name__)
 
 
+def _find_next_layers_with_tables(
+    current_layer: str,
+    config: DWConfig,
+    layers_with_tables: set[str],
+) -> list[str]:
+    """Find all transitive downstream layers that have tables.
+    
+    Skips empty intermediate layers to maintain trigger chain.
+    
+    Example:
+        ods -> dwd (empty) -> dim (has tables)
+        Result: ["dim"] (skip dwd, return dim)
+    
+    Args:
+        current_layer: Current layer name
+        config: DW configuration
+        layers_with_tables: Set of layers that have SQL files
+    
+    Returns:
+        List of downstream layer names that have tables
+    """
+    # Find direct downstream layers (layers that depend on current_layer)
+    direct_downstream = [
+        ds for ds, deps in config.layer_dependencies.items()
+        if current_layer in deps
+    ]
+    
+    if not direct_downstream:
+        return []
+    
+    # Check which direct downstream layers have tables
+    valid_layers = [ds for ds in direct_downstream if ds in layers_with_tables]
+    
+    if valid_layers:
+        # Found layers with tables, return them
+        return valid_layers
+    
+    # No direct downstream has tables, recursively check their downstream
+    # (skip empty intermediate layers)
+    next_layers = set()
+    for empty_layer in direct_downstream:
+        # Recursively find downstream layers of this empty layer
+        next_layers.update(
+            _find_next_layers_with_tables(empty_layer, config, layers_with_tables)
+        )
+    
+    return sorted(next_layers)  # Sort for deterministic order
+
+
 def _conf_targets(context: Mapping[str, Any]) -> list[str] | None:
     dag_run = context.get("dag_run")
     conf = dag_run.conf if dag_run else {}
@@ -271,11 +320,11 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                     if dep in table_last_tasks:
                         table_last_tasks[dep] >> table_last_tasks[table_name]
 
-        potential_downstream = [ds for ds, dps in config.layer_dependencies.items() if layer in dps]
-        valid_ds = [ds for ds in potential_downstream if ds in layers_with_tables]
+        # Trigger downstream layers (skip empty intermediate layers)
+        next_layers = _find_next_layers_with_tables(layer, config, layers_with_tables)
 
-        if valid_ds:
-            for ds in valid_ds:
+        if next_layers:
+            for ds in next_layers:
                 trigger = TriggerDagRunOperator(
                     task_id=f"trigger_dw_{ds}",
                     trigger_dag_id=f"dw_{ds}",
@@ -291,6 +340,7 @@ def create_layer_dag(layer: str, config: DWConfig) -> DAG | None:
                 for tg in table_last_tasks.values():
                     tg >> trigger
         else:
+            # No downstream layers with tables, trigger finish DAG
             trigger_finish = TriggerDagRunOperator(
                 task_id="trigger_dw_finish",
                 trigger_dag_id="dw_finish_dag",
