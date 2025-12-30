@@ -61,46 +61,43 @@ def _find_next_layers_with_tables(
     layers_with_tables: set[str],
 ) -> list[str]:
     """Find all transitive downstream layers that have tables.
-    
+
     Skips empty intermediate layers to maintain trigger chain.
-    
+
     Example:
         ods -> dwd (empty) -> dim (has tables)
         Result: ["dim"] (skip dwd, return dim)
-    
+
     Args:
         current_layer: Current layer name
         config: DW configuration
         layers_with_tables: Set of layers that have SQL files
-    
+
     Returns:
         List of downstream layer names that have tables
     """
     # Find direct downstream layers (layers that depend on current_layer)
     direct_downstream = [
-        ds for ds, deps in config.layer_dependencies.items()
-        if current_layer in deps
+        ds for ds, deps in config.layer_dependencies.items() if current_layer in deps
     ]
-    
+
     if not direct_downstream:
         return []
-    
+
     # Check which direct downstream layers have tables
     valid_layers = [ds for ds in direct_downstream if ds in layers_with_tables]
-    
+
     if valid_layers:
         # Found layers with tables, return them
         return valid_layers
-    
+
     # No direct downstream has tables, recursively check their downstream
     # (skip empty intermediate layers)
     next_layers = set()
     for empty_layer in direct_downstream:
         # Recursively find downstream layers of this empty layer
-        next_layers.update(
-            _find_next_layers_with_tables(empty_layer, config, layers_with_tables)
-        )
-    
+        next_layers.update(_find_next_layers_with_tables(empty_layer, config, layers_with_tables))
+
     return sorted(next_layers)  # Sort for deterministic order
 
 
@@ -178,7 +175,7 @@ def backfill_table_range(
     # 0. Normalize parameters from Jinja rendering (TriggerDagRunOperator passes strings)
     continue_on_error = parse_bool_param(continue_on_error, False)
     batch_size = parse_int_param(batch_size, 30)
-    
+
     spec = RunSpec(**dict(run_spec))
     table_name = str(spec.table)
     layer = str(spec.layer)
@@ -188,8 +185,7 @@ def backfill_table_range(
     if targets is not None and not any(_target_matches(run_spec, t) for t in targets):
         dates = _generate_dates(start_date, end_date)
         logger.info(
-            f"[Backfill] Skipping {layer}.{table_name} (not in targets), "
-            f"{len(dates)} dates skipped"
+            f"[Backfill] Skipping {layer}.{table_name} (not in targets), {len(dates)} dates skipped"
         )
         return {
             "skipped": True,
@@ -212,7 +208,7 @@ def backfill_table_range(
         dates = [start_date]  # Use start_date as a placeholder
     else:
         dates = _generate_dates(start_date, end_date)
-        
+
     logger.info(
         f"[Backfill] Starting backfill for {layer}.{table_name}: "
         f"{len(dates)} dates ({start_date} to {end_date}), "
@@ -332,8 +328,7 @@ def backfill_table_range(
 
     if failed_dates:
         logger.warning(
-            f"[Backfill] Failed dates for {layer}.{table_name}: "
-            f"{[f['date'] for f in failed_dates]}"
+            f"[Backfill] Failed dates for {layer}.{table_name}: {[f['date'] for f in failed_dates]}"
         )
 
     return result
@@ -459,4 +454,3 @@ def build_backfill_dags() -> dict[str, DAG]:
 
 # Register all backfill DAGs with Airflow
 globals().update(build_backfill_dags())
-

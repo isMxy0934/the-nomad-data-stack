@@ -10,14 +10,14 @@ from typing import Any
 
 def parse_bool_param(value: Any, default: bool = False) -> bool:
     """Parse boolean parameter from DAG run conf (handles Jinja string rendering).
-    
+
     Args:
         value: Value from dag_run.conf (may be bool, string, or other)
         default: Default value if parsing fails
-        
+
     Returns:
         Boolean value
-        
+
     Examples:
         >>> parse_bool_param(True)
         True
@@ -37,14 +37,14 @@ def parse_bool_param(value: Any, default: bool = False) -> bool:
 
 def parse_int_param(value: Any, default: int = 0) -> int:
     """Parse integer parameter from DAG run conf (handles Jinja string rendering).
-    
+
     Args:
         value: Value from dag_run.conf (may be int, string, or other)
         default: Default value if parsing fails
-        
+
     Returns:
         Integer value
-        
+
     Examples:
         >>> parse_int_param(30)
         30
@@ -70,7 +70,7 @@ def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
     Supports two formats:
     - "layer.table" (e.g., "ods.fund_etf_spot")
     - "layer" (e.g., "dwd" to process entire layer)
-    
+
     Returns None when targets is absent/empty.
     """
 
@@ -106,7 +106,7 @@ def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
     targets = [str(t).strip() for t in raw if str(t).strip()]
     if not targets:
         return None
-    
+
     # Validate each target (allow both "layer" and "layer.table" formats)
     for target in targets:
         if "*" in target:
@@ -116,7 +116,7 @@ def parse_targets(conf: dict[str, Any] | None) -> list[str] | None:
             parts = target.split(".", 1)
             if not parts[0] or not parts[1]:
                 raise ValueError(f"Invalid target format: '{target}'. Use 'layer' or 'layer.table'")
-    
+
     return targets
 
 

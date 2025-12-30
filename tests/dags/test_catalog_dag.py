@@ -20,7 +20,7 @@ def test_create_catalog_dag_builds_tasks():
     branch = dag.get_task("decide_dag_type")
     trigger_daily = dag.get_task("trigger_dw_ods")
     trigger_backfill = dag.get_task("trigger_dw_ods_backfill")
-    
+
     # Verify task dependencies: migrate -> branch -> [daily, backfill]
     assert migrate.downstream_task_ids == {branch.task_id}
     assert branch.downstream_task_ids == {trigger_daily.task_id, trigger_backfill.task_id}

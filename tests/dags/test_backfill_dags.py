@@ -426,4 +426,3 @@ class TestBackfillTableRange:
 
         # Verify cleanup was called despite the error
         mock_cleanup.assert_called_once()
-
