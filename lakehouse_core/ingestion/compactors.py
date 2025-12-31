@@ -511,8 +511,7 @@ def _write_partitioned_files(
         )
 
     connection.execute(
-        f"COPY (SELECT * EXCLUDE (__partition_dt) FROM {copy_view}) "
-        f"TO '{dest}' ({options});"
+        f"COPY (SELECT * EXCLUDE (__partition_dt) FROM {copy_view}) TO '{dest}' ({options});"
     )
 
 
