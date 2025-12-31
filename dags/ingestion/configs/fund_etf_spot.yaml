@@ -6,17 +6,17 @@ start_date: "2024-01-01"
 # 1. Split Strategy
 partitioner:
   # Single snapshot task, no partitioning needed
-  class: "dags.ingestion.standard.partitioners.SingleJobPartitioner"
+  class: "lakehouse_core.ingestion.partitioners.SingleJobPartitioner"
 
 # 2. Extraction Logic
 extractor:
-  class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
+  class: "lakehouse_core.ingestion.extractors.SimpleFunctionExtractor"
   kwargs:
     function_ref: "dags.ingestion.impl.etf.fetch_fund_etf_spot:fetch_fund_etf_spot"
 
 # 3. Compaction/Storage
 compactor:
-  class: "dags.ingestion.standard.compactors.StandardS3Compactor"
+  class: "lakehouse_core.ingestion.compactors.DuckDBCompactor"
   kwargs:
     bucket: "stock-data"
     prefix_template: "lake/raw/daily/fund_etf_spot"

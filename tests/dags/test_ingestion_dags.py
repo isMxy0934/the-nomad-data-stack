@@ -55,17 +55,11 @@ class TestIngestionDAGGeneration:
         config_path = config_files[0]
         dag = create_dag(config_path)
 
-        # Check for expected tasks
         task_ids = [task.task_id for task in dag.tasks]
-
-        # Based on the workflow: prepare_ingestion_paths, plan, execute, commit_ingestion
-        assert "prepare_ingestion_paths" in task_ids
-        assert "plan" in task_ids
-        assert "execute" in task_ids
-        assert "commit_ingestion" in task_ids
+        assert "run_ingestion" in task_ids
 
     def test_dag_task_dependencies(self):
-        """Test that task dependencies are correctly set up."""
+        """Test that DAG has a single runner task."""
         config_files = _load_yaml_configs()
         if not config_files:
             pytest.skip("No config files found")
@@ -73,36 +67,9 @@ class TestIngestionDAGGeneration:
         config_path = config_files[0]
         dag = create_dag(config_path)
 
-        # Get tasks
-        prepare_task = dag.get_task("prepare_ingestion_paths")
-        plan_task = dag.get_task("plan")
-        execute_task = dag.get_task("execute")
-        commit_task = dag.get_task("commit_ingestion")
-
-        # Verify dependencies: prepare -> plan -> execute -> commit
-        assert prepare_task in plan_task.upstream_list
-        assert plan_task in execute_task.upstream_list
-        assert execute_task in commit_task.upstream_list
-
-    def test_prepare_task_returns_partitioned_field(self):
-        """Test that prepare_ingestion_paths returns 'partitioned' field."""
-        config_files = _load_yaml_configs()
-        if not config_files:
-            pytest.skip("No config files found")
-
-        config_path = config_files[0]
-        dag = create_dag(config_path)
-
-        # Get the prepare task
-        prepare_task = dag.get_task("prepare_ingestion_paths")
-
-        # Check that the task function has the correct signature
-        assert hasattr(prepare_task, "python_callable")
-
-        # The function should return a dict with 'partitioned' key
-        # We can't execute it here without Airflow context, but we can verify
-        # by inspecting the source or by checking the DAG structure
-        assert prepare_task.task_id == "prepare_ingestion_paths"
+        tasks = [task.task_id for task in dag.tasks]
+        assert "run_ingestion" in tasks
+        assert len(tasks) == 1
 
     def test_dag_default_args(self):
         """Test that DAG has correct default arguments."""
@@ -185,42 +152,18 @@ class TestIngestionDAGIntegration:
         config_path = config_files[0]
         dag = create_dag(config_path)
 
-        # Verify workflow matches: prepare -> plan -> (execute) -> commit
         tasks = {task.task_id: task for task in dag.tasks}
 
-        # All required tasks exist
-        assert "prepare_ingestion_paths" in tasks
-        assert "plan" in tasks
-        assert "execute" in tasks
-        assert "commit_ingestion" in tasks
-
-        # Verify no extra tasks were added
-        expected_task_count = 4  # prepare, plan, execute, commit
-        # Note: execute may have multiple instances if mapped
-        assert len(tasks) >= expected_task_count
+        assert "run_ingestion" in tasks
+        assert len(tasks) == 1
 
     def test_commit_task_has_validate_step(self):
-        """Test that commit_ingestion task includes validate step via compactor."""
+        """Test that run_ingestion task exists."""
         config_files = _load_yaml_configs()
         if not config_files:
             pytest.skip("No config files found")
 
         config_path = config_files[0]
         dag = create_dag(config_path)
-
-        # Get commit task
-        commit_task = dag.get_task("commit_ingestion")
-
-        # Verify it's a task (could be PythonOperator or @task decorator)
-        assert commit_task is not None
-        assert commit_task.task_id == "commit_ingestion"
-
-        # The validate step is now inside StandardS3Compactor.compact()
-        # which is called from commit_ingestion
-        # We can verify the task exists and is properly configured
-        assert hasattr(commit_task, "downstream_list")
-        assert hasattr(commit_task, "upstream_list")
-
-        # Verify that commit_ingestion is downstream of execute
-        execute_task = dag.get_task("execute")
-        assert execute_task in commit_task.upstream_list
+        task = dag.get_task("run_ingestion")
+        assert task is not None

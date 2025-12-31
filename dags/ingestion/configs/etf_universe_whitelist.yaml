@@ -7,18 +7,18 @@ start_date: "2024-01-01"
 partitioner:
   # Since it's a single local file, we just need one job.
   # The storage partition (dt=...) is determined by the DAG execution date, not the partitioner.
-  class: "dags.ingestion.standard.partitioners.SingleJobPartitioner"
+  class: "lakehouse_core.ingestion.partitioners.SingleJobPartitioner"
 
 # 2. Extraction Logic
 extractor:
-  class: "dags.ingestion.standard.extractors.SimpleFunctionExtractor"
+  class: "lakehouse_core.ingestion.extractors.SimpleFunctionExtractor"
   kwargs:
     # Pointing to the migrated function
     function_ref: "dags.ingestion.impl.etf.fetch_etf_universe_whitelist:fetch_etf_universe_whitelist"
 
 # 3. Compaction/Storage
 compactor:
-  class: "dags.ingestion.standard.compactors.StandardS3Compactor"
+  class: "lakehouse_core.ingestion.compactors.DuckDBCompactor"
   kwargs:
     bucket: "stock-data"
     # Note: We align the path with the legacy ODS structure
