@@ -13,5 +13,5 @@ SELECT
     (MONTH(trade_date) == 12 AND DAY(trade_date) == 31) AS is_year_end,
     '${PARTITION_DATE}' AS dt
 FROM (
-    SELECT * FROM ods.ods_trade_date_hist_dt('${PARTITION_DATE}')
+    SELECT * FROM ods.ods_trade_date_hist where dt = '${PARTITION_DATE}'
 ) AS ods_data;
