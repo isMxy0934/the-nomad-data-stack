@@ -510,7 +510,11 @@ def _write_partitioned_files(
             "WRITE_PARTITION_COLUMNS false, FILENAME_PATTERN 'data_{i}'"
         )
 
-    connection.execute(f"COPY (SELECT * FROM {copy_view}) TO '{dest}' ({options});")
+    select_clause = (
+        "SELECT * EXCLUDE (filename, _ingest_file, _ingest_order) "
+        f"FROM {copy_view}"
+    )
+    connection.execute(f"COPY ({select_clause}) TO '{dest}' ({options});")
 
 
 def _collect_partition_files(
@@ -543,9 +547,15 @@ def _write_partition_file(
 
     if partition_date:
         where_clause = f"WHERE __partition_dt = '{partition_date}'"
-        select_clause = f"SELECT * EXCLUDE (__partition_dt) FROM {view_name} {where_clause}"
+        select_clause = (
+            "SELECT * EXCLUDE (__partition_dt, filename, _ingest_file, _ingest_order) "
+            f"FROM {view_name} {where_clause}"
+        )
     else:
-        select_clause = f"SELECT * FROM {view_name}"
+        select_clause = (
+            "SELECT * EXCLUDE (filename, _ingest_file, _ingest_order) "
+            f"FROM {view_name}"
+        )
 
     if file_format == "csv":
         copy_sql = (
