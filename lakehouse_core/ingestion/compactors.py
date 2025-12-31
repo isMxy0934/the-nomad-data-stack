@@ -510,9 +510,7 @@ def _write_partitioned_files(
             "WRITE_PARTITION_COLUMNS false, FILENAME_PATTERN 'data_{i}'"
         )
 
-    connection.execute(
-        f"COPY (SELECT * EXCLUDE (__partition_dt) FROM {copy_view}) TO '{dest}' ({options});"
-    )
+    connection.execute(f"COPY (SELECT * FROM {copy_view}) TO '{dest}' ({options});")
 
 
 def _collect_partition_files(
