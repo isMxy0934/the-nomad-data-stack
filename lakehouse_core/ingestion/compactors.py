@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -198,9 +199,9 @@ class DuckDBCompactor(BaseCompactor):
         max_workers: int,
     ) -> dict[str, Any]:
         prepared_view = _build_partition_view(connection, view_name, partition_column)
-        partitions = _list_partitions(connection, prepared_view)
+        partition_counts = _partition_counts(connection, prepared_view)
 
-        if not partitions:
+        if not partition_counts:
             log_event(logger, "ingestion.compact.skip", target=target, reason="no_partitions")
             return {"row_count": 0, "status": "skipped"}
 
@@ -209,6 +210,10 @@ class DuckDBCompactor(BaseCompactor):
         skipped: list[str] = []
         work_items: list[_PartitionWork] = []
         total_write_ms = 0.0
+
+        partitions = list(partition_counts.keys())
+        paths_by_dt: dict[str, tuple[str, Any]] = {}
+        allowed_partitions: list[str] = []
 
         for partition_date in partitions:
             unique_run_id = _unique_run_id(run_id, partition_date)
@@ -219,42 +224,77 @@ class DuckDBCompactor(BaseCompactor):
                 is_partitioned=True,
                 store_namespace=base_uri,
             )
+            paths_by_dt[partition_date] = (unique_run_id, paths)
 
             if _should_skip_partition(write_mode, store, paths.success_flag_path, partition_date):
                 skipped.append(partition_date)
                 continue
 
-            row_count = _count_rows(connection, prepared_view, partition_date)
-            if row_count == 0:
-                skipped.append(partition_date)
-                continue
+            allowed_partitions.append(partition_date)
 
-            write_start = perf_counter()
-            local_path = _write_partition_file(
-                connection=connection,
-                view_name=prepared_view,
-                output_dir=local_dir / f"dt={partition_date}",
-                file_format=self.file_format,
-                partition_date=partition_date,
-            )
-            write_ms = (perf_counter() - write_start) * 1000.0
-            total_write_ms += write_ms
+        if not allowed_partitions:
             log_event(
                 logger,
-                "ingestion.partition.write",
-                dt=partition_date,
-                row_count=row_count,
-                file_format=self.file_format,
-                duration_ms=round(write_ms, 2),
-                local_path=str(local_path),
+                "ingestion.compact.partitioned",
+                target=target,
+                partition_count=0,
+                skipped_count=len(skipped),
+                row_count=0,
+                write_ms=0.0,
+                max_workers=max_workers,
             )
+            return {
+                "row_count": 0,
+                "partition_count": 0,
+                "status": "skipped",
+                "partitions": [],
+                "skipped_partitions": skipped,
+            }
+
+        write_start = perf_counter()
+        output_root = local_dir / "partitioned"
+        if output_root.exists():
+            shutil.rmtree(output_root)
+        output_root.mkdir(parents=True, exist_ok=True)
+        filter_partitions = (
+            allowed_partitions if len(allowed_partitions) < len(partitions) else None
+        )
+        _write_partitioned_files(
+            connection=connection,
+            view_name=prepared_view,
+            output_dir=output_root,
+            file_format=self.file_format,
+            allowed_partitions=filter_partitions,
+        )
+        write_ms = (perf_counter() - write_start) * 1000.0
+        total_write_ms += write_ms
+        log_event(
+            logger,
+            "ingestion.partition.write_batch",
+            partition_count=len(allowed_partitions),
+            file_format=self.file_format,
+            duration_ms=round(write_ms, 2),
+            output_dir=str(output_root),
+        )
+
+        for partition_date in allowed_partitions:
+            unique_run_id, paths = paths_by_dt[partition_date]
+            row_count = int(partition_counts.get(partition_date, 0))
+            local_files = _collect_partition_files(
+                output_root=output_root,
+                partition_date=partition_date,
+                file_format=self.file_format,
+            )
+            if not local_files or row_count == 0:
+                skipped.append(partition_date)
+                continue
 
             work_items.append(
                 _PartitionWork(
                     partition_date=partition_date,
                     unique_run_id=unique_run_id,
                     paths=paths,
-                    local_path=local_path,
+                    local_paths=local_files,
                     row_count=row_count,
                 )
             )
@@ -334,7 +374,7 @@ class _PartitionWork:
     partition_date: str
     unique_run_id: str
     paths: Any
-    local_path: Path
+    local_paths: list[Path]
     row_count: int
 
 
@@ -346,11 +386,17 @@ def _upload_and_commit_partition(
     file_format: str,
 ) -> dict[str, Any]:
     publish_start = perf_counter()
-    local_size = item.local_path.stat().st_size
-    dest_uri = join_uri(item.paths.tmp_partition_prefix, item.local_path.name)
-    store.write_bytes(dest_uri, item.local_path.read_bytes())
+    local_size = 0
+    for local_path in item.local_paths:
+        local_size += local_path.stat().st_size
+        dest_uri = join_uri(item.paths.tmp_partition_prefix, local_path.name)
+        store.write_bytes(dest_uri, local_path.read_bytes())
 
-    metrics = {"row_count": item.row_count, "file_count": 1, "has_data": 1}
+    metrics = {
+        "row_count": item.row_count,
+        "file_count": len(item.local_paths),
+        "has_data": 1,
+    }
     validated = validate(store=store, paths=item.paths, metrics=metrics, file_format=file_format)
     publish_result, _ = commit(
         store=store,
@@ -367,7 +413,7 @@ def _upload_and_commit_partition(
         "ingestion.partition.publish",
         dt=item.partition_date,
         row_count=item.row_count,
-        file_count=1,
+        file_count=len(item.local_paths),
         file_size=local_size,
         duration_ms=round(publish_ms, 2),
     )
@@ -423,12 +469,67 @@ def _build_partition_view(connection, view_name: str, partition_column: str) -> 
     return "prepared"
 
 
-def _list_partitions(connection, view_name: str) -> list[str]:
+def _partition_counts(connection, view_name: str) -> dict[str, int]:
     rows = connection.execute(
-        f"SELECT DISTINCT __partition_dt FROM {view_name} "
-        "WHERE __partition_dt IS NOT NULL ORDER BY __partition_dt;"
+        f"SELECT __partition_dt, COUNT(*) FROM {view_name} "
+        "WHERE __partition_dt IS NOT NULL GROUP BY __partition_dt ORDER BY __partition_dt;"
     ).fetchall()
-    return [str(row[0]) for row in rows if row[0]]
+    return {str(row[0]): int(row[1]) for row in rows if row[0]}
+
+
+def _write_partitioned_files(
+    *,
+    connection,
+    view_name: str,
+    output_dir: Path,
+    file_format: str,
+    allowed_partitions: list[str] | None = None,
+) -> None:
+    copy_view = view_name
+    if allowed_partitions is not None:
+        connection.execute("CREATE OR REPLACE TEMP TABLE allowed_partitions (dt VARCHAR);")
+        connection.executemany(
+            "INSERT INTO allowed_partitions VALUES (?)", [(dt,) for dt in allowed_partitions]
+        )
+        connection.execute(
+            "CREATE OR REPLACE TEMP VIEW prepared_filtered AS "
+            f"SELECT * FROM {view_name} "
+            "WHERE __partition_dt IN (SELECT dt FROM allowed_partitions);"
+        )
+        copy_view = "prepared_filtered"
+
+    dest = normalize_duckdb_path(str(output_dir))
+    if file_format == "csv":
+        options = (
+            "FORMAT CSV, HEADER TRUE, PARTITION_BY (__partition_dt), "
+            "WRITE_PARTITION_COLUMNS false, FILENAME_PATTERN 'data_{i}'"
+        )
+    else:
+        options = (
+            "FORMAT PARQUET, PARTITION_BY (__partition_dt), "
+            "WRITE_PARTITION_COLUMNS false, FILENAME_PATTERN 'data_{i}'"
+        )
+
+    connection.execute(
+        f"COPY (SELECT * EXCLUDE (__partition_dt) FROM {copy_view}) "
+        f"TO '{dest}' ({options});"
+    )
+
+
+def _collect_partition_files(
+    *,
+    output_root: Path,
+    partition_date: str,
+    file_format: str,
+    partition_column: str = "__partition_dt",
+) -> list[Path]:
+    partition_dir = output_root / f"{partition_column}={partition_date}"
+    if not partition_dir.exists():
+        return []
+    suffix = ".csv" if file_format == "csv" else ".parquet"
+    return sorted(
+        [path for path in partition_dir.iterdir() if path.is_file() and path.suffix == suffix]
+    )
 
 
 def _write_partition_file(
