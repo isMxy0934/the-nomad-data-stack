@@ -4,6 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import duckdb
@@ -135,13 +136,25 @@ class DuckDBCompactor(BaseCompactor):
         if row_count == 0:
             return {"status": "skipped", "row_count": 0}
 
+        write_start = perf_counter()
         local_path = _write_partition_file(
             connection=connection,
             view_name=view_name,
             output_dir=local_dir / f"dt={partition_date}",
             file_format=self.file_format,
         )
+        write_ms = (perf_counter() - write_start) * 1000.0
+        log_event(
+            logger,
+            "ingestion.partition.write",
+            dt=partition_date,
+            row_count=row_count,
+            file_format=self.file_format,
+            duration_ms=round(write_ms, 2),
+            local_path=str(local_path),
+        )
 
+        publish_start = perf_counter()
         dest_uri = join_uri(paths.tmp_partition_prefix, local_path.name)
         store.write_bytes(dest_uri, local_path.read_bytes())
 
@@ -158,6 +171,15 @@ class DuckDBCompactor(BaseCompactor):
             metrics=validated,
         )
         cleanup(store=store, paths=paths)
+        publish_ms = (perf_counter() - publish_start) * 1000.0
+        log_event(
+            logger,
+            "ingestion.partition.publish",
+            dt=partition_date,
+            row_count=row_count,
+            file_count=1,
+            duration_ms=round(publish_ms, 2),
+        )
         return dict(publish_result)
 
     def _compact_partitioned(
@@ -186,6 +208,7 @@ class DuckDBCompactor(BaseCompactor):
         publish_results: list[dict[str, Any]] = []
         skipped: list[str] = []
         work_items: list[_PartitionWork] = []
+        total_write_ms = 0.0
 
         for partition_date in partitions:
             unique_run_id = _unique_run_id(run_id, partition_date)
@@ -206,12 +229,24 @@ class DuckDBCompactor(BaseCompactor):
                 skipped.append(partition_date)
                 continue
 
+            write_start = perf_counter()
             local_path = _write_partition_file(
                 connection=connection,
                 view_name=prepared_view,
                 output_dir=local_dir / f"dt={partition_date}",
                 file_format=self.file_format,
                 partition_date=partition_date,
+            )
+            write_ms = (perf_counter() - write_start) * 1000.0
+            total_write_ms += write_ms
+            log_event(
+                logger,
+                "ingestion.partition.write",
+                dt=partition_date,
+                row_count=row_count,
+                file_format=self.file_format,
+                duration_ms=round(write_ms, 2),
+                local_path=str(local_path),
             )
 
             work_items.append(
@@ -227,6 +262,7 @@ class DuckDBCompactor(BaseCompactor):
         if work_items:
             total_rows = sum(item.row_count for item in work_items)
             results_by_dt: dict[str, dict[str, Any]] = {}
+            publish_start = perf_counter()
             if max_workers <= 1 or len(work_items) == 1:
                 for item in work_items:
                     result = _upload_and_commit_partition(
@@ -256,12 +292,33 @@ class DuckDBCompactor(BaseCompactor):
                             raise RuntimeError(
                                 f"Failed to publish partition dt={partition_date}"
                             ) from exc
+            publish_ms = (perf_counter() - publish_start) * 1000.0
+            log_event(
+                logger,
+                "ingestion.partition.publish_batch",
+                target=target,
+                partition_count=len(work_items),
+                max_workers=max_workers,
+                duration_ms=round(publish_ms, 2),
+            )
 
             publish_results = [
                 results_by_dt[item.partition_date]
                 for item in work_items
                 if item.partition_date in results_by_dt
             ]
+
+        if work_items or skipped:
+            log_event(
+                logger,
+                "ingestion.compact.partitioned",
+                target=target,
+                partition_count=len(work_items),
+                skipped_count=len(skipped),
+                row_count=total_rows,
+                write_ms=round(total_write_ms, 2),
+                max_workers=max_workers,
+            )
 
         return {
             "row_count": total_rows,
@@ -288,6 +345,8 @@ def _upload_and_commit_partition(
     target: str,
     file_format: str,
 ) -> dict[str, Any]:
+    publish_start = perf_counter()
+    local_size = item.local_path.stat().st_size
     dest_uri = join_uri(item.paths.tmp_partition_prefix, item.local_path.name)
     store.write_bytes(dest_uri, item.local_path.read_bytes())
 
@@ -302,6 +361,16 @@ def _upload_and_commit_partition(
         metrics=validated,
     )
     cleanup(store=store, paths=item.paths)
+    publish_ms = (perf_counter() - publish_start) * 1000.0
+    log_event(
+        logger,
+        "ingestion.partition.publish",
+        dt=item.partition_date,
+        row_count=item.row_count,
+        file_count=1,
+        file_size=local_size,
+        duration_ms=round(publish_ms, 2),
+    )
     return dict(publish_result)
 
 

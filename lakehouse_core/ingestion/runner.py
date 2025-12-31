@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -123,19 +124,42 @@ def run_ingestion_config(
         log_event(logger, "ingestion.plan.empty", target=target)
         return IngestionRunResult(target=target, status="skipped", details={"reason": "no_jobs"})
 
+    log_event(
+        logger,
+        "ingestion.run.start",
+        target=target,
+        start_date=start_date,
+        end_date=end_date,
+        job_count=len(jobs),
+        max_workers=max_workers,
+        write_mode=write_mode,
+    )
+
     extracted: list[dict[str, Any]] = []
     try:
+        extract_start = perf_counter()
         extracted = _run_extractions(
             extractor=extractor,
             jobs=jobs,
             results_dir=results_dir,
             max_workers=max_workers,
         )
+        extract_ms = (perf_counter() - extract_start) * 1000.0
+        total_rows = sum(int(item.get("row_count", 0)) for item in extracted)
+        log_event(
+            logger,
+            "ingestion.extract.summary",
+            target=target,
+            result_count=len(extracted),
+            row_count=total_rows,
+            duration_ms=round(extract_ms, 2),
+        )
         if not extracted:
             return IngestionRunResult(
                 target=target, status="skipped", details={"reason": "no_data"}
             )
 
+        compact_start = perf_counter()
         compactor_result = compactor.compact(
             results=extracted,
             target=target,
@@ -146,6 +170,16 @@ def run_ingestion_config(
             local_dir=run_dir,
             write_mode=write_mode,
             max_workers=max_workers,
+        )
+        compact_ms = (perf_counter() - compact_start) * 1000.0
+        log_event(
+            logger,
+            "ingestion.compact.summary",
+            target=target,
+            status=compactor_result.get("status"),
+            row_count=compactor_result.get("row_count"),
+            partition_count=compactor_result.get("partition_count"),
+            duration_ms=round(compact_ms, 2),
         )
         return IngestionRunResult(target=target, status="ok", details=compactor_result)
     finally:
